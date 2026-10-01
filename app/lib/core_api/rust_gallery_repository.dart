@@ -102,6 +102,35 @@ class RustGalleryRepository implements GalleryRepository {
   }
 
   @override
+  Future<List<GalleryMediaItem>> queryMedia(
+    String vaultPath,
+    String indexPath,
+    List<String> filters, {
+    required List<String> virtualFilters,
+    required int offset,
+    required int limit,
+  }) async {
+    final items = await rust.queryMedia(
+      vaultPath: vaultPath,
+      indexPath: indexPath,
+      filters: filters,
+      virtualFilters: virtualFilters,
+      offset: offset,
+      limit: limit,
+    );
+    return items
+        .map(
+          (item) => GalleryMediaItem(
+            id: item.id,
+            noteId: item.noteId,
+            isVideo: item.isVideo,
+            exists: item.exists,
+          ),
+        )
+        .toList(growable: false);
+  }
+
+  @override
   Future<Uint8List?> getThumbnail(
     String vaultPath,
     String indexPath,

@@ -1,8 +1,9 @@
 use flutter_rust_bridge::frb;
 use gallery_core::{
-    Category as CoreCategory, CoreError, Gallery, NoteSummary as CoreNoteSummary,
-    ScanReport as CoreScanReport, VirtualFilter as CoreVirtualFilter, load_selected_vault,
-    prepare_private_app_directory, save_selected_vault,
+    Category as CoreCategory, CoreError, Gallery, MediaSummary as CoreMediaSummary,
+    NoteSummary as CoreNoteSummary, ScanReport as CoreScanReport,
+    VirtualFilter as CoreVirtualFilter, load_selected_vault, prepare_private_app_directory,
+    save_selected_vault,
 };
 use std::path::Path;
 
@@ -41,6 +42,15 @@ pub struct NoteSummary {
     pub media_count: u32,
     pub video_count: u32,
     pub representative_media_id: Option<u32>,
+}
+
+#[frb(non_opaque)]
+#[derive(Clone)]
+pub struct MediaItem {
+    pub id: u32,
+    pub note_id: u32,
+    pub is_video: bool,
+    pub exists: bool,
 }
 
 fn open_gallery(vault_path: &str, index_path: &str) -> Result<Gallery, String> {
@@ -99,6 +109,21 @@ pub fn query_notes(
     open_gallery(&vault_path, &index_path)?
         .query_filtered_page(&filters, &virtual_filters, offset as usize, limit as usize)
         .map(|notes| notes.into_iter().map(note_summary).collect())
+        .map_err(error_message)
+}
+
+pub fn query_media(
+    vault_path: String,
+    index_path: String,
+    filters: Vec<String>,
+    virtual_filters: Vec<String>,
+    offset: u32,
+    limit: u32,
+) -> Result<Vec<MediaItem>, String> {
+    let virtual_filters = parse_virtual_filters(virtual_filters)?;
+    open_gallery(&vault_path, &index_path)?
+        .query_media_filtered_page(&filters, &virtual_filters, offset as usize, limit as usize)
+        .map(|items| items.into_iter().map(media_item).collect())
         .map_err(error_message)
 }
 
@@ -161,6 +186,15 @@ fn note_summary(note: CoreNoteSummary) -> NoteSummary {
         representative_media_id: note
             .representative_media_id
             .map(|id| id.min(u32::MAX as i64) as u32),
+    }
+}
+
+fn media_item(item: CoreMediaSummary) -> MediaItem {
+    MediaItem {
+        id: item.id.min(u32::MAX as i64) as u32,
+        note_id: item.note_id.min(u32::MAX as i64) as u32,
+        is_video: item.is_video,
+        exists: item.exists,
     }
 }
 

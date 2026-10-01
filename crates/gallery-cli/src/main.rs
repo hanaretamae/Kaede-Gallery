@@ -1,6 +1,6 @@
 #![forbid(unsafe_code)]
 
-use gallery_core::Gallery;
+use gallery_core::{Gallery, diagnose_notes};
 use std::env;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
@@ -19,6 +19,14 @@ fn run() -> Result<(), String> {
     let mut args = env::args().skip(1);
     let command = args.next().ok_or_else(usage)?;
     let vault = PathBuf::from(args.next().ok_or_else(usage)?);
+    if command == "diagnose" {
+        let diagnostics = diagnose_notes(&vault).map_err(|error| error.to_string())?;
+        for diagnostic in &diagnostics {
+            println!("{}\t{}", diagnostic.path, diagnostic.reason);
+        }
+        println!("skipped={}", diagnostics.len());
+        return Ok(());
+    }
     let mut database = None;
     let mut filters = Vec::new();
     let mut remaining = args;
@@ -118,7 +126,7 @@ fn ensure_outside_vault(candidate: &Path, vault: &Path) -> Result<(), String> {
 }
 
 fn usage() -> String {
-    "usage: gallery-cli <scan|categories|list> <vault-path> [--database <database-path>] [tag ...]"
+    "usage: gallery-cli <scan|categories|list|diagnose> <vault-path> [--database <database-path>] [tag ...]"
         .to_owned()
 }
 

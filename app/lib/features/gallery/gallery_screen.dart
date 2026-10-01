@@ -117,6 +117,7 @@ class _GalleryLayout extends ConsumerWidget {
               ),
               icon: const Icon(Icons.tune),
             ),
+          const _DisplayModeButton(),
           IconButton(
             tooltip: '再走査',
             onPressed: () => ref.read(vaultSessionProvider.notifier).rescan(),
@@ -157,6 +158,36 @@ class _GalleryLayout extends ConsumerWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+class _DisplayModeButton extends ConsumerWidget {
+  const _DisplayModeButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(galleryDisplayModeProvider);
+    return PopupMenuButton<GalleryDisplayMode>(
+      tooltip: '表示方法',
+      icon: Icon(
+        mode == GalleryDisplayMode.byNote
+            ? Icons.grid_view
+            : Icons.photo_library_outlined,
+      ),
+      initialValue: mode,
+      onSelected: (value) =>
+          ref.read(galleryDisplayModeProvider.notifier).set(value),
+      itemBuilder: (context) => const [
+        PopupMenuItem(
+          value: GalleryDisplayMode.byNote,
+          child: Text('ノートごとにまとめる'),
+        ),
+        PopupMenuItem(
+          value: GalleryDisplayMode.allMedia,
+          child: Text('すべてのメディアを表示'),
+        ),
+      ],
     );
   }
 }
@@ -227,24 +258,30 @@ class _TagPanel extends ConsumerWidget {
     return categories.when(
       loading: () => const Center(child: CircularProgressIndicator()),
       error: (_, _) => const Center(child: Text('タグ一覧を読み込めませんでした。')),
-      data: (items) => ListView(
-        padding: const EdgeInsets.all(12),
-        children: [
-          Text('タグ', style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 8),
-          for (final category in items)
-            _CategoryCard(key: ValueKey(category.path), category: category),
-          if (items.isEmpty)
-            const Padding(
+      data: (items) => ListView.separated(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 24),
+        itemCount: items.isEmpty ? 1 : items.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 8),
+        itemBuilder: (context, index) {
+          if (items.isEmpty) {
+            return const Padding(
               padding: EdgeInsets.all(16),
               child: Text('タグがありません。先に Vault を走査してください。'),
-            ),
-        ],
+            );
+          }
+          final category = items[index];
+          return _CategoryCard(
+            key: ValueKey(category.path),
+            category: category,
+          );
+        },
       ),
     );
   }
 }
 
+/// カテゴリごとの折りたたみ可能なタグ枠。Material 3 Expressive の
+/// 丸みの強いカードと、ピル型チップで選択肢を並べる。
 class _CategoryCard extends ConsumerStatefulWidget {
   const _CategoryCard({super.key, required this.category});
 
@@ -257,6 +294,7 @@ class _CategoryCard extends ConsumerStatefulWidget {
 class _CategoryCardState extends ConsumerState<_CategoryCard> {
   late final TextEditingController searchController;
   String search = '';
+  bool? expandedOverride;
 
   @override
   void initState() {
@@ -286,69 +324,133 @@ class _CategoryCardState extends ConsumerState<_CategoryCard> {
   Widget build(BuildContext context) {
     final selected = ref.watch(selectedTagsProvider);
     final selectedVirtual = ref.watch(selectedVirtualFiltersProvider);
+    final hasSelection = widget.category.options.any(
+      (option) => option.virtualFilter == null
+          ? selected.contains(option.fullTag)
+          : selectedVirtual.contains(
+              GalleryVirtualFilter.fromKey(option.virtualFilter!),
+            ),
+    );
+    // 既定で全枠を展開し、ユーザーがヘッダーをタップしたときだけ個別に畳む。
+    final expanded = expandedOverride ?? true;
     final options = widget.category.options
         .where(
           (option) => option.name.toLowerCase().contains(search.toLowerCase()),
         )
         .toList(growable: false);
-    final optionRows = (options.length / 2).ceil().clamp(1, 8);
+    final colorScheme = Theme.of(context).colorScheme;
+
     return Card(
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      color: colorScheme.surfaceContainerLow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(20),
+        side: BorderSide(
+          color: hasSelection
+              ? colorScheme.primary.withValues(alpha: 0.5)
+              : colorScheme.outlineVariant.withValues(alpha: 0.4),
+        ),
+      ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.fromLTRB(16, 4, 12, 12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    widget.category.displayName,
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
+            InkWell(
+              borderRadius: BorderRadius.circular(16),
+              onTap: () => setState(() => expandedOverride = !expanded),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(vertical: 10),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        widget.category.displayName,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    if (hasSelection)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Icon(
+                          Icons.check_circle,
+                          size: 18,
+                          color: colorScheme.primary,
+                        ),
+                      ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        '${widget.category.count}',
+                        style: Theme.of(context).textTheme.labelMedium
+                            ?.copyWith(color: colorScheme.onSecondaryContainer),
+                      ),
+                    ),
+                    AnimatedRotation(
+                      turns: expanded ? 0.5 : 0,
+                      duration: const Duration(milliseconds: 180),
+                      child: const Icon(Icons.expand_more),
+                    ),
+                  ],
                 ),
-                Text('${widget.category.count}'),
-              ],
+              ),
             ),
-            if (widget.category.options.length > 30)
-              Padding(
-                padding: const EdgeInsets.only(top: 8),
-                child: TextField(
-                  controller: searchController,
-                  decoration: const InputDecoration(
-                    isDense: true,
-                    prefixIcon: Icon(Icons.search),
-                    hintText: '検索',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
+            AnimatedCrossFade(
+              duration: const Duration(milliseconds: 180),
+              crossFadeState: expanded
+                  ? CrossFadeState.showFirst
+                  : CrossFadeState.showSecond,
+              firstChild: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (widget.category.options.length > 30)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: TextField(
+                        controller: searchController,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          prefixIcon: Icon(Icons.search, size: 20),
+                          hintText: '検索',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.all(Radius.circular(24)),
+                          ),
+                        ),
+                      ),
+                    ),
+                  if (options.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 8),
+                      child: Text('該当する選択肢がありません'),
+                    )
+                  else
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: [
+                        for (final option in options)
+                          _OptionChip(
+                            option: option,
+                            selectedTags: selected,
+                            selectedVirtualFilters: selectedVirtual,
+                            isWholeCategory:
+                                option.fullTag == widget.category.path,
+                          ),
+                      ],
+                    ),
+                ],
               ),
-            const SizedBox(height: 8),
-            if (options.isEmpty)
-              const SizedBox(
-                height: 36,
-                child: Center(child: Text('該当する選択肢がありません')),
-              )
-            else
-              SizedBox(
-                height: optionRows * 40,
-                child: GridView.builder(
-                  physics: options.length > 16
-                      ? null
-                      : const NeverScrollableScrollPhysics(),
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 2,
-                    mainAxisExtent: 36,
-                    crossAxisSpacing: 6,
-                    mainAxisSpacing: 4,
-                  ),
-                  itemCount: options.length,
-                  itemBuilder: (context, index) => _OptionChip(
-                    option: options[index],
-                    selectedTags: selected,
-                    selectedVirtualFilters: selectedVirtual,
-                  ),
-                ),
-              ),
+              secondChild: const SizedBox.shrink(),
+            ),
           ],
         ),
       ),
@@ -361,40 +463,50 @@ class _OptionChip extends ConsumerWidget {
     required this.option,
     required this.selectedTags,
     required this.selectedVirtualFilters,
+    required this.isWholeCategory,
   });
 
   final GalleryCategoryOption option;
   final Set<String> selectedTags;
   final Set<GalleryVirtualFilter> selectedVirtualFilters;
+  final bool isWholeCategory;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final virtualFilter = option.virtualFilter == null
         ? null
         : GalleryVirtualFilter.fromKey(option.virtualFilter!);
+    final selected = virtualFilter == null
+        ? selectedTags.contains(option.fullTag)
+        : selectedVirtualFilters.contains(virtualFilter);
+    final colorScheme = Theme.of(context).colorScheme;
     return FilterChip(
-      label: SizedBox(
-        width: double.infinity,
-        child: Row(
-          children: [
-            Expanded(
-              child: Text(
-                option.name,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-            const SizedBox(width: 4),
-            Text(
-              '${option.count}',
-              style: Theme.of(context).textTheme.labelSmall,
-            ),
-          ],
+      showCheckmark: false,
+      avatar: selected
+          ? Icon(Icons.check, size: 16, color: colorScheme.onSecondaryContainer)
+          : isWholeCategory
+          ? Icon(Icons.all_inclusive, size: 16, color: colorScheme.primary)
+          : null,
+      label: Text(
+        option.name,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontWeight: isWholeCategory ? FontWeight.w600 : FontWeight.normal,
         ),
       ),
-      selected: virtualFilter == null
-          ? selectedTags.contains(option.fullTag)
-          : selectedVirtualFilters.contains(virtualFilter),
+      labelPadding: const EdgeInsets.symmetric(horizontal: 2),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      shape: const StadiumBorder(),
+      side: BorderSide(
+        color: option.disabled
+            ? colorScheme.outlineVariant.withValues(alpha: 0.3)
+            : colorScheme.outlineVariant,
+      ),
+      backgroundColor: colorScheme.surface,
+      selectedColor: colorScheme.secondaryContainer,
+      visualDensity: VisualDensity.compact,
+      selected: selected,
       onSelected: option.disabled
           ? null
           : (_) {
@@ -415,6 +527,18 @@ class _GalleryGrid extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(galleryDisplayModeProvider);
+    return mode == GalleryDisplayMode.byNote
+        ? const _NoteGrid()
+        : const _MediaGrid();
+  }
+}
+
+class _NoteGrid extends ConsumerWidget {
+  const _NoteGrid();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
     final gallery = ref.watch(galleryItemsProvider);
     return gallery.when(
       loading: () => const Center(child: CircularProgressIndicator()),
@@ -423,38 +547,77 @@ class _GalleryGrid extends ConsumerWidget {
         if (notes.isEmpty) {
           return const Center(child: Text('該当する note はありません。'));
         }
-        return LayoutBuilder(
-          builder: (context, constraints) {
-            final columns = (constraints.maxWidth / 190)
-                .floor()
-                .clamp(2, 8)
-                .toInt();
-            return NotificationListener<ScrollNotification>(
-              onNotification: (notification) {
-                if (notification.metrics.pixels >
-                    notification.metrics.maxScrollExtent - 600) {
-                  ref.read(galleryItemsProvider.notifier).loadMore();
-                }
-                return false;
-              },
-              child: GridView.builder(
-                padding: const EdgeInsets.all(12),
-                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                  crossAxisCount: columns,
-                  crossAxisSpacing: 10,
-                  mainAxisSpacing: 10,
-                  childAspectRatio: 0.78,
-                ),
-                itemCount: notes.length,
-                itemBuilder: (context, index) =>
-                    _GalleryTile(note: notes[index]),
-              ),
-            );
-          },
+        return _ThumbnailGrid(
+          itemCount: notes.length,
+          onNearEnd: () => ref.read(galleryItemsProvider.notifier).loadMore(),
+          itemBuilder: (context, index) => _GalleryTile(note: notes[index]),
         );
       },
     );
   }
+}
+
+class _MediaGrid extends ConsumerWidget {
+  const _MediaGrid();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final media = ref.watch(galleryMediaItemsProvider);
+    return media.when(
+      loading: () => const Center(child: CircularProgressIndicator()),
+      error: (_, _) => const Center(child: Text('一覧を読み込めませんでした。')),
+      data: (items) {
+        if (items.isEmpty) {
+          return const Center(child: Text('該当するメディアはありません。'));
+        }
+        return _ThumbnailGrid(
+          itemCount: items.length,
+          onNearEnd: () =>
+              ref.read(galleryMediaItemsProvider.notifier).loadMore(),
+          itemBuilder: (context, index) => _MediaTile(item: items[index]),
+        );
+      },
+    );
+  }
+}
+
+class _ThumbnailGrid extends StatelessWidget {
+  const _ThumbnailGrid({
+    required this.itemCount,
+    required this.itemBuilder,
+    required this.onNearEnd,
+  });
+
+  final int itemCount;
+  final IndexedWidgetBuilder itemBuilder;
+  final VoidCallback onNearEnd;
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final columns = (constraints.maxWidth / 190).floor().clamp(2, 8).toInt();
+      return NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.pixels >
+              notification.metrics.maxScrollExtent - 600) {
+            onNearEnd();
+          }
+          return false;
+        },
+        child: GridView.builder(
+          padding: const EdgeInsets.all(12),
+          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+            crossAxisCount: columns,
+            crossAxisSpacing: 10,
+            mainAxisSpacing: 10,
+            childAspectRatio: 1,
+          ),
+          itemCount: itemCount,
+          itemBuilder: itemBuilder,
+        ),
+      );
+    },
+  );
 }
 
 class _GalleryTile extends ConsumerWidget {
@@ -470,45 +633,67 @@ class _GalleryTile extends ConsumerWidget {
         : ref.watch(galleryThumbnailProvider(mediaId));
     return Card(
       clipBehavior: Clip.antiAlias,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          Expanded(
-            child: Stack(
-              fit: StackFit.expand,
-              children: [
-                if (thumbnail == null)
-                  _MediaPlaceholder(hasVideo: note.videoCount > 0)
-                else
-                  thumbnail.when(
-                    loading: () => const _MediaPlaceholder(),
-                    error: (_, _) =>
-                        _MediaPlaceholder(hasVideo: note.videoCount > 0),
-                    data: (bytes) => bytes == null
-                        ? _MediaPlaceholder(hasVideo: note.videoCount > 0)
-                        : Image.memory(
-                            bytes,
-                            fit: BoxFit.cover,
-                            gaplessPlayback: true,
-                            filterQuality: FilterQuality.low,
-                          ),
-                  ),
-                if (note.videoCount > 0)
-                  const Positioned(
-                    right: 8,
-                    bottom: 8,
-                    child: Icon(Icons.play_circle_outline, size: 30),
-                  ),
-              ],
+          if (thumbnail == null)
+            _MediaPlaceholder(hasVideo: note.videoCount > 0)
+          else
+            thumbnail.when(
+              loading: () => const _MediaPlaceholder(),
+              error: (_, _) => _MediaPlaceholder(hasVideo: note.videoCount > 0),
+              data: (bytes) => bytes == null
+                  ? _MediaPlaceholder(hasVideo: note.videoCount > 0)
+                  : Image.memory(
+                      bytes,
+                      fit: BoxFit.cover,
+                      gaplessPlayback: true,
+                      filterQuality: FilterQuality.low,
+                    ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-            child: Text(
-              '${note.mediaCount} 件のメディア',
-              style: Theme.of(context).textTheme.bodySmall,
+          if (note.videoCount > 0)
+            const Positioned(
+              right: 8,
+              bottom: 8,
+              child: Icon(Icons.play_circle_outline, size: 30),
             ),
+        ],
+      ),
+    );
+  }
+}
+
+class _MediaTile extends ConsumerWidget {
+  const _MediaTile({required this.item});
+
+  final GalleryMediaItem item;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final thumbnail = ref.watch(galleryThumbnailProvider(item.id));
+    return Card(
+      clipBehavior: Clip.antiAlias,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          thumbnail.when(
+            loading: () => const _MediaPlaceholder(),
+            error: (_, _) => _MediaPlaceholder(hasVideo: item.isVideo),
+            data: (bytes) => bytes == null
+                ? _MediaPlaceholder(hasVideo: item.isVideo)
+                : Image.memory(
+                    bytes,
+                    fit: BoxFit.cover,
+                    gaplessPlayback: true,
+                    filterQuality: FilterQuality.low,
+                  ),
           ),
+          if (item.isVideo)
+            const Positioned(
+              right: 8,
+              bottom: 8,
+              child: Icon(Icons.play_circle_outline, size: 30),
+            ),
         ],
       ),
     );

@@ -48,10 +48,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   List<CategoryOption> dco_decode_list_category_option(dynamic raw);
 
   @protected
+  List<MediaItem> dco_decode_list_media_item(dynamic raw);
+
+  @protected
   List<NoteSummary> dco_decode_list_note_summary(dynamic raw);
 
   @protected
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw);
+
+  @protected
+  MediaItem dco_decode_media_item(dynamic raw);
 
   @protected
   NoteSummary dco_decode_note_summary(dynamic raw);
@@ -104,10 +110,16 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  List<MediaItem> sse_decode_list_media_item(SseDeserializer deserializer);
+
+  @protected
   List<NoteSummary> sse_decode_list_note_summary(SseDeserializer deserializer);
 
   @protected
   Uint8List sse_decode_list_prim_u_8_strict(SseDeserializer deserializer);
+
+  @protected
+  MediaItem sse_decode_media_item(SseDeserializer deserializer);
 
   @protected
   NoteSummary sse_decode_note_summary(SseDeserializer deserializer);
@@ -167,6 +179,12 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
   );
 
   @protected
+  void sse_encode_list_media_item(
+    List<MediaItem> self,
+    SseSerializer serializer,
+  );
+
+  @protected
   void sse_encode_list_note_summary(
     List<NoteSummary> self,
     SseSerializer serializer,
@@ -177,6 +195,9 @@ abstract class RustLibApiImplPlatform extends BaseApiImpl<RustLibWire> {
     Uint8List self,
     SseSerializer serializer,
   );
+
+  @protected
+  void sse_encode_media_item(MediaItem self, SseSerializer serializer);
 
   @protected
   void sse_encode_note_summary(NoteSummary self, SseSerializer serializer);

@@ -67,7 +67,7 @@ class RustLib extends BaseEntrypoint<RustLibApi, RustLibApiImpl, RustLibWire> {
   String get codegenVersion => '2.13.0';
 
   @override
-  int get rustContentHash => -496328445;
+  int get rustContentHash => 1397084207;
 
   static const kDefaultExternalLibraryLoaderConfig =
       ExternalLibraryLoaderConfig(
@@ -99,6 +99,15 @@ abstract class RustLibApi extends BaseApi {
   Future<void> crateApiPrepareAppDataDirectory({
     required String directoryPath,
     required String vaultPath,
+  });
+
+  Future<List<MediaItem>> crateApiQueryMedia({
+    required String vaultPath,
+    required String indexPath,
+    required List<String> filters,
+    required List<String> virtualFilters,
+    required int offset,
+    required int limit,
   });
 
   Future<List<NoteSummary>> crateApiQueryNotes({
@@ -278,7 +287,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       );
 
   @override
-  Future<List<NoteSummary>> crateApiQueryNotes({
+  Future<List<MediaItem>> crateApiQueryMedia({
     required String vaultPath,
     required String indexPath,
     required List<String> filters,
@@ -300,6 +309,62 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
             generalizedFrbRustBinding,
             serializer,
             funcId: 5,
+            port: port_,
+          );
+        },
+        codec: SseCodec(
+          decodeSuccessData: sse_decode_list_media_item,
+          decodeErrorData: sse_decode_String,
+        ),
+        constMeta: kCrateApiQueryMediaConstMeta,
+        argValues: [
+          vaultPath,
+          indexPath,
+          filters,
+          virtualFilters,
+          offset,
+          limit,
+        ],
+        apiImpl: this,
+      ),
+    );
+  }
+
+  TaskConstMeta get kCrateApiQueryMediaConstMeta => const TaskConstMeta(
+    debugName: "query_media",
+    argNames: [
+      "vaultPath",
+      "indexPath",
+      "filters",
+      "virtualFilters",
+      "offset",
+      "limit",
+    ],
+  );
+
+  @override
+  Future<List<NoteSummary>> crateApiQueryNotes({
+    required String vaultPath,
+    required String indexPath,
+    required List<String> filters,
+    required List<String> virtualFilters,
+    required int offset,
+    required int limit,
+  }) {
+    return handler.executeNormal(
+      NormalTask(
+        callFfi: (port_) {
+          final serializer = SseSerializer(generalizedFrbRustBinding);
+          sse_encode_String(vaultPath, serializer);
+          sse_encode_String(indexPath, serializer);
+          sse_encode_list_String(filters, serializer);
+          sse_encode_list_String(virtualFilters, serializer);
+          sse_encode_u_32(offset, serializer);
+          sse_encode_u_32(limit, serializer);
+          pdeCallFfi(
+            generalizedFrbRustBinding,
+            serializer,
+            funcId: 6,
             port: port_,
           );
         },
@@ -347,7 +412,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 6,
+            funcId: 7,
             port: port_,
           );
         },
@@ -381,7 +446,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 7,
+            funcId: 8,
             port: port_,
           );
         },
@@ -415,7 +480,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           pdeCallFfi(
             generalizedFrbRustBinding,
             serializer,
-            funcId: 8,
+            funcId: 9,
             port: port_,
           );
         },
@@ -501,6 +566,12 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MediaItem> dco_decode_list_media_item(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    return (raw as List<dynamic>).map(dco_decode_media_item).toList();
+  }
+
+  @protected
   List<NoteSummary> dco_decode_list_note_summary(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return (raw as List<dynamic>).map(dco_decode_note_summary).toList();
@@ -510,6 +581,20 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   Uint8List dco_decode_list_prim_u_8_strict(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     return raw as Uint8List;
+  }
+
+  @protected
+  MediaItem dco_decode_media_item(dynamic raw) {
+    // Codec=Dco (DartCObject based), see doc to use other codecs
+    final arr = raw as List<dynamic>;
+    if (arr.length != 4)
+      throw Exception('unexpected arr length: expect 4 but see ${arr.length}');
+    return MediaItem(
+      id: dco_decode_u_32(arr[0]),
+      noteId: dco_decode_u_32(arr[1]),
+      isVideo: dco_decode_bool(arr[2]),
+      exists: dco_decode_bool(arr[3]),
+    );
   }
 
   @protected
@@ -666,6 +751,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  List<MediaItem> sse_decode_list_media_item(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+
+    var len_ = sse_decode_i_32(deserializer);
+    var ans_ = <MediaItem>[];
+    for (var idx_ = 0; idx_ < len_; ++idx_) {
+      ans_.add(sse_decode_media_item(deserializer));
+    }
+    return ans_;
+  }
+
+  @protected
   List<NoteSummary> sse_decode_list_note_summary(SseDeserializer deserializer) {
     // Codec=Sse (Serialization based), see doc to use other codecs
 
@@ -682,6 +779,21 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     var len_ = sse_decode_i_32(deserializer);
     return deserializer.buffer.getUint8List(len_);
+  }
+
+  @protected
+  MediaItem sse_decode_media_item(SseDeserializer deserializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    var var_id = sse_decode_u_32(deserializer);
+    var var_noteId = sse_decode_u_32(deserializer);
+    var var_isVideo = sse_decode_bool(deserializer);
+    var var_exists = sse_decode_bool(deserializer);
+    return MediaItem(
+      id: var_id,
+      noteId: var_noteId,
+      isVideo: var_isVideo,
+      exists: var_exists,
+    );
   }
 
   @protected
@@ -840,6 +952,18 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   }
 
   @protected
+  void sse_encode_list_media_item(
+    List<MediaItem> self,
+    SseSerializer serializer,
+  ) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_i_32(self.length, serializer);
+    for (final item in self) {
+      sse_encode_media_item(item, serializer);
+    }
+  }
+
+  @protected
   void sse_encode_list_note_summary(
     List<NoteSummary> self,
     SseSerializer serializer,
@@ -859,6 +983,15 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     // Codec=Sse (Serialization based), see doc to use other codecs
     sse_encode_i_32(self.length, serializer);
     serializer.buffer.putUint8List(self);
+  }
+
+  @protected
+  void sse_encode_media_item(MediaItem self, SseSerializer serializer) {
+    // Codec=Sse (Serialization based), see doc to use other codecs
+    sse_encode_u_32(self.id, serializer);
+    sse_encode_u_32(self.noteId, serializer);
+    sse_encode_bool(self.isVideo, serializer);
+    sse_encode_bool(self.exists, serializer);
   }
 
   @protected

@@ -1,7 +1,7 @@
-# Flutter application
+# Flutter アプリ
 
-This app is the Phase 2 Linux gallery UI. From the repository root, use
-`nix develop`, then run:
+このアプリは Phase 2 の Linux 向けギャラリー UI です。リポジトリのルートから
+`nix develop` に入り、次を実行してください。
 
 ```sh
 cd app
@@ -9,7 +9,6 @@ flutter pub get
 GDK_BACKEND=wayland flutter run -d linux
 ```
 
-The first Rust native-assets build uses the pinned version in the root
-`rust-toolchain.toml` and may download that toolchain through Rustup. The app
-keeps its index and thumbnails in its application-support directory, outside
-the selected Vault.
+最初の Rust ネイティブアセットビルドは、ルートの `rust-toolchain.toml` に固定された
+バージョンを使用し、Rustup 経由でそのツールチェインをダウンロードすることがあります。
+アプリは、索引とサムネイルを選択した Vault の外、アプリケーションサポートディレクトリに保存します。

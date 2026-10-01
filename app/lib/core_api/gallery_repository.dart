@@ -48,6 +48,20 @@ class GalleryNote {
   final int? representativeMediaId;
 }
 
+class GalleryMediaItem {
+  const GalleryMediaItem({
+    required this.id,
+    required this.noteId,
+    required this.isVideo,
+    required this.exists,
+  });
+
+  final int id;
+  final int noteId;
+  final bool isVideo;
+  final bool exists;
+}
+
 class GalleryScanReport {
   const GalleryScanReport({required this.notesIndexed, required this.warnings});
 
@@ -82,6 +96,14 @@ abstract interface class GalleryRepository {
     List<String> virtualFilters,
   );
   Future<List<GalleryNote>> queryNotes(
+    String vaultPath,
+    String indexPath,
+    List<String> filters, {
+    required List<String> virtualFilters,
+    required int offset,
+    required int limit,
+  });
+  Future<List<GalleryMediaItem>> queryMedia(
     String vaultPath,
     String indexPath,
     List<String> filters, {

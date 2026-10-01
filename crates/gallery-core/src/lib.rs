@@ -84,6 +84,14 @@ pub struct NoteSummary {
     pub representative_media_id: Option<i64>,
 }
 
+#[derive(Debug, Clone)]
+pub struct MediaSummary {
+    pub id: i64,
+    pub note_id: i64,
+    pub is_video: bool,
+    pub exists: bool,
+}
+
 struct ScanItem {
     path: PathBuf,
     relative: String,
@@ -624,50 +632,112 @@ impl Gallery {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<NoteSummary>, CoreError> {
-        let ids = self.matching_note_ids(filters, virtual_filters)?;
+        let ordered = self.sorted_note_ids(filters, virtual_filters)?;
         let mut result = Vec::new();
-        for id in ids {
-            let (published, summary) = self
+        for id in ordered.into_iter().skip(offset).take(limit) {
+            let summary = self
                 .connection
                 .query_row(
-                    "SELECT published, path, title, media_count, video_count FROM notes WHERE id=?1",
+                    "SELECT path, title, media_count, video_count FROM notes WHERE id=?1",
                     [id],
                     |row| {
-                        Ok((
-                            row.get::<_, Option<String>>(0)?,
-                            NoteSummary {
-                                id,
-                                path: row.get(1)?,
-                                title: row.get(2)?,
-                                media_count: row.get::<_, i64>(3)? as usize,
-                                video_count: row.get::<_, i64>(4)? as usize,
-                                representative_media_id: self
-                                    .connection
-                                    .query_row(
-                                        "SELECT id FROM media WHERE note_id=?1 ORDER BY ord LIMIT 1",
-                                        [id],
-                                        |media_row| media_row.get(0),
-                                    )
-                                    .optional()?,
-                            },
-                        ))
+                        Ok(NoteSummary {
+                            id,
+                            path: row.get(0)?,
+                            title: row.get(1)?,
+                            media_count: row.get::<_, i64>(2)? as usize,
+                            video_count: row.get::<_, i64>(3)? as usize,
+                            representative_media_id: self
+                                .connection
+                                .query_row(
+                                    "SELECT id FROM media WHERE note_id=?1 ORDER BY ord LIMIT 1",
+                                    [id],
+                                    |media_row| media_row.get(0),
+                                )
+                                .optional()?,
+                        })
                     },
                 )
                 .map_err(|_| CoreError::Database)?;
-            result.push((published, summary));
+            result.push(summary);
         }
-        result.sort_by(|(left, _), (right, _)| match (left, right) {
+        Ok(result)
+    }
+
+    /// Flattens every (not just representative) media item belonging to the
+    /// notes matching `filters`/`virtual_filters`, ordered the same way as
+    /// `query_filtered_page` (newest `published` first, then media
+    /// appearance order within a note), then paginates across that flat list.
+    pub fn query_media_filtered_page(
+        &self,
+        filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<MediaSummary>, CoreError> {
+        let ordered = self.sorted_note_ids(filters, virtual_filters)?;
+        let mut result = Vec::new();
+        let mut skipped = 0usize;
+        for note_id in ordered {
+            if result.len() >= limit {
+                break;
+            }
+            let mut statement = self
+                .connection
+                .prepare("SELECT id, kind, exists_flag FROM media WHERE note_id=?1 ORDER BY ord")
+                .map_err(|_| CoreError::Database)?;
+            let rows = statement
+                .query_map([note_id], |row| {
+                    Ok((
+                        row.get::<_, i64>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, i64>(2)?,
+                    ))
+                })
+                .map_err(|_| CoreError::Database)?;
+            for row in rows {
+                let (media_id, kind, exists_flag) = row.map_err(|_| CoreError::Database)?;
+                if skipped < offset {
+                    skipped += 1;
+                    continue;
+                }
+                if result.len() >= limit {
+                    break;
+                }
+                result.push(MediaSummary {
+                    id: media_id,
+                    note_id,
+                    is_video: kind == "video",
+                    exists: exists_flag != 0,
+                });
+            }
+        }
+        Ok(result)
+    }
+
+    fn sorted_note_ids(
+        &self,
+        filters: &[String],
+        virtual_filters: &[VirtualFilter],
+    ) -> Result<Vec<i64>, CoreError> {
+        let ids = self.matching_note_ids(filters, virtual_filters)?;
+        let mut with_published = Vec::with_capacity(ids.len());
+        for id in ids {
+            let published: Option<String> = self
+                .connection
+                .query_row("SELECT published FROM notes WHERE id=?1", [id], |row| {
+                    row.get(0)
+                })
+                .map_err(|_| CoreError::Database)?;
+            with_published.push((published, id));
+        }
+        with_published.sort_by(|(left, _), (right, _)| match (left, right) {
             (Some(left), Some(right)) => right.cmp(left),
             (Some(_), None) => std::cmp::Ordering::Less,
             (None, Some(_)) => std::cmp::Ordering::Greater,
             (None, None) => std::cmp::Ordering::Equal,
         });
-        Ok(result
-            .into_iter()
-            .skip(offset)
-            .take(limit)
-            .map(|(_, summary)| summary)
-            .collect())
+        Ok(with_published.into_iter().map(|(_, id)| id).collect())
     }
 
     fn matching_note_ids(
@@ -991,6 +1061,82 @@ fn note_ids_for_virtual_filter(
         .map_err(|_| CoreError::Database)?
         .collect::<Result<BTreeSet<_>, _>>()
         .map_err(|_| CoreError::Database)
+}
+
+/// A single note that did not become a gallery item, with the reason (no
+/// paths/tags/titles are logged elsewhere; this is an explicit, opt-in,
+/// local-only diagnostic for the person running the CLI against their own
+/// Vault, per docs/design.md §15.4).
+#[derive(Debug, Clone)]
+pub struct NoteDiagnostic {
+    pub path: String,
+    pub reason: String,
+}
+
+/// Walks the Vault like `scan` does, but reports every `.md` file that would
+/// not end up in the gallery (read failures, size/parse errors, or a parsed
+/// note without a `source/` tag) together with the reason. Does not touch the
+/// index; intended for `gallery-cli diagnose` to let a person find out why
+/// their note count differs from what they expect.
+pub fn diagnose_notes(vault: &Path) -> Result<Vec<NoteDiagnostic>, CoreError> {
+    let root = fs::canonicalize(vault).map_err(|_| CoreError::VaultUnavailable)?;
+    if !root.is_dir() {
+        return Err(CoreError::InvalidVault);
+    }
+    let (files, _traversal_warnings) = collect_notes(&root)?;
+    let mut diagnostics = Vec::new();
+    for path in files {
+        let Some(relative) = path
+            .strip_prefix(&root)
+            .ok()
+            .and_then(|path| path.to_str())
+            .map(|path| path.replace('\\', "/"))
+        else {
+            continue;
+        };
+        let metadata = match fs::metadata(&path) {
+            Ok(metadata) => metadata,
+            Err(_) => {
+                diagnostics.push(NoteDiagnostic {
+                    path: relative,
+                    reason: "ファイルを読み込めません".to_owned(),
+                });
+                continue;
+            }
+        };
+        if metadata.len() > gallery_parse::MAX_NOTE_BYTES as u64 {
+            diagnostics.push(NoteDiagnostic {
+                path: relative,
+                reason: "ファイルサイズの上限を超えています".to_owned(),
+            });
+            continue;
+        }
+        let content = match fs::read_to_string(&path) {
+            Ok(content) => content,
+            Err(_) => {
+                diagnostics.push(NoteDiagnostic {
+                    path: relative,
+                    reason: "文字コードが UTF-8 ではないか、読み込めません".to_owned(),
+                });
+                continue;
+            }
+        };
+        match parse_note(&content) {
+            Ok(parsed) => {
+                if !parsed.tags.iter().any(|tag| tag.starts_with("source/")) {
+                    diagnostics.push(NoteDiagnostic {
+                        path: relative,
+                        reason: "source/ から始まるタグがありません".to_owned(),
+                    });
+                }
+            }
+            Err(error) => diagnostics.push(NoteDiagnostic {
+                path: relative,
+                reason: error.to_string(),
+            }),
+        }
+    }
+    Ok(diagnostics)
 }
 
 fn collect_notes(root: &Path) -> Result<(Vec<PathBuf>, usize), CoreError> {
@@ -1814,6 +1960,92 @@ mod tests {
             1
         );
         fs::remove_file(&database).expect("remove index");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn query_media_flattens_every_media_item_across_notes() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(
+            root.join("many.md"),
+            "---\ntags: [source/rating/safe]\npublished: 2026-01-02T00:00:00\ncover: first.png\n---\n# Many\n![](second.mp4)\n",
+        )
+        .expect("write multi-media note");
+        fs::write(
+            root.join("single.md"),
+            "---\ntags: [source/rating/safe]\npublished: 2026-01-01T00:00:00\ncover: only.png\n---\n# Single\n",
+        )
+        .expect("write single-media note");
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+
+        // Grouped by note: two notes, one each.
+        assert_eq!(gallery.query(&[], 10).expect("notes").len(), 2);
+
+        // Flattened: three media items total (two from "many", one from "single"),
+        // newest-published note first, in appearance order within a note.
+        let media = gallery
+            .query_media_filtered_page(&[], &[], 0, 10)
+            .expect("media");
+        assert_eq!(media.len(), 3);
+        assert!(!media[0].is_video);
+        assert!(media[1].is_video);
+        assert_eq!(media[0].note_id, media[1].note_id);
+        assert_ne!(media[0].note_id, media[2].note_id);
+
+        // Pagination across the flattened list works like the note-level one.
+        let first_page = gallery
+            .query_media_filtered_page(&[], &[], 0, 2)
+            .expect("first page");
+        let second_page = gallery
+            .query_media_filtered_page(&[], &[], 2, 2)
+            .expect("second page");
+        assert_eq!(first_page.len(), 2);
+        assert_eq!(second_page.len(), 1);
+        assert_eq!(second_page[0].id, media[2].id);
+
+        fs::remove_file(&database).expect("remove index");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn diagnose_notes_explains_why_each_note_is_excluded() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(
+            root.join("ok.md"),
+            "---\ntags: [source/rating/safe]\n---\n# Ok\n",
+        )
+        .expect("write kept note");
+        fs::write(
+            root.join("no-source-tag.md"),
+            "---\ntags: [moc]\n---\n# No source tag\n",
+        )
+        .expect("write note without a source tag");
+        fs::write(
+            root.join("broken.md"),
+            "---\ntags: [broken\n---\n# Broken\n",
+        )
+        .expect("write note with broken frontmatter");
+        fs::write(root.join("no-tags.md"), "---\nurl: x\n---\n# No tags\n")
+            .expect("write note without tags");
+
+        let diagnostics = diagnose_notes(&root).expect("diagnose");
+        assert_eq!(diagnostics.len(), 3);
+        let by_path: BTreeMap<_, _> = diagnostics
+            .iter()
+            .map(|diagnostic| (diagnostic.path.as_str(), diagnostic.reason.as_str()))
+            .collect();
+        assert!(by_path.contains_key("no-source-tag.md"));
+        assert!(by_path.contains_key("broken.md"));
+        assert!(by_path.contains_key("no-tags.md"));
+        assert!(!by_path.contains_key("ok.md"));
+
         fs::remove_dir_all(root).expect("remove vault");
     }
 }

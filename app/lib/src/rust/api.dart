@@ -7,8 +7,8 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `category`, `error_message`, `note_summary`, `open_gallery`, `parse_virtual_filters`, `scan_report`, `virtual_filter_key`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`
+// These functions are ignored because they are not marked as `pub`: `category`, `error_message`, `media_item`, `note_summary`, `open_gallery`, `parse_virtual_filters`, `scan_report`, `virtual_filter_key`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`
 
 Future<void> prepareAppDataDirectory({
   required String directoryPath,
@@ -57,6 +57,22 @@ Future<List<NoteSummary>> queryNotes({
   required int offset,
   required int limit,
 }) => RustLib.instance.api.crateApiQueryNotes(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  filters: filters,
+  virtualFilters: virtualFilters,
+  offset: offset,
+  limit: limit,
+);
+
+Future<List<MediaItem>> queryMedia({
+  required String vaultPath,
+  required String indexPath,
+  required List<String> filters,
+  required List<String> virtualFilters,
+  required int offset,
+  required int limit,
+}) => RustLib.instance.api.crateApiQueryMedia(
   vaultPath: vaultPath,
   indexPath: indexPath,
   filters: filters,
@@ -148,6 +164,34 @@ class CategoryOption {
           count == other.count &&
           disabled == other.disabled &&
           virtualFilter == other.virtualFilter;
+}
+
+class MediaItem {
+  final int id;
+  final int noteId;
+  final bool isVideo;
+  final bool exists;
+
+  const MediaItem({
+    required this.id,
+    required this.noteId,
+    required this.isVideo,
+    required this.exists,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^ noteId.hashCode ^ isVideo.hashCode ^ exists.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is MediaItem &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          noteId == other.noteId &&
+          isVideo == other.isVideo &&
+          exists == other.exists;
 }
 
 class NoteSummary {

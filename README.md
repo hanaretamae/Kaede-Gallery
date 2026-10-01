@@ -1,17 +1,15 @@
 # vault-gallery
 
-An offline, read-only gallery for tagged Obsidian Vault notes. The Rust parser,
-indexer, CLI, and Flutter Linux gallery UI are implemented. The app selects a
-Vault, indexes it locally, filters by hierarchical tags, and lazily generates
-private image thumbnails. The gallery uses Material 3 Expressive styling with
-compact two-column filter choices and a category-wide choice at the start of
-each tag group. Viewer, note details, video playback, and Android support remain
-later phases.
+タグ付けされた Obsidian Vault の note 向けの、オフライン・読み取り専用のギャラリーです。
+Rust 製のパーサー・索引・CLI と、Flutter(Linux)製のギャラリー UI を実装済みです。
+アプリは Vault を選択し、ローカルで索引を作り、階層タグで絞り込み、プライベートな画像サムネイルを遅延生成します。
+ギャラリーは Material 3 Expressive のスタイルを採用し、タグの枠は折りたたみ可能で、
+ピル型の選択肢チップと各タグ枠の先頭に「カテゴリ全体」の選択肢を並べます。
+ビューワー、詳細パネル、動画再生、Android 対応は後のフェーズで実装します。
 
-## Phase 1 quick start
+## Phase 1 クイックスタート
 
-Enter the development shell with Nix, or install Rust stable, a C compiler, and
-Python 3:
+Nix で開発シェルに入るか、Rust stable・C コンパイラ・Python 3 を手元にインストールしてください。
 
 ```sh
 nix develop
@@ -23,22 +21,21 @@ cargo test --workspace
 cargo deny check advisories bans licenses sources
 ```
 
-The database defaults to `$XDG_STATE_HOME/vault-gallery/index.sqlite` or
-`$HOME/.local/state/vault-gallery/index.sqlite`, outside the Vault. A custom
-database path must also be outside the Vault. Unix state directories and index
-files are restricted to the current user. CLI error messages omit note content,
-paths, tags, and URLs.
+索引データベースは既定で `$XDG_STATE_HOME/vault-gallery/index.sqlite`
+(なければ `$HOME/.local/state/vault-gallery/index.sqlite`)に置かれ、Vault の外にあります。
+カスタムのデータベースパスを指定する場合も、Vault の外である必要があります。
+Unix では状態ディレクトリと索引ファイルの権限を現在のユーザーのみに制限します。
+CLI のエラーメッセージには、note の内容・パス・タグ・URL を含めません。
 
-The scanner ignores hidden paths and common Syncthing management files. The
-index is disposable: changing a note's modification time or size reparses it;
-removed notes disappear on the next scan. Missing media is retained as a note
-with an existence flag that is refreshed on later scans.
+走査では、隠しパスと一般的な Syncthing の管理ファイルを無視します。
+索引は使い捨てで、note の更新日時やサイズが変わると再パースし、削除された note は次回の走査で索引から消えます。
+メディアが見つからない note は、「存在フラグ」付きで残り、後の走査で再確認されます。
 
-## Flutter Linux gallery
+## Flutter(Linux)ギャラリー
 
-The Nix shell includes Flutter, Linux desktop build dependencies, Rust, and
-Rustup. The Rust toolchain is pinned in `rust-toolchain.toml`; the first native
-assets build installs that toolchain through Rustup:
+Nix シェルには、Flutter、Linux デスクトップビルドに必要な依存関係、Rust、Rustup が含まれています。
+Rust ツールチェインは `rust-toolchain.toml` に固定されており、最初のネイティブアセットビルド時に
+Rustup 経由でそのツールチェインがインストールされます。
 
 ```sh
 nix develop
@@ -47,64 +44,58 @@ flutter pub get
 GDK_BACKEND=wayland flutter run -d linux
 ```
 
-The Linux runner loads the Rust bridge from the shared library bundled beside
-the executable, so the app does not depend on `LD_LIBRARY_PATH` containing the
-bundle directory. The Nix shell also exposes GTK's compiled GSettings schema,
-which the Linux directory chooser requires. Restart `nix develop` after
-changing `flake.nix`. The Linux runner leaves titlebar rendering to the
-compositor instead of adding its own GTK header bar.
+Linux ランナーは、実行ファイルと同梱された共有ライブラリから Rust ブリッジを読み込むため、
+`LD_LIBRARY_PATH` にバンドルディレクトリを含める必要はありません。
+Nix シェルは、Linux のディレクトリ選択ダイアログに必要な GTK のコンパイル済み GSettings スキーマも提供します。
+`flake.nix` を変更した場合は `nix develop` を再実行してください。
+Linux ランナーはタイトルバーの描画をコンポジタに任せており、独自の GTK ヘッダーバーは追加しません。
 
-The app stores its index and thumbnails under Flutter's application-support
-directory, never in the Vault. The data directory is restricted to the current
-user on Unix. Vault access remains read-only. App data is local and no
-background network, telemetry, or analytics calls are made.
-The current pure-Rust thumbnail decoder supports PNG, JPEG, GIF, and WebP;
-AVIF and video thumbnails currently use placeholders pending later media
-support work.
+アプリは索引とサムネイルを Flutter のアプリケーションサポートディレクトリに保存し、Vault には書き込みません。
+データディレクトリは Unix では現在のユーザーのみに権限が制限されます。Vault へのアクセスは常に読み取り専用です。
+アプリのデータはローカルに保存され、バックグラウンドでのネットワーク通信・テレメトリ・アナリティクスは一切行いません。
+現状の純 Rust サムネイルデコーダーは PNG・JPEG・GIF・WebP に対応しています。
+AVIF と動画サムネイルは、今後のメディア対応作業までプレースホルダー表示になります。
 
-## Parser scope and safety
+## パーサーの対象範囲と安全性
 
-The parser accepts UTF-8 with an optional BOM, LF/CRLF, YAML frontmatter with a
-non-empty `tags` list, Markdown headings, Markdown media embeds and links, and
-`関連` / `覚書` sections. The supplied sanitized Vault examples use Markdown
-embeds only; Obsidian wikilink embeds are not required. Resource limits
-currently cap notes at 2 MiB,
-frontmatter at 256 KiB, tags at 256, and YAML nesting at 64 levels.
+パーサーは、BOM 付き/なしの UTF-8、LF/CRLF、`tags` が空でない YAML フロントマター、
+Markdown の見出し、Markdown のメディア埋め込み・リンク、「関連」/「覚書」セクションを受け付けます。
+提供されているサニタイズ済みの Vault サンプルは Markdown 埋め込みのみを使用しており、
+Obsidian の wikilink 埋め込みは必須ではありません。
+リソース制限は現状、note の最大サイズを 2 MiB、フロントマターの最大サイズを 256 KiB、
+タグ数の上限を 256、YAML のネストの深さを 64 階層としています。
 
-YAML aliases are rejected before deserialization. The selected
-`yaml_serde`/libyaml parser does not expose a configurable alias expansion
-budget, so rejecting alias tokens is the conservative way to avoid expansion
-attacks. Quoted asterisks and comments are accepted. If representative Vault
-notes require aliases, replace this with an event-based parser and an explicit
-alias budget before enabling them.
+YAML のエイリアスはデシリアライズ前に拒否されます。採用している `serde_yaml`/libyaml ベースのパーサーは
+設定可能なエイリアス展開上限を公開していないため、エイリアストークンを拒否することが
+展開攻撃を避けるための保守的な方法です。引用符で囲まれたアスタリスクやコメントは許可されます。
+実際の Vault の note でエイリアスが必要になった場合は、有効化する前に、
+イベントベースのパーサーと明示的なエイリアス上限に置き換えてください。
 
-SQLite is provided by `rusqlite` with its `bundled` feature. This embeds the
-SQLite C library via FFI and is an explicit exception to the preference for
-pure-Rust dependencies; it provides a consistent local index and avoids
-system-SQLite variation. It is not a network client. The index is created only
-outside the Vault.
+SQLite は `rusqlite` の `bundled` 機能で提供されます。これは FFI 経由で SQLite の C ライブラリを
+同梱するもので、純 Rust 依存を優先する方針に対する明示的な例外です。
+一貫したローカル索引を提供し、システムの SQLite のばらつきを避けるためのものであり、
+ネットワーククライアントではありません。索引は Vault の外にのみ作成されます。
 
-The initial exclude prefixes are `moc`, `add`, `pin`, and `source/art`. They
-only affect category display; notes tagged `source/art` remain searchable and
-listed. Category options omit ancestor tags, and tag filtering uses OR within
-one category and AND across categories.
+初期の除外対象プレフィックスは `moc`、`add`、`pin`、`source/art` です。
+これらはカテゴリの表示にのみ影響し、`source/art` タグの付いた note は検索対象・一覧表示対象のままです。
+カテゴリの選択肢には親タグを含めず、タグによる絞り込みは同一カテゴリ内では OR、カテゴリ間では AND です。
 
-## Performance and fixtures
+## パフォーマンスとテストデータ
 
-Generate scale fixtures without using real clips:
+実際のクリップを使わずに、規模を模したテストデータを生成できます。
 
 ```sh
 python3 tools/generate_dummy_vault.py /tmp/vault-7806 --notes 7806
 python3 tools/generate_dummy_vault.py /tmp/vault-20000 --notes 20000
 ```
 
-`tools/benchmark.sh` records a release build and scan timing for a requested
-note count. Use `--database <path>` before tag arguments to select a custom
-index location. Generated scale fixtures are not committed; the repository's
-small `testdata/dummy-vault` fixture is fictional.
+`tools/benchmark.sh` は、指定した note 数に対するリリースビルドと走査時間を記録します。
+タグの引数の前に `--database <path>` を指定すると、カスタムの索引の場所を選べます。
+生成した大規模なテストデータはコミットしません。リポジトリに含まれる小さな
+`testdata/dummy-vault` のテストデータは架空のものです。
 
-## Dependency security
+## 依存関係のセキュリティ
 
-Core crates declare `forbid(unsafe_code)`. Dependency versions are locked in
-`Cargo.lock`; network-related packages are denied by `deny.toml`. The index is
-a cache and can be deleted and rebuilt from the Vault.
+主要なクレートには `forbid(unsafe_code)` を付けています。依存関係のバージョンは
+`Cargo.lock` で固定され、ネットワーク関連のパッケージは `deny.toml` で禁止されています。
+索引はキャッシュであり、削除して Vault から再構築できます。

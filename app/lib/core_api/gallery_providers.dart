@@ -143,6 +143,23 @@ class SelectedVirtualFiltersController
   }
 }
 
+/// How the gallery grid groups media: one tile per note (showing just the
+/// representative media), or one tile per media item so every image/video a
+/// note contains shows up on its own.
+enum GalleryDisplayMode { byNote, allMedia }
+
+final galleryDisplayModeProvider =
+    NotifierProvider<GalleryDisplayModeController, GalleryDisplayMode>(
+      GalleryDisplayModeController.new,
+    );
+
+class GalleryDisplayModeController extends Notifier<GalleryDisplayMode> {
+  @override
+  GalleryDisplayMode build() => GalleryDisplayMode.byNote;
+
+  void set(GalleryDisplayMode mode) => state = mode;
+}
+
 final galleryCategoriesProvider = FutureProvider<List<GalleryCategory>>((
   ref,
 ) async {
@@ -214,6 +231,73 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
       final next = await ref
           .read(galleryRepositoryProvider)
           .queryNotes(
+            session.vaultPath,
+            session.paths.indexPath,
+            _filters,
+            virtualFilters: _virtualFilters,
+            offset: current.length,
+            limit: galleryPageSize,
+          );
+      _hasMore = next.length == galleryPageSize;
+      state = AsyncData([...current, ...next]);
+    } catch (error, stackTrace) {
+      state = AsyncError(error, stackTrace);
+    } finally {
+      isLoadingMore = false;
+    }
+  }
+}
+
+final galleryMediaItemsProvider =
+    AsyncNotifierProvider<GalleryMediaItemsController, List<GalleryMediaItem>>(
+      GalleryMediaItemsController.new,
+    );
+
+class GalleryMediaItemsController
+    extends AsyncNotifier<List<GalleryMediaItem>> {
+  VaultSession? _session;
+  List<String> _filters = const [];
+  List<String> _virtualFilters = const [];
+  bool _hasMore = true;
+  bool isLoadingMore = false;
+
+  @override
+  Future<List<GalleryMediaItem>> build() async {
+    _filters = ref.watch(selectedTagsProvider).toList(growable: false);
+    _virtualFilters = ref
+        .watch(selectedVirtualFiltersProvider)
+        .map((filter) => filter.key)
+        .toList(growable: false);
+    _session = await ref.watch(vaultSessionProvider.future);
+    _hasMore = true;
+    if (_session == null) {
+      return const [];
+    }
+    final items = await ref
+        .read(galleryRepositoryProvider)
+        .queryMedia(
+          _session!.vaultPath,
+          _session!.paths.indexPath,
+          _filters,
+          virtualFilters: _virtualFilters,
+          offset: 0,
+          limit: galleryPageSize,
+        );
+    _hasMore = items.length == galleryPageSize;
+    return items;
+  }
+
+  Future<void> loadMore() async {
+    final current = state.value;
+    final session = _session;
+    if (current == null || session == null || !_hasMore || isLoadingMore) {
+      return;
+    }
+    isLoadingMore = true;
+    try {
+      final next = await ref
+          .read(galleryRepositoryProvider)
+          .queryMedia(
             session.vaultPath,
             session.paths.indexPath,
             _filters,

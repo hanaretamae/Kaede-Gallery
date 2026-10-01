@@ -176,6 +176,16 @@ class _FakeRepository implements GalleryRepository {
   }
 
   @override
+  Future<List<GalleryMediaItem>> queryMedia(
+    String vaultPath,
+    String indexPath,
+    List<String> filters, {
+    required List<String> virtualFilters,
+    required int offset,
+    required int limit,
+  }) async => const [];
+
+  @override
   Future<Uint8List?> getThumbnail(
     String vaultPath,
     String indexPath,
