@@ -220,7 +220,8 @@ class _TagPanel extends ConsumerWidget {
         children: [
           Text('タグ', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: 8),
-          for (final category in items) _CategoryCard(category: category),
+          for (final category in items)
+            _CategoryCard(key: ValueKey(category.path), category: category),
           if (items.isEmpty)
             const Padding(
               padding: EdgeInsets.all(16),
@@ -233,7 +234,7 @@ class _TagPanel extends ConsumerWidget {
 }
 
 class _CategoryCard extends ConsumerStatefulWidget {
-  const _CategoryCard({required this.category});
+  const _CategoryCard({super.key, required this.category});
 
   final GalleryCategory category;
 
@@ -278,10 +279,10 @@ class _CategoryCardState extends ConsumerState<_CategoryCard> {
           (option) => option.name.toLowerCase().contains(search.toLowerCase()),
         )
         .toList(growable: false);
+    final optionRows = (options.length / 2).ceil().clamp(1, 8);
     return Card(
-      clipBehavior: Clip.antiAlias,
       child: Padding(
-        padding: const EdgeInsets.all(10),
+        padding: const EdgeInsets.all(12),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -309,21 +310,33 @@ class _CategoryCardState extends ConsumerState<_CategoryCard> {
                   ),
                 ),
               ),
-            const SizedBox(height: 6),
-            SizedBox(
-              height: 190,
-              child: ListView.builder(
-                itemCount: options.length,
-                itemBuilder: (context, index) => Align(
-                  alignment: Alignment.centerLeft,
-                  child: _OptionChip(
+            const SizedBox(height: 8),
+            if (options.isEmpty)
+              const SizedBox(
+                height: 36,
+                child: Center(child: Text('該当する選択肢がありません')),
+              )
+            else
+              SizedBox(
+                height: optionRows * 40,
+                child: GridView.builder(
+                  physics: options.length > 16
+                      ? null
+                      : const NeverScrollableScrollPhysics(),
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 2,
+                    mainAxisExtent: 36,
+                    crossAxisSpacing: 6,
+                    mainAxisSpacing: 4,
+                  ),
+                  itemCount: options.length,
+                  itemBuilder: (context, index) => _OptionChip(
                     option: options[index],
                     selectedTags: selected,
                     selectedVirtualFilters: selectedVirtual,
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -348,7 +361,25 @@ class _OptionChip extends ConsumerWidget {
         ? null
         : GalleryVirtualFilter.fromKey(option.virtualFilter!);
     return FilterChip(
-      label: Text('${option.name}  ${option.count}'),
+      label: SizedBox(
+        width: double.infinity,
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                option.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            const SizedBox(width: 4),
+            Text(
+              '${option.count}',
+              style: Theme.of(context).textTheme.labelSmall,
+            ),
+          ],
+        ),
+      ),
       selected: virtualFilter == null
           ? selectedTags.contains(option.fullTag)
           : selectedVirtualFilters.contains(virtualFilter),

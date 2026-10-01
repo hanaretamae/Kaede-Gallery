@@ -6,7 +6,7 @@ This app is the Phase 2 Linux gallery UI. From the repository root, use
 ```sh
 cd app
 flutter pub get
-flutter run -d linux
+GDK_BACKEND=wayland flutter run -d linux
 ```
 
 The first Rust native-assets build uses the pinned version in the root

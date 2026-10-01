@@ -3,8 +3,10 @@
 An offline, read-only gallery for tagged Obsidian Vault notes. The Rust parser,
 indexer, CLI, and Flutter Linux gallery UI are implemented. The app selects a
 Vault, indexes it locally, filters by hierarchical tags, and lazily generates
-private image thumbnails. Viewer, note details, video playback, and Android
-support remain later phases.
+private image thumbnails. The gallery uses Material 3 Expressive styling with
+compact two-column filter choices and a category-wide choice at the start of
+each tag group. Viewer, note details, video playback, and Android support remain
+later phases.
 
 ## Phase 1 quick start
 

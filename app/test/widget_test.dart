@@ -48,10 +48,19 @@ void main() {
     expect(find.text('コンテンツ'), findsOneWidget);
     expect(find.text('性別'), findsOneWidget);
     expect(find.textContaining('female'), findsOneWidget);
+    expect(
+      tester.widget<MaterialApp>(find.byType(MaterialApp)).theme!.useMaterial3,
+      isTrue,
+    );
+    expect(find.text('gender'), findsOneWidget);
 
     await tester.tap(find.textContaining('複数画像'));
     await tester.pumpAndSettle();
     expect(repository.lastVirtualFilters, contains('multiple_media'));
+
+    await tester.tap(find.text('gender'));
+    await tester.pumpAndSettle();
+    expect(repository.lastFilters, contains('source/gender'));
 
     await tester.tap(find.textContaining('female'));
     await tester.pumpAndSettle();
@@ -108,6 +117,12 @@ class _FakeRepository implements GalleryRepository {
       displayName: 'コンテンツ',
       count: 1,
       options: [
+        GalleryCategoryOption(
+          name: 'gender',
+          fullTag: 'source/gender',
+          count: 1,
+          disabled: false,
+        ),
         GalleryCategoryOption(
           name: '複数画像',
           fullTag: '@virtual:multiple_media',

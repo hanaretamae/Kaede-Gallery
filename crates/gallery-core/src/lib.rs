@@ -522,16 +522,15 @@ impl Gallery {
                 .get(&path)
                 .cloned()
                 .unwrap_or_else(|| path.clone());
-            let category_filters = filters
-                .iter()
-                .filter(|filter| tag_category(filter) == path.as_str())
-                .cloned()
-                .collect::<Vec<_>>();
-            let base_filters = filters
-                .iter()
-                .filter(|filter| tag_category(filter) != path.as_str())
-                .cloned()
-                .collect::<Vec<_>>();
+            let mut category_filters = Vec::new();
+            let mut base_filters = Vec::new();
+            for filter in filters {
+                if filter_category(&self.connection, filter)? == path {
+                    category_filters.push(filter.clone());
+                } else {
+                    base_filters.push(filter.clone());
+                }
+            }
             let base_matches = self.matching_note_ids(&base_filters, virtual_filters)?;
             let mut selected_ids = BTreeSet::new();
             for filter in &category_filters {
@@ -560,6 +559,18 @@ impl Gallery {
                 });
             }
             let count = base_matches.intersection(&category_ids).count();
+            if path != "その他" {
+                category_options.insert(
+                    0,
+                    CategoryOption {
+                        name: path.rsplit('/').next().unwrap_or(path.as_str()).to_owned(),
+                        full_tag: path.clone(),
+                        count,
+                        disabled: count == 0,
+                        virtual_filter: None,
+                    },
+                );
+            }
             categories.push(Category {
                 path,
                 display_name,
@@ -666,10 +677,7 @@ impl Gallery {
     ) -> Result<BTreeSet<i64>, CoreError> {
         let mut grouped_filters: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for filter in filters {
-            let category = filter
-                .rsplit_once('/')
-                .map(|(category, _)| category.to_owned())
-                .unwrap_or_else(|| "その他".to_owned());
+            let category = filter_category(&self.connection, filter)?;
             grouped_filters
                 .entry(category)
                 .or_default()
@@ -951,10 +959,17 @@ fn note_ids_for_tag(connection: &Connection, tag: &str) -> Result<BTreeSet<i64>,
         .map_err(|_| CoreError::Database)
 }
 
-fn tag_category(tag: &str) -> &str {
-    tag.rsplit_once('/')
-        .map(|(category, _)| category)
-        .unwrap_or("その他")
+fn filter_category(connection: &Connection, tag: &str) -> Result<String, CoreError> {
+    if !tag.contains('/') {
+        return Ok("その他".to_owned());
+    }
+    if statement_has_descendant(connection, tag)? {
+        return Ok(tag.to_owned());
+    }
+    Ok(tag
+        .rsplit_once('/')
+        .map(|(category, _)| category.to_owned())
+        .unwrap_or_else(|| "その他".to_owned()))
 }
 
 fn note_ids_for_virtual_filter(
@@ -1706,6 +1721,9 @@ mod tests {
             .find(|category| category.path == "source/gender")
             .expect("gender category");
         assert_eq!(gender.count, 3);
+        assert_eq!(gender.options[0].name, "gender");
+        assert_eq!(gender.options[0].full_tag, "source/gender");
+        assert_eq!(gender.options[0].count, 3);
         assert_eq!(
             gender
                 .options
@@ -1713,6 +1731,20 @@ mod tests {
                 .find(|option| option.name == "male")
                 .expect("male option")
                 .count,
+            3
+        );
+        assert_eq!(
+            gallery
+                .query(&["source/gender".into()], 10)
+                .expect("category-wide filter")
+                .len(),
+            3
+        );
+        assert_eq!(
+            gallery
+                .query(&["source/gender".into(), "source/gender/female".into()], 10,)
+                .expect("category-wide OR specific filter")
+                .len(),
             3
         );
         let rating = categories
