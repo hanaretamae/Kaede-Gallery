@@ -42,8 +42,12 @@ assets build installs that toolchain through Rustup:
 nix develop
 cd app
 flutter pub get
-flutter run -d linux
+GDK_BACKEND=wayland flutter run -d linux
 ```
+
+The Linux runner loads the Rust bridge from the shared library bundled beside
+the executable, so the app does not depend on `LD_LIBRARY_PATH` containing the
+bundle directory.
 
 The app stores its index and thumbnails under Flutter's application-support
 directory, never in the Vault. The data directory is restricted to the current
