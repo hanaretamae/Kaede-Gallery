@@ -44,7 +44,9 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('架空の note'), findsOneWidget);
+    expect(find.text('fictional-vault'), findsOneWidget);
+    expect(find.text('1 件'), findsOneWidget);
+    expect(find.text('架空の note'), findsNothing);
     expect(find.text('コンテンツ'), findsOneWidget);
     expect(find.text('性別'), findsOneWidget);
     expect(find.textContaining('female'), findsOneWidget);

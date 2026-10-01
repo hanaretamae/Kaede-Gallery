@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as p;
 
 import '../../core_api/gallery_providers.dart';
 import '../../core_api/gallery_repository.dart';
@@ -44,7 +45,7 @@ class _VaultPickerScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Vault Gallery')),
+    appBar: AppBar(),
     body: Center(
       child: FilledButton.icon(
         onPressed: onChooseVault,
@@ -62,7 +63,7 @@ class _VaultErrorScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('Vault Gallery')),
+    appBar: AppBar(),
     body: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -91,9 +92,20 @@ class _GalleryLayout extends ConsumerWidget {
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final filters = ref.watch(selectedTagsProvider);
     final virtualFilters = ref.watch(selectedVirtualFiltersProvider);
+    final vaultName = p.basename(session.vaultPath);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Vault Gallery'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(vaultName, overflow: TextOverflow.ellipsis),
+            Text(
+              '${session.scanReport.notesIndexed} 件',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+        ),
         actions: [
           if (!wide)
             IconButton(
@@ -491,15 +503,7 @@ class _GalleryTile extends ConsumerWidget {
             ),
           ),
           Padding(
-            padding: const EdgeInsets.fromLTRB(10, 8, 10, 2),
-            child: Text(
-              note.title.isEmpty ? note.path : note.title,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(10, 0, 10, 8),
+            padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
             child: Text(
               '${note.mediaCount} 件のメディア',
               style: Theme.of(context).textTheme.bodySmall,
