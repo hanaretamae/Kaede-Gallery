@@ -1,5 +1,5 @@
 {
-  description = "Development environment for vault-gallery Phase 1";
+  description = "Development environment for vault-gallery";
 
   inputs.nixpkgs.url = "https://channels.nixos.org/nixos-unstable/nixexprs.tar.zst";
 
@@ -18,11 +18,21 @@
               cargo
               rustfmt
               clippy
+              rustup
               cargo-deny
+              flutter
               pkg-config
               stdenv.cc
+              cmake
+              ninja
+              clang
+              gtk3
+              glib
+              libGL
               python3
             ];
+            FLUTTER_SUPPRESS_ANALYTICS = "true";
+            DART_SUPPRESS_ANALYTICS = "true";
           };
         });
     };

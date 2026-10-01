@@ -3,6 +3,7 @@ members = [
     "crates/gallery-parse",
     "crates/gallery-core",
     "crates/gallery-cli",
+    "crates/gallery-bridge",
 ]
 resolver = "2"
 
@@ -18,7 +19,12 @@ serde_yaml = { package = "yaml_serde", version = "0.10" }
 thiserror = "2.0"
 rusqlite = { version = "0.40", features = ["bundled"] }
 urlencoding = "2.1"
+image = { version = "0.25.10", default-features = false, features = ["gif", "jpeg", "png", "webp"] }
+sha2 = "0.10.9"
 
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(frb_expand)'] }

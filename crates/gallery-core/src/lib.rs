@@ -1,18 +1,41 @@
 #![forbid(unsafe_code)]
 
 use gallery_parse::{MediaKind, ParsedNote, expanded_tags, parse_note};
+use image::{ImageDecoder, ImageFormat, ImageReader, Limits};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-use std::fs::{self, File};
-use std::io::Read;
+use std::fs::{self, File, OpenOptions};
+use std::io::{Cursor, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, mpsc};
+use std::sync::{Arc, Mutex, mpsc};
 use std::thread;
+use std::time::UNIX_EPOCH;
 use thiserror::Error;
 
 const DEFAULT_EXCLUDES: [&str; 4] = ["moc", "add", "pin", "source/art"];
 const INDEX_SCHEMA_VERSION: &str = "1";
+const MAX_THUMBNAIL_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
+const MAX_THUMBNAIL_PIXELS: u64 = 32 * 1024 * 1024;
+const MAX_THUMBNAIL_DIMENSION: u32 = 16_384;
+const MAX_THUMBNAIL_ALLOCATION: u64 = 192 * 1024 * 1024;
+const MAX_THUMBNAIL_SIZE: u32 = 1_024;
+static THUMBNAIL_LOCK: Mutex<()> = Mutex::new(());
+const VIRTUAL_FILTERS: [(VirtualFilter, &str); 4] = [
+    (VirtualFilter::MultipleMedia, "複数画像"),
+    (VirtualFilter::HasMemo, "覚書あり"),
+    (VirtualFilter::HasVideo, "動画あり"),
+    (VirtualFilter::HasRelated, "関連あり"),
+];
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum VirtualFilter {
+    MultipleMedia,
+    HasMemo,
+    HasVideo,
+    HasRelated,
+}
 
 #[derive(Debug, Error)]
 pub enum CoreError {
@@ -39,6 +62,8 @@ pub struct CategoryOption {
     pub name: String,
     pub full_tag: String,
     pub count: usize,
+    pub disabled: bool,
+    pub virtual_filter: Option<VirtualFilter>,
 }
 
 #[derive(Debug, Clone)]
@@ -46,14 +71,17 @@ pub struct Category {
     pub path: String,
     pub display_name: String,
     pub options: Vec<CategoryOption>,
+    pub count: usize,
 }
 
 #[derive(Debug, Clone)]
 pub struct NoteSummary {
+    pub id: i64,
     pub path: String,
     pub title: String,
     pub media_count: usize,
     pub video_count: usize,
+    pub representative_media_id: Option<i64>,
 }
 
 struct ScanItem {
@@ -70,6 +98,62 @@ pub struct Gallery {
     labels: BTreeMap<String, String>,
 }
 
+pub fn prepare_private_app_directory(directory: &Path, vault: &Path) -> Result<(), CoreError> {
+    let vault_root = fs::canonicalize(vault).map_err(|_| CoreError::VaultUnavailable)?;
+    let canonical = ensure_private_child_directory(directory, &vault_root)?;
+    set_private_directory(&canonical)
+}
+
+pub fn load_selected_vault(directory: &Path) -> Result<Option<String>, CoreError> {
+    let path = directory.join("vault-path");
+    let metadata = match fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(_) => return Err(CoreError::Io),
+    };
+    if !metadata.file_type().is_file() || metadata.len() > 4_096 {
+        return Err(CoreError::Io);
+    }
+    let contents = fs::read_to_string(path).map_err(|_| CoreError::Io)?;
+    let value = contents.trim_end_matches(['\r', '\n']);
+    if value.is_empty() || value.contains('\0') || value.len() > 4_096 {
+        return Err(CoreError::Io);
+    }
+    Ok(Some(value.to_owned()))
+}
+
+pub fn save_selected_vault(directory: &Path, vault: &Path) -> Result<String, CoreError> {
+    prepare_private_app_directory(directory, vault)?;
+    let canonical_vault = fs::canonicalize(vault).map_err(|_| CoreError::VaultUnavailable)?;
+    if !canonical_vault.is_dir() {
+        return Err(CoreError::InvalidVault);
+    }
+    let value = canonical_vault.to_str().ok_or(CoreError::Io)?;
+    if value.len() > 4_096 || value.contains('\0') {
+        return Err(CoreError::Io);
+    }
+    let path = directory.join("vault-path");
+    let temporary = directory.join("vault-path.tmp");
+    match fs::symlink_metadata(&temporary) {
+        Ok(_) => fs::remove_file(&temporary).map_err(|_| CoreError::Io)?,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(CoreError::Io),
+    }
+    let mut options = OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        options.mode(0o600);
+    }
+    let mut file = options.open(&temporary).map_err(|_| CoreError::Io)?;
+    file.write_all(value.as_bytes())
+        .map_err(|_| CoreError::Io)?;
+    file.sync_all().map_err(|_| CoreError::Io)?;
+    fs::rename(&temporary, path).map_err(|_| CoreError::Io)?;
+    Ok(value.to_owned())
+}
+
 impl Gallery {
     pub fn open(vault: &Path, database: &Path) -> Result<Self, CoreError> {
         let root = fs::canonicalize(vault).map_err(|_| CoreError::VaultUnavailable)?;
@@ -77,7 +161,7 @@ impl Gallery {
             return Err(CoreError::InvalidVault);
         }
         let database_path = resolve_database_path(database, &root)?;
-        let connection = Connection::open(&database_path).map_err(|_| CoreError::Database)?;
+        let mut connection = Connection::open(&database_path).map_err(|_| CoreError::Database)?;
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -165,6 +249,33 @@ impl Gallery {
                 [INDEX_SCHEMA_VERSION],
             )
             .map_err(|_| CoreError::Database)?;
+        let transaction = connection.transaction().map_err(|_| CoreError::Database)?;
+        let indexed_vault = transaction
+            .query_row("SELECT value FROM meta WHERE key='vault_root'", [], |row| {
+                row.get::<_, String>(0)
+            })
+            .optional()
+            .map_err(|_| CoreError::Database)?;
+        let vault_identity = root.to_string_lossy();
+        if indexed_vault.as_deref() != Some(vault_identity.as_ref()) {
+            transaction
+                .execute_batch(
+                    "DELETE FROM note_tags;
+                     DELETE FROM media;
+                     DELETE FROM notes;
+                     DELETE FROM tags;
+                     DELETE FROM scan_state;
+                     DELETE FROM warnings;",
+                )
+                .map_err(|_| CoreError::Database)?;
+        }
+        transaction
+            .execute(
+                "INSERT OR REPLACE INTO meta(key,value) VALUES ('vault_root',?1)",
+                [vault_identity.as_ref()],
+            )
+            .map_err(|_| CoreError::Database)?;
+        transaction.commit().map_err(|_| CoreError::Database)?;
 
         Ok(Self {
             root,
@@ -369,6 +480,18 @@ impl Gallery {
     }
 
     pub fn categories(&self) -> Result<Vec<Category>, CoreError> {
+        self.categories_for(&[])
+    }
+
+    pub fn categories_for(&self, filters: &[String]) -> Result<Vec<Category>, CoreError> {
+        self.categories_with_filters(filters, &[])
+    }
+
+    pub fn categories_with_filters(
+        &self,
+        filters: &[String],
+        virtual_filters: &[VirtualFilter],
+    ) -> Result<Vec<Category>, CoreError> {
         let mut category_tags: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         let mut statement = self
             .connection
@@ -399,25 +522,148 @@ impl Gallery {
                 .get(&path)
                 .cloned()
                 .unwrap_or_else(|| path.clone());
+            let category_filters = filters
+                .iter()
+                .filter(|filter| tag_category(filter) == path.as_str())
+                .cloned()
+                .collect::<Vec<_>>();
+            let base_filters = filters
+                .iter()
+                .filter(|filter| tag_category(filter) != path.as_str())
+                .cloned()
+                .collect::<Vec<_>>();
+            let base_matches = self.matching_note_ids(&base_filters, virtual_filters)?;
+            let mut selected_ids = BTreeSet::new();
+            for filter in &category_filters {
+                selected_ids.extend(note_ids_for_tag(&self.connection, filter)?);
+            }
+            let mut category_ids = BTreeSet::new();
             let mut category_options = Vec::new();
-            for full_tag in options {
-                let name = full_tag.rsplit('/').next().unwrap_or(&full_tag).to_owned();
+            for full_tag in &options {
+                let name = full_tag
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or(full_tag.as_str())
+                    .to_owned();
+                let option_ids = note_ids_for_tag(&self.connection, full_tag)?;
+                category_ids.extend(option_ids.iter().copied());
+                let count = selected_ids
+                    .union(&option_ids)
+                    .filter(|id| base_matches.contains(id))
+                    .count();
                 category_options.push(CategoryOption {
-                    count: count_tag(&self.connection, &full_tag)?,
+                    count,
+                    disabled: count == 0,
                     name,
-                    full_tag,
+                    full_tag: full_tag.clone(),
+                    virtual_filter: None,
                 });
             }
+            let count = base_matches.intersection(&category_ids).count();
             categories.push(Category {
                 path,
                 display_name,
                 options: category_options,
+                count,
             });
         }
+        let matched_count = self.matching_note_ids(filters, virtual_filters)?.len();
+        let mut content_options = Vec::with_capacity(VIRTUAL_FILTERS.len());
+        for (filter, name) in VIRTUAL_FILTERS {
+            let mut option_filters = virtual_filters.to_vec();
+            option_filters.push(filter);
+            let count = self.matching_note_ids(filters, &option_filters)?.len();
+            content_options.push(CategoryOption {
+                name: name.to_owned(),
+                full_tag: String::new(),
+                count,
+                disabled: count == 0,
+                virtual_filter: Some(filter),
+            });
+        }
+        categories.insert(
+            0,
+            Category {
+                path: "@content".to_owned(),
+                display_name: "コンテンツ".to_owned(),
+                options: content_options,
+                count: matched_count,
+            },
+        );
         Ok(categories)
     }
 
     pub fn query(&self, filters: &[String], limit: usize) -> Result<Vec<NoteSummary>, CoreError> {
+        self.query_page(filters, 0, limit)
+    }
+
+    pub fn query_page(
+        &self,
+        filters: &[String],
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<NoteSummary>, CoreError> {
+        self.query_filtered_page(filters, &[], offset, limit)
+    }
+
+    pub fn query_filtered_page(
+        &self,
+        filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<NoteSummary>, CoreError> {
+        let ids = self.matching_note_ids(filters, virtual_filters)?;
+        let mut result = Vec::new();
+        for id in ids {
+            let (published, summary) = self
+                .connection
+                .query_row(
+                    "SELECT published, path, title, media_count, video_count FROM notes WHERE id=?1",
+                    [id],
+                    |row| {
+                        Ok((
+                            row.get::<_, Option<String>>(0)?,
+                            NoteSummary {
+                                id,
+                                path: row.get(1)?,
+                                title: row.get(2)?,
+                                media_count: row.get::<_, i64>(3)? as usize,
+                                video_count: row.get::<_, i64>(4)? as usize,
+                                representative_media_id: self
+                                    .connection
+                                    .query_row(
+                                        "SELECT id FROM media WHERE note_id=?1 ORDER BY ord LIMIT 1",
+                                        [id],
+                                        |media_row| media_row.get(0),
+                                    )
+                                    .optional()?,
+                            },
+                        ))
+                    },
+                )
+                .map_err(|_| CoreError::Database)?;
+            result.push((published, summary));
+        }
+        result.sort_by(|(left, _), (right, _)| match (left, right) {
+            (Some(left), Some(right)) => right.cmp(left),
+            (Some(_), None) => std::cmp::Ordering::Less,
+            (None, Some(_)) => std::cmp::Ordering::Greater,
+            (None, None) => std::cmp::Ordering::Equal,
+        });
+        Ok(result
+            .into_iter()
+            .skip(offset)
+            .take(limit)
+            .map(|(_, summary)| summary)
+            .collect())
+    }
+
+    fn matching_note_ids(
+        &self,
+        filters: &[String],
+        virtual_filters: &[VirtualFilter],
+    ) -> Result<BTreeSet<i64>, CoreError> {
         let mut grouped_filters: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for filter in filters {
             let category = filter
@@ -440,43 +686,17 @@ impl Gallery {
                 Some(current) => current.intersection(&category_ids).copied().collect(),
             });
         }
-        let ids = match candidates {
+        for virtual_filter in virtual_filters {
+            let virtual_ids = note_ids_for_virtual_filter(&self.connection, *virtual_filter)?;
+            candidates = Some(match candidates {
+                None => virtual_ids,
+                Some(current) => current.intersection(&virtual_ids).copied().collect(),
+            });
+        }
+        Ok(match candidates {
             Some(ids) => ids,
             None => all_note_ids(&self.connection)?,
-        };
-        let mut result = Vec::new();
-        for id in ids {
-            let (published, summary) = self
-                .connection
-                .query_row(
-                    "SELECT published, path, title, media_count, video_count FROM notes WHERE id=?1",
-                    [id],
-                    |row| {
-                        Ok((
-                            row.get::<_, Option<String>>(0)?,
-                            NoteSummary {
-                                path: row.get(1)?,
-                                title: row.get(2)?,
-                                media_count: row.get::<_, i64>(3)? as usize,
-                                video_count: row.get::<_, i64>(4)? as usize,
-                            },
-                        ))
-                    },
-                )
-                .map_err(|_| CoreError::Database)?;
-            result.push((published, summary));
-        }
-        result.sort_by(|(left, _), (right, _)| match (left, right) {
-            (Some(left), Some(right)) => right.cmp(left),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => std::cmp::Ordering::Equal,
-        });
-        Ok(result
-            .into_iter()
-            .take(limit)
-            .map(|(_, summary)| summary)
-            .collect())
+        })
     }
 
     pub fn warning_count(&self) -> Result<usize, CoreError> {
@@ -485,6 +705,163 @@ impl Gallery {
                 row.get::<_, i64>(0).map(|n| n as usize)
             })
             .map_err(|_| CoreError::Database)
+    }
+
+    pub fn get_thumbnail(
+        &self,
+        media_id: i64,
+        size: u32,
+        cache_root: &Path,
+    ) -> Result<Option<Vec<u8>>, CoreError> {
+        if size == 0 || size > MAX_THUMBNAIL_SIZE {
+            return Err(CoreError::Io);
+        }
+        let _guard = THUMBNAIL_LOCK.lock().map_err(|_| CoreError::Worker)?;
+        let Some((source, media_identity)) = self.media_path(media_id)? else {
+            return Ok(None);
+        };
+        let metadata = fs::metadata(&source).map_err(|_| CoreError::Io)?;
+        if !metadata.is_file() || metadata.len() > MAX_THUMBNAIL_SOURCE_BYTES {
+            return Ok(None);
+        }
+        let modified = metadata
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+            .map_or(0, |duration| duration.as_nanos());
+        let cache_root = prepare_thumbnail_cache(cache_root, &self.root)?;
+        let media_shard = cache_root.join(format!("{:02x}", media_id.rem_euclid(256)));
+        match fs::symlink_metadata(&media_shard) {
+            Ok(metadata) if metadata.file_type().is_dir() => {}
+            Ok(_) => return Err(CoreError::Io),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(&media_shard).map_err(|_| CoreError::Io)?;
+            }
+            Err(_) => return Err(CoreError::Io),
+        }
+        let media_shard = fs::canonicalize(&media_shard).map_err(|_| CoreError::Io)?;
+        if !media_shard.starts_with(&cache_root) {
+            return Err(CoreError::Io);
+        }
+        set_private_directory(&media_shard)?;
+        let cache_key = Sha256::digest(media_identity.as_bytes());
+        let cache_key = cache_key[..16]
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        let cache_file = media_shard.join(format!(
+            "{cache_key}-{modified}-{}-{size}.png",
+            metadata.len()
+        ));
+        let temporary_file = media_shard.join(format!(
+            "{cache_key}-{modified}-{size}-{}.tmp",
+            std::process::id()
+        ));
+        if let Ok(cache_metadata) = fs::symlink_metadata(&cache_file) {
+            if !cache_metadata.file_type().is_file() || cache_metadata.len() > 4 * 1024 * 1024 {
+                return Err(CoreError::Io);
+            }
+            return fs::read(cache_file).map(Some).map_err(|_| CoreError::Io);
+        }
+
+        let mut input = Vec::with_capacity(metadata.len() as usize);
+        File::open(source)
+            .map_err(|_| CoreError::Io)?
+            .take(MAX_THUMBNAIL_SOURCE_BYTES + 1)
+            .read_to_end(&mut input)
+            .map_err(|_| CoreError::Io)?;
+        if input.len() as u64 > MAX_THUMBNAIL_SOURCE_BYTES {
+            return Ok(None);
+        }
+        let reader = match ImageReader::new(Cursor::new(&input)).with_guessed_format() {
+            Ok(reader) => reader,
+            Err(_) => return Ok(None),
+        };
+        let mut decoder = match reader.into_decoder() {
+            Ok(decoder) => decoder,
+            Err(_) => return Ok(None),
+        };
+        let (width, height) = decoder.dimensions();
+        if width == 0
+            || height == 0
+            || width > MAX_THUMBNAIL_DIMENSION
+            || height > MAX_THUMBNAIL_DIMENSION
+            || u64::from(width) * u64::from(height) > MAX_THUMBNAIL_PIXELS
+        {
+            return Ok(None);
+        }
+        let mut limits = Limits::default();
+        limits.max_image_width = Some(MAX_THUMBNAIL_DIMENSION);
+        limits.max_image_height = Some(MAX_THUMBNAIL_DIMENSION);
+        limits.max_alloc = Some(MAX_THUMBNAIL_ALLOCATION);
+        if decoder.set_limits(limits).is_err() {
+            return Ok(None);
+        }
+        let image = match image::DynamicImage::from_decoder(decoder) {
+            Ok(image) => image,
+            Err(_) => return Ok(None),
+        };
+        let thumbnail = image.thumbnail(size, size);
+        let mut encoded = Cursor::new(Vec::new());
+        if thumbnail.write_to(&mut encoded, ImageFormat::Png).is_err() {
+            return Ok(None);
+        }
+        if encoded.get_ref().len() > 4 * 1024 * 1024 {
+            return Ok(None);
+        }
+        match fs::symlink_metadata(&temporary_file) {
+            Ok(_) => fs::remove_file(&temporary_file).map_err(|_| CoreError::Io)?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(_) => return Err(CoreError::Io),
+        }
+        let mut options = OpenOptions::new();
+        options.write(true).create_new(true);
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::OpenOptionsExt;
+            options.mode(0o600);
+        }
+        let mut output = options.open(&temporary_file).map_err(|_| CoreError::Io)?;
+        output
+            .write_all(encoded.get_ref())
+            .map_err(|_| CoreError::Io)?;
+        output.sync_all().map_err(|_| CoreError::Io)?;
+        drop(output);
+        fs::rename(&temporary_file, &cache_file).map_err(|_| CoreError::Io)?;
+        Ok(Some(encoded.into_inner()))
+    }
+
+    fn media_path(&self, media_id: i64) -> Result<Option<(PathBuf, String)>, CoreError> {
+        let media = self
+            .connection
+            .query_row(
+                "SELECT notes.path, media.rel_path, media.exists_flag
+                 FROM media JOIN notes ON notes.id=media.note_id WHERE media.id=?1",
+                [media_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, bool>(2)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|_| CoreError::Database)?;
+        let Some((note_path, media_path, exists)) = media else {
+            return Ok(None);
+        };
+        if !exists {
+            return Ok(None);
+        }
+        Ok(
+            resolve_media(&self.root, &note_path, &media_path).map(|path| {
+                (
+                    path,
+                    format!("{}\0{note_path}\0{media_path}", self.root.display()),
+                )
+            }),
+        )
     }
 }
 
@@ -551,16 +928,6 @@ fn is_excluded(tag: &str, excludes: &[String]) -> bool {
         .any(|prefix| tag == prefix || tag.starts_with(&format!("{prefix}/")))
 }
 
-fn count_tag(connection: &Connection, tag: &str) -> Result<usize, CoreError> {
-    connection
-        .query_row(
-            "SELECT COUNT(*) FROM note_tags nt JOIN tags t ON nt.tag_id=t.id WHERE t.name=?1",
-            [tag],
-            |row| row.get::<_, i64>(0).map(|n| n as usize),
-        )
-        .map_err(|_| CoreError::Database)
-}
-
 fn statement_has_descendant(connection: &Connection, tag: &str) -> Result<bool, CoreError> {
     connection
         .query_row(
@@ -579,6 +946,33 @@ fn note_ids_for_tag(connection: &Connection, tag: &str) -> Result<BTreeSet<i64>,
         .map_err(|_| CoreError::Database)?;
     statement
         .query_map([tag], |row| row.get::<_, i64>(0))
+        .map_err(|_| CoreError::Database)?
+        .collect::<Result<BTreeSet<_>, _>>()
+        .map_err(|_| CoreError::Database)
+}
+
+fn tag_category(tag: &str) -> &str {
+    tag.rsplit_once('/')
+        .map(|(category, _)| category)
+        .unwrap_or("その他")
+}
+
+fn note_ids_for_virtual_filter(
+    connection: &Connection,
+    filter: VirtualFilter,
+) -> Result<BTreeSet<i64>, CoreError> {
+    let condition = match filter {
+        VirtualFilter::MultipleMedia => "media_count >= 2",
+        VirtualFilter::HasMemo => "has_memo != 0",
+        VirtualFilter::HasVideo => "video_count >= 1",
+        VirtualFilter::HasRelated => "has_related != 0",
+    };
+    let query = format!("SELECT id FROM notes WHERE {condition}");
+    let mut statement = connection
+        .prepare(&query)
+        .map_err(|_| CoreError::Database)?;
+    statement
+        .query_map([], |row| row.get::<_, i64>(0))
         .map_err(|_| CoreError::Database)?
         .collect::<Result<BTreeSet<_>, _>>()
         .map_err(|_| CoreError::Database)
@@ -758,23 +1152,94 @@ fn refresh_media_existence(transaction: &Transaction<'_>, root: &Path) -> Result
 }
 
 fn safe_media_exists(root: &Path, note_path: &str, media_path: &str) -> bool {
+    resolve_media(root, note_path, media_path).is_some()
+}
+
+fn resolve_media(root: &Path, note_path: &str, media_path: &str) -> Option<PathBuf> {
     let relative_note = Path::new(note_path);
-    let Some(parent) = relative_note.parent() else {
-        return false;
-    };
+    let parent = relative_note.parent()?;
     let requested = Path::new(media_path);
     if requested.is_absolute()
         || requested
             .components()
             .any(|component| matches!(component, Component::Prefix(_) | Component::RootDir))
     {
-        return false;
+        return None;
     }
     let joined = root.join(parent).join(requested);
-    let Ok(canonical) = fs::canonicalize(joined) else {
-        return false;
+    let canonical = fs::canonicalize(joined).ok()?;
+    (canonical.starts_with(root) && canonical.is_file()).then_some(canonical)
+}
+
+fn prepare_thumbnail_cache(cache_root: &Path, vault_root: &Path) -> Result<PathBuf, CoreError> {
+    let canonical = ensure_private_child_directory(cache_root, vault_root)?;
+    set_private_directory(&canonical)?;
+    Ok(canonical)
+}
+
+fn ensure_private_child_directory(
+    directory: &Path,
+    vault_root: &Path,
+) -> Result<PathBuf, CoreError> {
+    let absolute = if directory.is_absolute() {
+        directory.to_path_buf()
+    } else {
+        std::env::current_dir()
+            .map_err(|_| CoreError::Io)?
+            .join(directory)
     };
-    canonical.starts_with(root) && canonical.is_file()
+    let components = absolute.components().collect::<Vec<_>>();
+    if components
+        .iter()
+        .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+    {
+        return Err(CoreError::Io);
+    }
+    let name = absolute.file_name().ok_or(CoreError::Io)?.to_os_string();
+    let mut ancestor = absolute.parent().ok_or(CoreError::Io)?.to_path_buf();
+    let mut missing = Vec::new();
+    let mut canonical_ancestor = loop {
+        match fs::canonicalize(&ancestor) {
+            Ok(canonical) => break canonical,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                missing.push(ancestor.file_name().ok_or(CoreError::Io)?.to_os_string());
+                ancestor = ancestor.parent().ok_or(CoreError::Io)?.to_path_buf();
+            }
+            Err(_) => return Err(CoreError::Io),
+        }
+    };
+    let mut requested = canonical_ancestor.clone();
+    for component in missing.iter().rev().chain(std::iter::once(&name)) {
+        requested.push(component);
+    }
+    if requested.starts_with(vault_root) {
+        return Err(CoreError::Io);
+    }
+    for component in missing.iter().rev().chain(std::iter::once(&name)) {
+        canonical_ancestor.push(component);
+        match fs::symlink_metadata(&canonical_ancestor) {
+            Ok(metadata) if metadata.file_type().is_dir() => {}
+            Ok(_) => return Err(CoreError::Io),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                fs::create_dir(&canonical_ancestor).map_err(|_| CoreError::Io)?;
+            }
+            Err(_) => return Err(CoreError::Io),
+        }
+        canonical_ancestor = fs::canonicalize(&canonical_ancestor).map_err(|_| CoreError::Io)?;
+        if canonical_ancestor.starts_with(vault_root) {
+            return Err(CoreError::Io);
+        }
+    }
+    Ok(canonical_ancestor)
+}
+
+fn set_private_directory(path: &Path) -> Result<(), CoreError> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).map_err(|_| CoreError::Io)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -1017,6 +1482,55 @@ mod tests {
     }
 
     #[test]
+    fn switching_vaults_clears_stale_index_entries() {
+        let first_vault = temp_dir();
+        let second_vault = temp_dir().with_extension("second");
+        fs::create_dir_all(&first_vault).expect("create first vault");
+        fs::create_dir_all(&second_vault).expect("create second vault");
+        let first_note = first_vault.join("same.md");
+        let second_note = second_vault.join("same.md");
+        fs::write(&first_note, "---\ntags: [source/example]\n---\n# First\n")
+            .expect("write first note");
+        fs::write(&second_note, "---\ntags: [source/example]\n---\n# Other\n")
+            .expect("write second note");
+        let modified = UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+        for path in [&first_note, &second_note] {
+            fs::File::options()
+                .write(true)
+                .open(path)
+                .expect("open note")
+                .set_times(fs::FileTimes::new().set_modified(modified))
+                .expect("set note timestamp");
+        }
+        let database = first_vault.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            first_vault.file_name().expect("name").to_string_lossy()
+        ));
+
+        let mut first = Gallery::open(&first_vault, &database).expect("open first vault");
+        first.scan().expect("scan first vault");
+        drop(first);
+
+        let mut second = Gallery::open(&second_vault, &database).expect("open second vault");
+        assert!(
+            second
+                .query(&[], 10)
+                .expect("empty switched index")
+                .is_empty()
+        );
+        assert_eq!(second.scan().expect("scan second vault").notes_indexed, 1);
+        assert_eq!(
+            second.query(&[], 10).expect("second vault notes")[0].title,
+            "Other"
+        );
+
+        drop(second);
+        fs::remove_file(database).expect("remove index");
+        fs::remove_dir_all(first_vault).expect("remove first vault");
+        fs::remove_dir_all(second_vault).expect("remove second vault");
+    }
+
+    #[test]
     fn parse_failures_are_retried_on_later_scans() {
         let root = temp_dir();
         fs::create_dir_all(&root).expect("create vault");
@@ -1051,6 +1565,223 @@ mod tests {
         let result = Gallery::open(&root, &external_index);
         assert!(matches!(result, Err(CoreError::Database)));
         fs::remove_file(external_index).expect("remove external link");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn generates_bounded_private_thumbnail_cache_outside_the_vault() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        let mut encoded = Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(24, 16)
+            .write_to(&mut encoded, ImageFormat::Png)
+            .expect("encode fixture");
+        fs::write(root.join("tiny.png"), encoded.into_inner()).expect("write media");
+        fs::write(
+            root.join("one.md"),
+            "---\ntags: [source/test]\ncover: tiny.png\n---\n# One\n",
+        )
+        .expect("write note");
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let cache = root.parent().expect("parent").join(format!(
+            "gallery-cache-{}",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        let note = gallery.query(&[], 1).expect("query").remove(0);
+        let media_id = note.representative_media_id.expect("media id");
+        let thumbnail = gallery
+            .get_thumbnail(media_id, 320, &cache)
+            .expect("thumbnail")
+            .expect("decoded image");
+        assert_eq!(&thumbnail[..8], b"\x89PNG\r\n\x1a\n");
+        assert_eq!(
+            gallery
+                .get_thumbnail(media_id, 320, &cache)
+                .expect("cached thumbnail"),
+            Some(thumbnail)
+        );
+        assert!(matches!(
+            gallery.get_thumbnail(media_id, 0, &cache),
+            Err(CoreError::Io)
+        ));
+        assert!(matches!(
+            gallery.get_thumbnail(media_id, 320, &root.join("cache")),
+            Err(CoreError::Io)
+        ));
+        assert!(!root.join("cache").exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(
+                fs::metadata(&cache).expect("cache directory").mode() & 0o777,
+                0o700
+            );
+            let shard = fs::read_dir(&cache)
+                .expect("cache shard")
+                .next()
+                .expect("shard")
+                .expect("entry")
+                .path();
+            assert_eq!(
+                fs::metadata(shard).expect("shard metadata").mode() & 0o777,
+                0o700
+            );
+        }
+        fs::remove_dir_all(&cache).expect("remove thumbnail cache");
+        fs::remove_file(&database).expect("remove index");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn vault_selection_storage_is_private_and_never_created_in_the_vault() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        let state = root.parent().expect("parent").join(format!(
+            "gallery-state-{}",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let selected = save_selected_vault(&state, &root).expect("save selection");
+        assert_eq!(
+            load_selected_vault(&state).expect("load selection"),
+            Some(selected)
+        );
+        let inside_vault = root.join("vault-gallery");
+        assert!(matches!(
+            prepare_private_app_directory(&inside_vault, &root),
+            Err(CoreError::Io)
+        ));
+        assert!(!inside_vault.exists());
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            assert_eq!(
+                fs::metadata(&state).expect("state metadata").mode() & 0o777,
+                0o700
+            );
+            assert_eq!(
+                fs::metadata(state.join("vault-path"))
+                    .expect("vault path metadata")
+                    .mode()
+                    & 0o777,
+                0o600
+            );
+        }
+        fs::remove_dir_all(&state).expect("remove state");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn category_counts_respect_active_or_and_filters() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        for (name, gender, rating) in [
+            ("one.md", "female", "safe"),
+            ("two.md", "male", "safe"),
+            ("three.md", "female", "adult"),
+        ] {
+            fs::write(
+                root.join(name),
+                format!(
+                    "---\ntags: [source/gender/{gender}, source/rating/{rating}, standalone]\n---\n# One\n"
+                ),
+            )
+            .expect("write note");
+        }
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        let categories = gallery
+            .categories_for(&["source/gender/female".to_owned()])
+            .expect("filtered categories");
+        let gender = categories
+            .iter()
+            .find(|category| category.path == "source/gender")
+            .expect("gender category");
+        assert_eq!(gender.count, 3);
+        assert_eq!(
+            gender
+                .options
+                .iter()
+                .find(|option| option.name == "male")
+                .expect("male option")
+                .count,
+            3
+        );
+        let rating = categories
+            .iter()
+            .find(|category| category.path == "source/rating")
+            .expect("rating category");
+        assert_eq!(rating.count, 2);
+        let single_level = gallery
+            .categories_for(&["standalone".to_owned()])
+            .expect("single-level tag categories");
+        assert_eq!(
+            single_level
+                .iter()
+                .find(|category| category.path == "その他")
+                .expect("other category")
+                .count,
+            3
+        );
+        fs::remove_file(&database).expect("remove index");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn virtual_content_filters_are_first_class_options() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(
+            root.join("many.md"),
+            "---\ntags: [source/rating/safe]\ncover: first.png\n---\n# Many\n![](second.png)\n# 文書\n## 覚書\n- keep this\n",
+        )
+        .expect("write multi-media note");
+        let parsed =
+            parse_note(&fs::read_to_string(root.join("many.md")).expect("read multi-media note"))
+                .expect("parse multi-media note");
+        assert_eq!(parsed.memo_lines.len(), 1);
+        fs::write(
+            root.join("single.md"),
+            "---\ntags: [source/rating/safe]\ncover: first.png\n---\n# Single\n",
+        )
+        .expect("write single-media note");
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        let categories = gallery.categories().expect("categories");
+        assert_eq!(categories[0].path, "@content");
+        assert_eq!(categories[0].display_name, "コンテンツ");
+        let multiple = categories[0]
+            .options
+            .iter()
+            .find(|option| option.virtual_filter == Some(VirtualFilter::MultipleMedia))
+            .expect("multiple-media filter");
+        assert_eq!(multiple.count, 1);
+        let memo = categories[0]
+            .options
+            .iter()
+            .find(|option| option.virtual_filter == Some(VirtualFilter::HasMemo))
+            .expect("memo filter");
+        assert_eq!(memo.count, 1);
+        assert_eq!(
+            gallery
+                .query_filtered_page(&[], &[VirtualFilter::MultipleMedia], 0, 10)
+                .expect("filtered query")
+                .len(),
+            1
+        );
+        fs::remove_file(&database).expect("remove index");
         fs::remove_dir_all(root).expect("remove vault");
     }
 }

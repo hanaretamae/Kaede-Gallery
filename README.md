@@ -1,8 +1,10 @@
 # vault-gallery
 
-An offline, read-only gallery for tagged Obsidian Vault notes. Phase 1 provides
-the Rust parser, indexer, CLI, and fictional Vault generator; the Flutter UI is
-planned for later phases.
+An offline, read-only gallery for tagged Obsidian Vault notes. The Rust parser,
+indexer, CLI, and Flutter Linux gallery UI are implemented. The app selects a
+Vault, indexes it locally, filters by hierarchical tags, and lazily generates
+private image thumbnails. Viewer, note details, video playback, and Android
+support remain later phases.
 
 ## Phase 1 quick start
 
@@ -29,6 +31,27 @@ The scanner ignores hidden paths and common Syncthing management files. The
 index is disposable: changing a note's modification time or size reparses it;
 removed notes disappear on the next scan. Missing media is retained as a note
 with an existence flag that is refreshed on later scans.
+
+## Flutter Linux gallery
+
+The Nix shell includes Flutter, Linux desktop build dependencies, Rust, and
+Rustup. The Rust toolchain is pinned in `rust-toolchain.toml`; the first native
+assets build installs that toolchain through Rustup:
+
+```sh
+nix develop
+cd app
+flutter pub get
+flutter run -d linux
+```
+
+The app stores its index and thumbnails under Flutter's application-support
+directory, never in the Vault. The data directory is restricted to the current
+user on Unix. Vault access remains read-only. App data is local and no
+background network, telemetry, or analytics calls are made.
+The current pure-Rust thumbnail decoder supports PNG, JPEG, GIF, and WebP;
+AVIF and video thumbnails currently use placeholders pending later media
+support work.
 
 ## Parser scope and safety
 
