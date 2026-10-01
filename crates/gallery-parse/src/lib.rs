@@ -84,7 +84,7 @@ pub enum ParseError {
 
 #[derive(Debug, Default, Deserialize)]
 struct Frontmatter {
-    url: Option<String>,
+    url: Option<serde_yaml::Value>,
     published: Option<serde_yaml::Value>,
     created: Option<serde_yaml::Value>,
     updated: Option<serde_yaml::Value>,
@@ -133,7 +133,7 @@ pub fn parse_note(input: &str) -> Result<ParsedNote, ParseError> {
 
     Ok(ParsedNote {
         title,
-        url: frontmatter.url,
+        url: url_string(frontmatter.url),
         published: value_string(frontmatter.published),
         created: value_string(frontmatter.created),
         updated: value_string(frontmatter.updated),
@@ -275,6 +275,18 @@ fn value_string(value: Option<serde_yaml::Value>) -> Option<String> {
             .ok()
             .map(|value| value.trim().to_owned()),
     })
+}
+
+/// `url` is usually a scalar string, but some notes store it as a single-item
+/// YAML list (e.g. from clients that always emit a sequence). Accept both
+/// forms, taking the first entry of a list.
+fn url_string(value: Option<serde_yaml::Value>) -> Option<String> {
+    match value {
+        Some(serde_yaml::Value::Sequence(items)) => {
+            items.into_iter().find_map(|item| value_string(Some(item)))
+        }
+        other => value_string(other),
+    }
 }
 
 fn extract_title(body: &str) -> (String, &str) {
@@ -597,6 +609,14 @@ mod tests {
         assert_eq!(note.body_text, "A post text with source link.");
         assert!(note.related_lines.is_empty());
         assert!(note.memo_lines.is_empty());
+    }
+
+    #[test]
+    fn accepts_url_as_a_single_item_yaml_list() {
+        let input =
+            "---\nurl:\n  - https://example.invalid/post\ntags:\n  - source/art\n---\n# title\n";
+        let note = parse_note(input).expect("valid note");
+        assert_eq!(note.url.as_deref(), Some("https://example.invalid/post"));
     }
 
     #[test]
