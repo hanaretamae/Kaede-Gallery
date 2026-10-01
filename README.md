@@ -47,7 +47,10 @@ GDK_BACKEND=wayland flutter run -d linux
 
 The Linux runner loads the Rust bridge from the shared library bundled beside
 the executable, so the app does not depend on `LD_LIBRARY_PATH` containing the
-bundle directory.
+bundle directory. The Nix shell also exposes GTK's compiled GSettings schema,
+which the Linux directory chooser requires. Restart `nix develop` after
+changing `flake.nix`. The Linux runner leaves titlebar rendering to the
+compositor instead of adding its own GTK header bar.
 
 The app stores its index and thumbnails under Flutter's application-support
 directory, never in the Vault. The data directory is restricted to the current

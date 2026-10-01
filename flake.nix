@@ -33,6 +33,7 @@
             ];
             FLUTTER_SUPPRESS_ANALYTICS = "true";
             DART_SUPPRESS_ANALYTICS = "true";
+            GSETTINGS_SCHEMA_DIR = "${pkgs.gtk3}/share/gsettings-schemas/gtk+3-${pkgs.gtk3.version}/glib-2.0/schemas";
           };
         });
     };
