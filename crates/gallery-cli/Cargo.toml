@@ -1,0 +1,9 @@
+[package]
+name = "gallery-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+gallery-core = { version = "0.1.0", path = "../gallery-core" }

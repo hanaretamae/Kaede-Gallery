@@ -1,0 +1,37 @@
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+deny = [
+  { name = "reqwest" },
+  { name = "hyper" },
+  { name = "ureq" },
+  { name = "surf" },
+  { name = "isahc" },
+  { name = "awc" },
+  { name = "curl" },
+  { name = "libcurl" },
+  { name = "tungstenite" },
+  { name = "tokio-tungstenite" },
+]
+
+[licenses]
+version = 2
+confidence-threshold = 0.8
+allow = [
+  "Apache-2.0",
+  "MIT",
+  "Unicode-3.0",
+  "Zlib",
+]
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
