@@ -198,6 +198,8 @@ nix develop
 既定のデータベース場所は `~/Documents/KeePass/password.kdbx`、エントリー名は
 `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。異なる場合は
 `KEEPASSXC_DATABASE`、`KEEPASSXC_ENTRY`、`KEEPASSXC_ATTACHMENT` 環境変数で指定できます。
+データベースがキーファイルを併用する場合は、`KEEPASSXC_KEY_FILE` にそのパスを指定します
+（Vault や Git 管理下に置かないでください）。
 実行環境には mode 700 の `XDG_RUNTIME_DIR` が必要です。
 
 スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査し、

@@ -51,6 +51,12 @@ keepassxc_entry=${KEEPASSXC_ENTRY:-Kaede Gallery Android signing}
 keepassxc_attachment=${KEEPASSXC_ATTACHMENT:-release.jks}
 [[ -f $keepassxc_database && -r $keepassxc_database ]] ||
   fail "set KEEPASSXC_DATABASE to a readable KeePassXC database"
+keepassxc_auth=()
+if [[ -n ${KEEPASSXC_KEY_FILE:-} ]]; then
+  [[ -f $KEEPASSXC_KEY_FILE && -r $KEEPASSXC_KEY_FILE ]] ||
+    fail "KEEPASSXC_KEY_FILE must point to a readable key file"
+  keepassxc_auth=(--key-file "$KEEPASSXC_KEY_FILE")
+fi
 [[ -n ${XDG_RUNTIME_DIR:-} && -d $XDG_RUNTIME_DIR && -O $XDG_RUNTIME_DIR ]] ||
   fail "XDG_RUNTIME_DIR must be a private runtime directory"
 runtime_mode=$(stat -c '%a' -- "$XDG_RUNTIME_DIR") ||
@@ -86,14 +92,14 @@ cargo test --locked --workspace
 key_dir=$(mktemp -d "$XDG_RUNTIME_DIR/kaede-gallery-release.XXXXXXXX") ||
   fail "could not create a private release directory"
 keystore_path="$key_dir/release.jks"
-if ! keepassxc-cli attachment-export \
+if ! keepassxc-cli attachment-export "${keepassxc_auth[@]}" \
   "$keepassxc_database" "$keepassxc_entry" "$keepassxc_attachment" "$keystore_path"; then
   fail "could not export the signing keystore from KeePassXC"
 fi
 [[ -s $keystore_path ]] || fail "KeePassXC exported an empty signing keystore"
 chmod 600 "$keystore_path"
 
-if ! signing_password=$(keepassxc-cli show --show-protected --attributes Password \
+if ! signing_password=$(keepassxc-cli show "${keepassxc_auth[@]}" --show-protected --attributes Password \
   "$keepassxc_database" "$keepassxc_entry"); then
   fail "could not read the signing password from KeePassXC"
 fi
