@@ -84,7 +84,14 @@ NixOS では `nixosModules.default` を import するか、
 ```
 
 Home Manager では `homeManagerModules.default` を import するか、
-`home.packages = [ kaede-gallery.packages.${pkgs.stdenv.hostPlatform.system}.default ];` を設定します。
+`inputs` を Home Manager の設定モジュールに渡して、次のように指定します。
+
+```nix
+home.packages = [
+  inputs.kaede-gallery.packages.${pkgs.stdenv.hostPlatform.system}.default
+];
+```
+
 パッケージには `share/applications/kaede-gallery.desktop` が含まれ、再ログイン後にランチャーへ表示されます。
 直接試す場合は `nix profile install github:hanaretamae/Kaede-Gallery` を使えます。
 この flake は x86_64 Linux 向けのビルド定義です。Kaede Gallery 自体のバイナリキャッシュは

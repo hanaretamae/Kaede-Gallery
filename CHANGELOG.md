@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-10-03
+
+### Changed
+
+- Home Manager のインストール例を `inputs.kaede-gallery` を使う設定に更新しました。
+- アプリのバージョンを `1.0.3`（Android build number `4`）に更新しました。
+
 ## [1.0.2] - 2026-10-03
 
 ### Fixed
