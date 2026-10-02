@@ -5,9 +5,17 @@
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-10-03
+
 ### Changed
 
-- Android リリーススクリプトが KeePassXC から署名鍵とパスワードを一時取得するようになりました。
+- Android の署名リリース手順が KeePassXC から鍵とパスワードを一時取得し、Gradle デーモンを無効にするようになりました。
+- Rust core のノート登録処理で関連コンテキストをまとめ、strict Clippy の警告を解消しました。
+
+### Verified
+
+- Rust format、strict Clippy、workspace tests、cargo-deny を実行しました。
+- Dart format、Flutter analyze、Flutter tests を実行しました。
 
 ## [1.0.0] - 2026-10-03
 

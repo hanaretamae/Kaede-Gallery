@@ -144,6 +144,15 @@ struct ScanItem {
     size: i64,
 }
 
+struct NoteInsertContext<'a> {
+    relative: &'a str,
+    root: &'a Path,
+    mtime: i64,
+    size: i64,
+    eligible: bool,
+    available_files: Option<&'a BTreeSet<String>>,
+}
+
 pub struct Gallery {
     root: PathBuf,
     saf: bool,
@@ -572,13 +581,15 @@ impl Gallery {
                         });
                         insert_note(
                             &transaction,
-                            &item.relative,
                             &parsed,
-                            &self.root,
-                            item.mtime,
-                            item.size,
-                            eligible,
-                            None,
+                            NoteInsertContext {
+                                relative: &item.relative,
+                                root: &self.root,
+                                mtime: item.mtime,
+                                size: item.size,
+                                eligible,
+                                available_files: None,
+                            },
                         )?;
                         if eligible {
                             notes_indexed += 1;
@@ -719,13 +730,15 @@ impl Gallery {
                     });
                     insert_note(
                         &transaction,
-                        &relative,
                         &parsed,
-                        &self.root,
-                        document.modified_nanos,
-                        size,
-                        eligible,
-                        Some(&available_files),
+                        NoteInsertContext {
+                            relative: &relative,
+                            root: &self.root,
+                            mtime: document.modified_nanos,
+                            size,
+                            eligible,
+                            available_files: Some(&available_files),
+                        },
                     )?;
                     notes_indexed += usize::from(eligible);
                 }
@@ -2445,14 +2458,17 @@ fn parse_note_content(
 
 fn insert_note(
     transaction: &Transaction<'_>,
-    relative: &str,
     note: &ParsedNote,
-    root: &Path,
-    mtime: i64,
-    size: i64,
-    eligible: bool,
-    available_files: Option<&BTreeSet<String>>,
-) -> Result<bool, CoreError> {
+    context: NoteInsertContext<'_>,
+) -> Result<(), CoreError> {
+    let NoteInsertContext {
+        relative,
+        root,
+        mtime,
+        size,
+        eligible,
+        available_files,
+    } = context;
     let filename = Path::new(relative)
         .file_name()
         .and_then(|name| name.to_str())
@@ -2514,7 +2530,7 @@ fn insert_note(
                 .map_err(|_| CoreError::Database)?;
         }
     }
-    Ok(true)
+    Ok(())
 }
 
 fn resolve_media_relative_path(note_path: &str, media_path: &str) -> Option<String> {

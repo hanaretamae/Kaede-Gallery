@@ -32,10 +32,7 @@ class VaultGalleryApp extends ConsumerWidget {
         final darkSystemScheme = portalAccent == null
             ? darkDynamic == null
                   ? null
-                  : materialYouScheme(
-                      darkDynamic,
-                      brightness: Brightness.dark,
-                    )
+                  : materialYouScheme(darkDynamic, brightness: Brightness.dark)
             : ColorScheme.fromSeed(
                 seedColor: portalAccent,
                 brightness: Brightness.dark,

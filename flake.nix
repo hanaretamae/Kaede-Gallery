@@ -44,7 +44,7 @@
         in
         pkgs.flutterPackages.stable.buildFlutterApplication (finalAttrs: {
           pname = "kaede-gallery";
-          version = "1.0.0";
+          version = "1.0.1";
           src = self.outPath;
           sourceRoot = "source/app";
           autoPubspecLock = self + "/app/pubspec.lock";
