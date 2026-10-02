@@ -39,9 +39,10 @@ remote_tag=$(git ls-remote origin "refs/tags/$tag^{}" "refs/tags/$tag" |
   ')
 [[ $remote_tag == "$tag_commit" ]] || fail "push tag $tag to origin before releasing"
 
-for variable in ANDROID_KEYSTORE_PATH ANDROID_KEYSTORE_PASSWORD ANDROID_KEY_ALIAS ANDROID_KEY_PASSWORD; do
-  [[ -n ${!variable:-} ]] || fail "$variable must be set for a consistently signed release"
-done
+[[ -n ${ANDROID_KEYSTORE_PATH:-} ]] || fail "ANDROID_KEYSTORE_PATH must be set"
+[[ -n ${ANDROID_KEYSTORE_PASSWORD:-} ]] || fail "ANDROID_KEYSTORE_PASSWORD must be set"
+[[ -n ${ANDROID_KEY_ALIAS:-} ]] || fail "ANDROID_KEY_ALIAS must be set"
+[[ -n ${ANDROID_KEY_PASSWORD:-} ]] || fail "ANDROID_KEY_PASSWORD must be set"
 [[ -f $ANDROID_KEYSTORE_PATH ]] || fail "ANDROID_KEYSTORE_PATH does not point to a file"
 
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || fail "could not identify the GitHub repository"
