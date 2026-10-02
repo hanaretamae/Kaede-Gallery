@@ -11,6 +11,7 @@
         "aarch64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
+      version = "1.0.2";
       mkPkgs =
         system:
         import nixpkgs {
@@ -41,10 +42,22 @@
               exit 1
             fi
           '';
+          desktopItem = pkgs.makeDesktopItem {
+            name = "kaede-gallery";
+            desktopName = "Kaede Gallery";
+            comment = "Offline, read-only gallery for Obsidian Vaults";
+            exec = "vault_gallery";
+            icon = "applications-graphics";
+            categories = [
+              "Graphics"
+              "Viewer"
+            ];
+            startupWMClass = "com.example.vault_gallery";
+          };
         in
         pkgs.flutterPackages.stable.buildFlutterApplication (finalAttrs: {
           pname = "kaede-gallery";
-          version = "1.0.1";
+          inherit version;
           src = self.outPath;
           sourceRoot = "source/app";
           autoPubspecLock = self + "/app/pubspec.lock";
@@ -70,6 +83,11 @@
           ];
           FLUTTER_SUPPRESS_ANALYTICS = "true";
           DART_SUPPRESS_ANALYTICS = "true";
+          postInstall = ''
+            install -Dm644 \
+              ${desktopItem}/share/applications/kaede-gallery.desktop \
+              $out/share/applications/kaede-gallery.desktop
+          '';
           preBuild = ''
             export HOME="$NIX_BUILD_TOP/home"
             mkdir -p "$HOME"
@@ -96,11 +114,11 @@
         });
 
       nixosModules.default = { pkgs, ... }: {
-        environment.systemPackages = [ self.packages.${pkgs.system}.default ];
+        environment.systemPackages = [ self.packages.${pkgs.stdenv.hostPlatform.system}.default ];
       };
 
       homeManagerModules.default = { pkgs, ... }: {
-        home.packages = [ self.packages.${pkgs.system}.default ];
+        home.packages = [ self.packages.${pkgs.stdenv.hostPlatform.system}.default ];
       };
 
       devShells = forAllSystems (

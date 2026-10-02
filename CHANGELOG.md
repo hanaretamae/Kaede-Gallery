@@ -5,8 +5,16 @@
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-10-03
+
+### Fixed
+
+- Nix パッケージにデスクトップエントリを追加し、アプリランチャーから起動できるようにしました。
+
 ### Changed
 
+- NixOS / Home Manager module で利用するシステム属性を `pkgs.stdenv.hostPlatform.system` に更新しました。
+- アプリのバージョンを `1.0.2`（Android build number `3`）に更新しました。
 - Android リリース時の KeePassXC データベースとキーファイルのパスを必須の実行時指定にしました。
 
 ## [1.0.1] - 2026-10-03
