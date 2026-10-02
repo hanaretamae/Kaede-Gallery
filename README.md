@@ -1,19 +1,56 @@
-# vault-gallery
+# Kaede Gallery
 
 タグ付けされた Obsidian Vault の note 向けの、オフライン・読み取り専用のギャラリーです。
 Rust 製のパーサー・索引・CLI と、Flutter(Linux)製のギャラリー UI を実装済みです。
 アプリは Vault を選択し、ローカルで索引を作り、階層タグで絞り込み、プライベートな画像サムネイルを遅延生成します。
-ギャラリーは Material 3 Expressive のスタイルを採用し、タグの枠は折りたたみ可能で、
-ピル型の選択肢チップと各タグ枠の先頭に「カテゴリ全体」の選択肢を並べます。
-ビューワー、詳細パネル、動画再生、Android 対応は後のフェーズで実装します。
+ギャラリーは Flutter 標準 Material 3 の共通テーマを使い、Material 3 Expressive の公式指針を参考に
+色の階層、形状、タッチ領域、動きを全画面で統一しています。Flutter は Expressive の全コンポーネントを
+提供していないため、ネイティブ Material 3 部品の範囲で実装しています。
+丸みのあるカードと色の階層を活かしたスタイルを採用し、
+タグの枠は折りたたんだ状態で表示します。タグ絞り込みには全カテゴリ対象の検索欄があり、
+`#タグ` / `-#タグ` / ノート名・タグ名のあいまい検索を組み合わせられます。
+ソースの各カテゴリは一つの「ソース」枠にまとめ、`source/test` より下のタグ階層は
+その枠内で `test` 配下に表示します。絞り込み後も開いたカテゴリは閉じません。
+カードを開くと黒背景のアプリ内ビューアーでメディアを最大表示し、最初は詳細を隠します。タップすると投稿者を画像上、
+投稿文（投稿者を除く）を画像下に含む詳細を Material 3 の配色で表示します。複数メディアはスワイプ、
+左右キー、横方向トラックパッド操作で切り替えられます。フルスクリーン切替は画像・動画共通で、
+メディアは既定のアプリまたはファイルマネージャーでも開けます。
+覚書・関連は箇条書きの階層を字下げで表し、関連ノートはアプリ内で開けます。タグはカテゴリ色で表示します。
+動画は透明な Material 3 操作部品から再生速度・1本ループ・ミュートを切り替えられます。
+Obsidian と外部 URL は、それぞれのボタンを押したときだけ開きます。
+設定では絞り込み対象タグのプレフィックス、非表示タグ、タグ色を追加・削除でき、
+外観を含む設定をJSONにエクスポートできます。タグの絞り込み設定は表示だけを制御し、
+Vault内のノートや索引を変更しません。
+JSON設定はインポートもでき、保存済み設定の全削除と既定値へのリセットも選べます。
+ノート構造の設定では、ギャラリー対象タグのプレフィックス、覚書・関連・投稿文の終端として扱う見出し、
+タグ・タイトル・投稿URL・日時・カバー画像に使うFrontmatterキーを編集できます。
+Markdown/Wikilinkの関連ノート解決方法も最短・ノート相対・Vaultルート相対から選べます。
+変更時は再走査して反映し、初期値は現在のノート形式を維持します。
+架空のノート例は設定内でMarkdownとして閲覧できますが、Vaultには書き込みません。
+
+## 主な機能
+
+- ページング: 1ページの件数を設定でき、「総件数 件中 先頭 - 末尾 件」を表示します。
+  任意の位置へ飛ぶと対象ページと直前ページだけを読み込み、スクロールに合わせて前後を追加読み込みします。
+- 検索: ノート名・`#タグ`・`-#タグ`・`&#タグ` とタグ名のあいまい検索に対応します。
+- 表示方法: ノート単位／全メディアの切替、タイルの通し番号・複数画像数・覚書数・関連数の表示。
+- 設定: 外観、ページングと一覧表示、保管庫（Vault と再走査）、ノート（構造とタグ設定）、
+  このアプリについて（情報・ライセンス、インポート・エクスポート・リセット、ヘルプ）。
+- 技術構成: Rust（`gallery-parse` / `gallery-core` / `gallery-bridge` / `gallery-cli`）と Dart/Flutter のみ。
+  Vault は読み取り専用で、索引・キャッシュ・設定は Vault 外のアプリ専用データに保存します。
+  ネットワーク通信は行いません（外部リンクはボタン操作時のみ既定のアプリで開きます）。
+- 開発用ダミー Vault は `cargo run -p gallery-cli --bin generate-dummy-vault` で生成します。
+- UI コードは `app/lib/features/gallery/` 配下に、設定・タグ絞り込み・グリッド・ビューアーなどの
+  Dart `part` ファイルとして分割しています。
+現在の Flutter UI と動画再生は Linux を対象とし、Android 対応は後のフェーズです。
 
 ## Phase 1 クイックスタート
 
-Nix で開発シェルに入るか、Rust stable・C コンパイラ・Python 3 を手元にインストールしてください。
+Nix で開発シェルに入るか、Rust stable・C コンパイラを手元にインストールしてください。
 
 ```sh
 nix develop
-python3 tools/generate_dummy_vault.py /tmp/dummy-vault --notes 100
+cargo run --release -p gallery-cli --bin generate-dummy-vault -- /tmp/dummy-vault --notes 100
 cargo run --release -p gallery-cli -- scan /tmp/dummy-vault
 cargo run --release -p gallery-cli -- categories /tmp/dummy-vault
 cargo run --release -p gallery-cli -- list /tmp/dummy-vault source/rating/safe
@@ -44,17 +81,23 @@ flutter pub get
 GDK_BACKEND=wayland flutter run -d linux
 ```
 
+Linux で動画サムネイルを生成するため、開発シェルには FFmpeg が含まれます。
+Linux の動画再生には mpv/libass を使います。動画・外部ページ・Obsidian URI は
+ユーザーがビューアー上で操作した場合にだけ開きます。
+
 Linux ランナーは、実行ファイルと同梱された共有ライブラリから Rust ブリッジを読み込むため、
 `LD_LIBRARY_PATH` にバンドルディレクトリを含める必要はありません。
 Nix シェルは、Linux のディレクトリ選択ダイアログに必要な GTK のコンパイル済み GSettings スキーマも提供します。
 `flake.nix` を変更した場合は `nix develop` を再実行してください。
+ディレクトリ選択ダイアログは GTK のネイティブ UI で、Flutter の配色ではなくデスクトップの GTK/システムテーマに従います。
 Linux ランナーはタイトルバーの描画をコンポジタに任せており、独自の GTK ヘッダーバーは追加しません。
 
 アプリは索引とサムネイルを Flutter のアプリケーションサポートディレクトリに保存し、Vault には書き込みません。
 データディレクトリは Unix では現在のユーザーのみに権限が制限されます。Vault へのアクセスは常に読み取り専用です。
 アプリのデータはローカルに保存され、バックグラウンドでのネットワーク通信・テレメトリ・アナリティクスは一切行いません。
-現状の純 Rust サムネイルデコーダーは PNG・JPEG・GIF・WebP に対応しています。
-AVIF と動画サムネイルは、今後のメディア対応作業までプレースホルダー表示になります。
+純 Rust サムネイルデコーダーは PNG・JPEG・GIF・WebP に対応します。
+動画サムネイルは Flutter のネイティブプラグインで各動画からフレームを抽出します。
+AVIF はプレースホルダー表示になります。
 
 ## パーサーの対象範囲と安全性
 
@@ -85,11 +128,11 @@ SQLite は `rusqlite` の `bundled` 機能で提供されます。これは FFI 
 実際のクリップを使わずに、規模を模したテストデータを生成できます。
 
 ```sh
-python3 tools/generate_dummy_vault.py /tmp/vault-7806 --notes 7806
-python3 tools/generate_dummy_vault.py /tmp/vault-20000 --notes 20000
+cargo run --release -p gallery-cli --bin generate-dummy-vault -- /tmp/vault-7806 --notes 7806
+cargo run --release -p gallery-cli --bin generate-dummy-vault -- /tmp/vault-20000 --notes 20000
 ```
 
-`tools/benchmark.sh` は、指定した note 数に対するリリースビルドと走査時間を記録します。
+`tools/benchmark.sh`（シェルのみ） は、指定した note 数に対するリリースビルドと走査時間を記録します。
 タグの引数の前に `--database <path>` を指定すると、カスタムの索引の場所を選べます。
 生成した大規模なテストデータはコミットしません。リポジトリに含まれる小さな
 `testdata/dummy-vault` のテストデータは架空のものです。

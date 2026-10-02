@@ -449,6 +449,7 @@ dependencies = [
  "rusqlite",
  "sha2",
  "thiserror",
+ "urlencoding",
 ]
 
 [[package]]

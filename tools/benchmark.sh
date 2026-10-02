@@ -7,7 +7,7 @@ vault="${work}/vault"
 database="${work}/index.sqlite"
 
 mkdir -p "$work"
-python3 tools/generate_dummy_vault.py "$vault" --notes "$notes"
+cargo run --release -q -p gallery-cli --bin generate-dummy-vault -- "$vault" --notes "$notes"
 cargo build --release -p gallery-cli
 echo "initial scan: notes=$notes"
 time target/release/gallery-cli scan "$vault" --database "$database"

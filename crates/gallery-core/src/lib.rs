@@ -1,6 +1,9 @@
 #![forbid(unsafe_code)]
 
-use gallery_parse::{MediaKind, ParsedNote, expanded_tags, parse_note};
+use gallery_parse::{
+    InlineToken, LinkResolutionMode, MediaKind, NoteStructureSettings, ParsedNote, expanded_tags,
+    parse_note, parse_note_for_link_target, parse_note_structure_settings,
+};
 use image::{ImageDecoder, ImageFormat, ImageReader, Limits};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use sha2::{Digest, Sha256};
@@ -14,8 +17,7 @@ use std::thread;
 use std::time::UNIX_EPOCH;
 use thiserror::Error;
 
-const DEFAULT_EXCLUDES: [&str; 4] = ["moc", "add", "pin", "source/art"];
-const INDEX_SCHEMA_VERSION: &str = "1";
+const INDEX_SCHEMA_VERSION: &str = "5";
 const MAX_THUMBNAIL_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_THUMBNAIL_PIXELS: u64 = 32 * 1024 * 1024;
 const MAX_THUMBNAIL_DIMENSION: u32 = 16_384;
@@ -81,6 +83,8 @@ pub struct NoteSummary {
     pub title: String,
     pub media_count: usize,
     pub video_count: usize,
+    pub memo_count: usize,
+    pub related_count: usize,
     pub representative_media_id: Option<i64>,
 }
 
@@ -90,6 +94,36 @@ pub struct MediaSummary {
     pub note_id: i64,
     pub is_video: bool,
     pub exists: bool,
+    pub media_count: usize,
+    pub memo_count: usize,
+    pub related_count: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct DetailLine {
+    pub text: String,
+    pub urls: Vec<String>,
+    pub is_bullet: bool,
+    pub indent_level: u8,
+    pub linked_note_id: Option<i64>,
+}
+
+#[derive(Debug, Clone)]
+pub struct NoteDetail {
+    pub id: i64,
+    pub path: String,
+    pub title: String,
+    pub author: Option<String>,
+    pub author_url: Option<String>,
+    pub url: Option<String>,
+    pub published: Option<String>,
+    pub created: Option<String>,
+    pub updated: Option<String>,
+    pub tags: Vec<String>,
+    pub body_text: String,
+    pub memo_lines: Vec<DetailLine>,
+    pub related_lines: Vec<DetailLine>,
+    pub media: Vec<MediaSummary>,
 }
 
 struct ScanItem {
@@ -102,8 +136,8 @@ struct ScanItem {
 pub struct Gallery {
     root: PathBuf,
     connection: Connection,
-    excludes: Vec<String>,
     labels: BTreeMap<String, String>,
+    note_structure: NoteStructureSettings,
 }
 
 pub fn prepare_private_app_directory(directory: &Path, vault: &Path) -> Result<(), CoreError> {
@@ -219,8 +253,12 @@ impl Gallery {
                    video_count INTEGER NOT NULL,
                    has_memo INTEGER NOT NULL,
                    has_related INTEGER NOT NULL,
+                   memo_count INTEGER NOT NULL,
+                   related_count INTEGER NOT NULL,
                    mtime INTEGER NOT NULL,
-                   size INTEGER NOT NULL
+                   size INTEGER NOT NULL,
+                   eligible INTEGER NOT NULL DEFAULT 1,
+                   filename TEXT NOT NULL
                  );
                  CREATE TABLE IF NOT EXISTS scan_state (
                    path TEXT PRIMARY KEY,
@@ -248,7 +286,14 @@ impl Gallery {
                    id INTEGER PRIMARY KEY,
                    category TEXT NOT NULL
                  );
-                 CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);",
+                 CREATE INDEX IF NOT EXISTS idx_note_tags_tag ON note_tags(tag_id);
+                 CREATE INDEX IF NOT EXISTS idx_notes_eligible_id ON notes(id) WHERE eligible=1;
+                 CREATE INDEX IF NOT EXISTS idx_notes_filename ON notes(filename);
+                 CREATE INDEX IF NOT EXISTS idx_notes_title_lower ON notes(lower(title));
+                 CREATE INDEX IF NOT EXISTS idx_notes_related ON notes(id) WHERE eligible=1 AND has_related != 0;
+                 CREATE INDEX IF NOT EXISTS idx_notes_memo ON notes(id) WHERE eligible=1 AND has_memo != 0;
+                 CREATE INDEX IF NOT EXISTS idx_notes_multiple_media ON notes(id) WHERE eligible=1 AND media_count >= 2;
+                 CREATE INDEX IF NOT EXISTS idx_notes_video ON notes(id) WHERE eligible=1 AND video_count >= 1;",
             )
             .map_err(|_| CoreError::Database)?;
         connection
@@ -284,15 +329,33 @@ impl Gallery {
             )
             .map_err(|_| CoreError::Database)?;
         transaction.commit().map_err(|_| CoreError::Database)?;
+        let note_structure = load_note_structure_settings(&database_path)?;
+        let structure_fingerprint = format!("{note_structure:?}");
+        let previous_structure = connection
+            .query_row(
+                "SELECT value FROM meta WHERE key='note_structure'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|_| CoreError::Database)?;
+        if previous_structure.as_deref() != Some(&structure_fingerprint) {
+            connection
+                .execute("DELETE FROM scan_state", [])
+                .map_err(|_| CoreError::Database)?;
+            connection
+                .execute(
+                    "INSERT OR REPLACE INTO meta(key,value) VALUES ('note_structure',?1)",
+                    [&structure_fingerprint],
+                )
+                .map_err(|_| CoreError::Database)?;
+        }
 
         Ok(Self {
             root,
             connection,
-            excludes: DEFAULT_EXCLUDES
-                .iter()
-                .map(|tag| (*tag).to_owned())
-                .collect(),
             labels: default_labels(),
+            note_structure,
         })
     }
 
@@ -312,7 +375,7 @@ impl Gallery {
         {
             let mut statement = transaction
                 .prepare(
-                    "SELECT s.path, s.mtime, s.size, n.id IS NOT NULL
+                    "SELECT s.path, s.mtime, s.size, COALESCE(n.eligible, 0)
                      FROM scan_state s LEFT JOIN notes n ON n.path=s.path",
                 )
                 .map_err(|_| CoreError::Database)?;
@@ -394,7 +457,7 @@ impl Gallery {
                 size,
             });
         }
-        if unchanged_indexed != 0 {
+        if unchanged != 0 {
             refresh_media_existence(&transaction, &self.root)?;
         }
 
@@ -414,6 +477,7 @@ impl Gallery {
                 let pending = Arc::clone(&pending);
                 let next = Arc::clone(&next);
                 let sender = sender.clone();
+                let note_structure = self.note_structure.clone();
                 let handle = thread::Builder::new()
                     .name(format!("gallery-scan-{worker}"))
                     .spawn_scoped(scope, move || {
@@ -422,7 +486,10 @@ impl Gallery {
                             let Some(item) = pending.get(index) else {
                                 break;
                             };
-                            if sender.send((index, read_parse_note(&item.path))).is_err() {
+                            if sender
+                                .send((index, read_parse_note(&item.path, &note_structure)))
+                                .is_err()
+                            {
                                 break;
                             }
                         }
@@ -442,15 +509,22 @@ impl Gallery {
                                 params![item.relative, item.mtime, item.size],
                             )
                             .map_err(|_| CoreError::Database)?;
-                        if parsed.tags.iter().any(|tag| tag.starts_with("source/")) {
-                            insert_note(
-                                &transaction,
-                                &item.relative,
-                                &parsed,
-                                &self.root,
-                                item.mtime,
-                                item.size,
-                            )?;
+                        let eligible = parsed.tags.iter().any(|tag| {
+                            self.note_structure
+                                .gallery_tag_prefixes
+                                .iter()
+                                .any(|prefix| tag_matches_prefix(tag, prefix))
+                        });
+                        insert_note(
+                            &transaction,
+                            &item.relative,
+                            &parsed,
+                            &self.root,
+                            item.mtime,
+                            item.size,
+                            eligible,
+                        )?;
+                        if eligible {
                             notes_indexed += 1;
                         }
                     }
@@ -492,12 +566,23 @@ impl Gallery {
     }
 
     pub fn categories_for(&self, filters: &[String]) -> Result<Vec<Category>, CoreError> {
-        self.categories_with_filters(filters, &[])
+        self.categories_with_filters(filters, &[], &[])
     }
 
     pub fn categories_with_filters(
         &self,
         filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+    ) -> Result<Vec<Category>, CoreError> {
+        self.categories_with_filter_modes(filters, &[], excluded_filters, virtual_filters)
+    }
+
+    pub fn categories_with_filter_modes(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
         virtual_filters: &[VirtualFilter],
     ) -> Result<Vec<Category>, CoreError> {
         let mut category_tags: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -510,17 +595,11 @@ impl Gallery {
             .map_err(|_| CoreError::Database)?;
         for tag in tags {
             let tag = tag.map_err(|_| CoreError::Database)?;
-            if is_excluded(&tag, &self.excludes) {
-                continue;
-            }
             let has_descendant = statement_has_descendant(&self.connection, &tag)?;
             if has_descendant {
                 continue;
             }
-            let category = tag
-                .rsplit_once('/')
-                .map(|(category, _)| category.to_owned())
-                .unwrap_or_else(|| "その他".to_owned());
+            let category = filter_category(&self.connection, &tag)?;
             category_tags.entry(category).or_default().insert(tag);
         }
         let mut categories = Vec::new();
@@ -539,42 +618,98 @@ impl Gallery {
                     base_filters.push(filter.clone());
                 }
             }
-            let base_matches = self.matching_note_ids(&base_filters, virtual_filters)?;
+            let mut category_excluded = Vec::new();
+            let mut base_excluded = Vec::new();
+            for filter in excluded_filters {
+                if filter_category(&self.connection, filter)? == path {
+                    category_excluded.push(filter.clone());
+                } else {
+                    base_excluded.push(filter.clone());
+                }
+            }
+            let mut category_all_filters = Vec::new();
+            let mut base_all_filters = Vec::new();
+            for filter in all_filters {
+                if filter_category(&self.connection, filter)? == path {
+                    category_all_filters.push(filter.clone());
+                } else {
+                    base_all_filters.push(filter.clone());
+                }
+            }
+            let base_matches = self.matching_note_ids_with_all(
+                &base_filters,
+                &base_all_filters,
+                &base_excluded,
+                virtual_filters,
+            )?;
             let mut selected_ids = BTreeSet::new();
             for filter in &category_filters {
                 selected_ids.extend(note_ids_for_tag(&self.connection, filter)?);
+            }
+            let selected_all_ids = self.intersect_tag_ids(&category_all_filters)?;
+            let mut excluded_ids = BTreeSet::new();
+            for filter in &category_excluded {
+                excluded_ids.extend(note_ids_for_tag(&self.connection, filter)?);
             }
             let mut category_ids = BTreeSet::new();
             let mut category_options = Vec::new();
             for full_tag in &options {
                 let name = full_tag
-                    .rsplit('/')
-                    .next()
-                    .unwrap_or(full_tag.as_str())
+                    .strip_prefix("source/")
+                    .filter(|_| path == "source")
+                    .unwrap_or_else(|| full_tag.rsplit('/').next().unwrap_or(full_tag.as_str()))
                     .to_owned();
                 let option_ids = note_ids_for_tag(&self.connection, full_tag)?;
                 category_ids.extend(option_ids.iter().copied());
-                let count = selected_ids
+                let mut matching_option_ids = selected_ids
                     .union(&option_ids)
-                    .filter(|id| base_matches.contains(id))
+                    .copied()
+                    .collect::<BTreeSet<_>>();
+                if !category_all_filters.is_empty() {
+                    matching_option_ids = matching_option_ids
+                        .intersection(&selected_all_ids)
+                        .copied()
+                        .collect();
+                }
+                let count = matching_option_ids
+                    .intersection(&base_matches)
+                    .filter(|id| !excluded_ids.contains(id))
                     .count();
+                let active = !selected_ids.is_disjoint(&option_ids)
+                    || !excluded_ids.is_disjoint(&option_ids)
+                    || category_all_filters.contains(full_tag);
                 category_options.push(CategoryOption {
                     count,
-                    disabled: count == 0,
+                    disabled: count == 0 && !active,
                     name,
                     full_tag: full_tag.clone(),
                     virtual_filter: None,
                 });
             }
-            let count = base_matches.intersection(&category_ids).count();
+            let current_category_ids = if category_all_filters.is_empty() {
+                category_ids.clone()
+            } else {
+                category_ids
+                    .intersection(&selected_all_ids)
+                    .copied()
+                    .collect()
+            };
+            let count = base_matches.intersection(&current_category_ids).count();
             if path != "その他" {
                 category_options.insert(
                     0,
                     CategoryOption {
-                        name: path.rsplit('/').next().unwrap_or(path.as_str()).to_owned(),
+                        name: if path == "source" {
+                            "すべてのソース".to_owned()
+                        } else {
+                            path.rsplit('/').next().unwrap_or(path.as_str()).to_owned()
+                        },
                         full_tag: path.clone(),
                         count,
-                        disabled: count == 0,
+                        disabled: count == 0
+                            && selected_ids.is_empty()
+                            && category_all_filters.is_empty()
+                            && excluded_ids.is_empty(),
                         virtual_filter: None,
                     },
                 );
@@ -586,17 +721,26 @@ impl Gallery {
                 count,
             });
         }
-        let matched_count = self.matching_note_ids(filters, virtual_filters)?.len();
+        let matched_count = self
+            .matching_note_ids_with_all(filters, all_filters, excluded_filters, virtual_filters)?
+            .len();
         let mut content_options = Vec::with_capacity(VIRTUAL_FILTERS.len());
         for (filter, name) in VIRTUAL_FILTERS {
             let mut option_filters = virtual_filters.to_vec();
             option_filters.push(filter);
-            let count = self.matching_note_ids(filters, &option_filters)?.len();
+            let count = self
+                .matching_note_ids_with_all(
+                    filters,
+                    all_filters,
+                    excluded_filters,
+                    &option_filters,
+                )?
+                .len();
             content_options.push(CategoryOption {
                 name: name.to_owned(),
                 full_tag: String::new(),
                 count,
-                disabled: count == 0,
+                disabled: count == 0 && !virtual_filters.contains(&filter),
                 virtual_filter: Some(filter),
             });
         }
@@ -609,6 +753,16 @@ impl Gallery {
                 count: matched_count,
             },
         );
+        categories.push(Category {
+            path: "source".to_owned(),
+            display_name: self
+                .labels
+                .get("source")
+                .cloned()
+                .unwrap_or_else(|| "ソース".to_owned()),
+            options: Vec::new(),
+            count: matched_count,
+        });
         Ok(categories)
     }
 
@@ -632,13 +786,54 @@ impl Gallery {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<NoteSummary>, CoreError> {
-        let ordered = self.sorted_note_ids(filters, virtual_filters)?;
+        self.query_filtered_page_search(filters, &[], virtual_filters, "", offset, limit)
+    }
+
+    pub fn query_filtered_page_search(
+        &self,
+        filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<NoteSummary>, CoreError> {
+        self.query_filtered_page_search_with_all(
+            filters,
+            &[],
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            offset,
+            limit,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_filtered_page_search_with_all(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<NoteSummary>, CoreError> {
+        let ordered = self.sorted_note_ids_with_all(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+        )?;
         let mut result = Vec::new();
         for id in ordered.into_iter().skip(offset).take(limit) {
             let summary = self
                 .connection
                 .query_row(
-                    "SELECT path, title, media_count, video_count FROM notes WHERE id=?1",
+                    "SELECT path, title, media_count, video_count, memo_count, related_count
+                     FROM notes WHERE id=?1",
                     [id],
                     |row| {
                         Ok(NoteSummary {
@@ -647,6 +842,8 @@ impl Gallery {
                             title: row.get(1)?,
                             media_count: row.get::<_, i64>(2)? as usize,
                             video_count: row.get::<_, i64>(3)? as usize,
+                            memo_count: row.get::<_, i64>(4)? as usize,
+                            related_count: row.get::<_, i64>(5)? as usize,
                             representative_media_id: self
                                 .connection
                                 .query_row(
@@ -664,6 +861,25 @@ impl Gallery {
         Ok(result)
     }
 
+    pub fn count_filtered_notes_with_all(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+    ) -> Result<usize, CoreError> {
+        Ok(self
+            .sorted_note_ids_with_all(
+                filters,
+                all_filters,
+                excluded_filters,
+                virtual_filters,
+                search_query,
+            )?
+            .len())
+    }
+
     /// Flattens every (not just representative) media item belonging to the
     /// notes matching `filters`/`virtual_filters`, ordered the same way as
     /// `query_filtered_page` (newest `published` first, then media
@@ -675,13 +891,67 @@ impl Gallery {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<MediaSummary>, CoreError> {
-        let ordered = self.sorted_note_ids(filters, virtual_filters)?;
+        self.query_media_filtered_page_search(filters, &[], virtual_filters, "", offset, limit)
+    }
+
+    pub fn query_media_filtered_page_search(
+        &self,
+        filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<MediaSummary>, CoreError> {
+        self.query_media_filtered_page_search_with_all(
+            filters,
+            &[],
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            offset,
+            limit,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_media_filtered_page_search_with_all(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<MediaSummary>, CoreError> {
+        let ordered = self.sorted_note_ids_with_all(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+        )?;
         let mut result = Vec::new();
         let mut skipped = 0usize;
         for note_id in ordered {
             if result.len() >= limit {
                 break;
             }
+            let (media_count, memo_count, related_count) = self
+                .connection
+                .query_row(
+                    "SELECT media_count, memo_count, related_count FROM notes WHERE id=?1",
+                    [note_id],
+                    |row| {
+                        Ok((
+                            row.get::<_, i64>(0)? as usize,
+                            row.get::<_, i64>(1)? as usize,
+                            row.get::<_, i64>(2)? as usize,
+                        ))
+                    },
+                )
+                .map_err(|_| CoreError::Database)?;
             let mut statement = self
                 .connection
                 .prepare("SELECT id, kind, exists_flag FROM media WHERE note_id=?1 ORDER BY ord")
@@ -709,18 +979,97 @@ impl Gallery {
                     note_id,
                     is_video: kind == "video",
                     exists: exists_flag != 0,
+                    media_count,
+                    memo_count,
+                    related_count,
                 });
             }
         }
         Ok(result)
     }
 
-    fn sorted_note_ids(
+    pub fn count_filtered_media_with_all(
         &self,
         filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
         virtual_filters: &[VirtualFilter],
+        search_query: &str,
+    ) -> Result<usize, CoreError> {
+        let note_ids = self.sorted_note_ids_with_all(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+        )?;
+        let mut statement = self
+            .connection
+            .prepare("SELECT COUNT(*) FROM media WHERE note_id=?1")
+            .map_err(|_| CoreError::Database)?;
+        note_ids.into_iter().try_fold(0usize, |count, note_id| {
+            let note_media_count = statement
+                .query_row([note_id], |row| row.get::<_, i64>(0))
+                .map_err(|_| CoreError::Database)?;
+            Ok(count.saturating_add(note_media_count as usize))
+        })
+    }
+
+    fn sorted_note_ids_with_all(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
     ) -> Result<Vec<i64>, CoreError> {
-        let ids = self.matching_note_ids(filters, virtual_filters)?;
+        let (search_text, query_filters, query_all_filters, query_excluded_filters) =
+            parse_note_search_query(search_query);
+        let mut filters = filters.to_vec();
+        filters.extend(self.expand_fuzzy_tag_queries(query_filters)?);
+        let mut all_filters = all_filters.to_vec();
+        all_filters.extend(self.expand_fuzzy_tag_queries(query_all_filters)?);
+        let mut excluded_filters = excluded_filters.to_vec();
+        excluded_filters.extend(self.expand_fuzzy_tag_queries(query_excluded_filters)?);
+        let mut ids = self
+            .matching_note_ids_with_all(&filters, &all_filters, &excluded_filters, virtual_filters)?
+            .into_iter()
+            .collect::<Vec<_>>();
+        if !search_text.trim().is_empty() {
+            let query = search_text.trim().chars().take(128).collect::<String>();
+            let mut searched_ids = Vec::with_capacity(ids.len());
+            let mut tag_statement = self
+                .connection
+                .prepare(
+                    "SELECT tags.name FROM note_tags
+                     JOIN tags ON tags.id=note_tags.tag_id
+                     WHERE note_tags.note_id=?1",
+                )
+                .map_err(|_| CoreError::Database)?;
+            for id in ids {
+                let (title, path) = self
+                    .connection
+                    .query_row("SELECT title, path FROM notes WHERE id=?1", [id], |row| {
+                        Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
+                    })
+                    .map_err(|_| CoreError::Database)?;
+                let tags = tag_statement
+                    .query_map([id], |row| row.get::<_, String>(0))
+                    .map_err(|_| CoreError::Database)?
+                    .collect::<Result<Vec<_>, _>>()
+                    .map_err(|_| CoreError::Database)?;
+                let matches = query.split_whitespace().all(|term| {
+                    fuzzy_note_match(&title, &path, term)
+                        || tags
+                            .iter()
+                            .any(|tag| fuzzy_tag_match_score(tag, term).is_some())
+                });
+                if matches {
+                    searched_ids.push(id);
+                }
+            }
+            ids = searched_ids;
+        }
         let mut with_published = Vec::with_capacity(ids.len());
         for id in ids {
             let published: Option<String> = self
@@ -740,9 +1089,37 @@ impl Gallery {
         Ok(with_published.into_iter().map(|(_, id)| id).collect())
     }
 
-    fn matching_note_ids(
+    fn expand_fuzzy_tag_queries(&self, filters: Vec<String>) -> Result<Vec<String>, CoreError> {
+        let mut statement = self
+            .connection
+            .prepare("SELECT name FROM tags ORDER BY name")
+            .map_err(|_| CoreError::Database)?;
+        let tags = statement
+            .query_map([], |row| row.get::<_, String>(0))
+            .map_err(|_| CoreError::Database)?
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|_| CoreError::Database)?;
+        Ok(filters
+            .into_iter()
+            .map(|filter| {
+                tags.iter()
+                    .filter_map(|tag| fuzzy_tag_match_score(tag, &filter).map(|score| (score, tag)))
+                    .min_by(|(left_score, left_tag), (right_score, right_tag)| {
+                        left_score
+                            .cmp(right_score)
+                            .then_with(|| left_tag.cmp(right_tag))
+                    })
+                    .map(|(_, tag)| tag.clone())
+                    .unwrap_or(filter)
+            })
+            .collect())
+    }
+
+    fn matching_note_ids_with_all(
         &self,
         filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
         virtual_filters: &[VirtualFilter],
     ) -> Result<BTreeSet<i64>, CoreError> {
         let mut grouped_filters: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
@@ -764,6 +1141,13 @@ impl Gallery {
                 Some(current) => current.intersection(&category_ids).copied().collect(),
             });
         }
+        if !all_filters.is_empty() {
+            let required_ids = self.intersect_tag_ids(all_filters)?;
+            candidates = Some(match candidates {
+                None => required_ids,
+                Some(current) => current.intersection(&required_ids).copied().collect(),
+            });
+        }
         for virtual_filter in virtual_filters {
             let virtual_ids = note_ids_for_virtual_filter(&self.connection, *virtual_filter)?;
             candidates = Some(match candidates {
@@ -771,10 +1155,28 @@ impl Gallery {
                 Some(current) => current.intersection(&virtual_ids).copied().collect(),
             });
         }
-        Ok(match candidates {
+        let mut candidates = match candidates {
             Some(ids) => ids,
             None => all_note_ids(&self.connection)?,
-        })
+        };
+        for tag in excluded_filters {
+            for note_id in note_ids_for_tag(&self.connection, tag)? {
+                candidates.remove(&note_id);
+            }
+        }
+        Ok(candidates)
+    }
+
+    fn intersect_tag_ids(&self, tags: &[String]) -> Result<BTreeSet<i64>, CoreError> {
+        let mut matching: Option<BTreeSet<i64>> = None;
+        for tag in tags {
+            let ids = note_ids_for_tag(&self.connection, tag)?;
+            matching = Some(match matching {
+                None => ids,
+                Some(current) => current.intersection(&ids).copied().collect(),
+            });
+        }
+        Ok(matching.unwrap_or_default())
     }
 
     pub fn warning_count(&self) -> Result<usize, CoreError> {
@@ -795,9 +1197,12 @@ impl Gallery {
             return Err(CoreError::Io);
         }
         let _guard = THUMBNAIL_LOCK.lock().map_err(|_| CoreError::Worker)?;
-        let Some((source, media_identity)) = self.media_path(media_id)? else {
+        let Some((source, media_identity, is_video)) = self.media_path(media_id)? else {
             return Ok(None);
         };
+        if is_video {
+            return Ok(None);
+        }
         let metadata = fs::metadata(&source).map_err(|_| CoreError::Io)?;
         if !metadata.is_file() || metadata.len() > MAX_THUMBNAIL_SOURCE_BYTES {
             return Ok(None);
@@ -909,11 +1314,160 @@ impl Gallery {
         Ok(Some(encoded.into_inner()))
     }
 
-    fn media_path(&self, media_id: i64) -> Result<Option<(PathBuf, String)>, CoreError> {
+    pub fn video_source_path(&self, media_id: i64) -> Result<Option<PathBuf>, CoreError> {
+        let Some((source, _, is_video)) = self.media_path(media_id)? else {
+            return Ok(None);
+        };
+        if !is_video {
+            return Ok(None);
+        }
+        let metadata = fs::metadata(&source).map_err(|_| CoreError::Io)?;
+        if !metadata.is_file() || metadata.len() > MAX_THUMBNAIL_SOURCE_BYTES {
+            return Ok(None);
+        }
+        Ok(Some(source))
+    }
+
+    pub fn media_source_path(&self, media_id: i64) -> Result<Option<PathBuf>, CoreError> {
+        let Some((source, _, _)) = self.media_path(media_id)? else {
+            return Ok(None);
+        };
+        let metadata = fs::metadata(&source).map_err(|_| CoreError::Io)?;
+        if !metadata.is_file() {
+            return Ok(None);
+        }
+        Ok(Some(source))
+    }
+
+    pub fn note_detail(&self, note_id: i64) -> Result<Option<NoteDetail>, CoreError> {
+        let indexed_note = self
+            .connection
+            .query_row(
+                "SELECT path, eligible FROM notes WHERE id=?1",
+                [note_id],
+                |row| Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?)),
+            )
+            .optional()
+            .map_err(|_| CoreError::Database)?;
+        let Some((indexed_path, eligible)) = indexed_note else {
+            return Ok(None);
+        };
+        let path = fs::canonicalize(self.root.join(&indexed_path)).map_err(|_| CoreError::Io)?;
+        if !path.starts_with(&self.root) || !path.is_file() {
+            return Err(CoreError::Io);
+        }
+        let parsed = read_parse_note(&path, &self.note_structure).map_err(|_| CoreError::Io)?;
+        if !eligible {
+            let has_media: bool = self
+                .connection
+                .query_row(
+                    "SELECT EXISTS(SELECT 1 FROM media WHERE note_id=?1)",
+                    [note_id],
+                    |row| row.get(0),
+                )
+                .map_err(|_| CoreError::Database)?;
+            if !has_media {
+                for (ordinal, media) in parsed.media.iter().enumerate() {
+                    let exists = safe_media_exists(&self.root, &indexed_path, &media.path);
+                    self.connection
+                        .execute(
+                            "INSERT INTO media(note_id,ord,rel_path,kind,exists_flag)
+                             VALUES (?1,?2,?3,?4,?5)",
+                            params![
+                                note_id,
+                                ordinal as i64,
+                                media.path,
+                                if media.kind == MediaKind::Video {
+                                    "video"
+                                } else {
+                                    "image"
+                                },
+                                exists
+                            ],
+                        )
+                        .map_err(|_| CoreError::Database)?;
+                }
+            }
+        }
+        let media = {
+            let mut statement = self
+                .connection
+                .prepare(
+                    "SELECT media.id, media.note_id, media.kind, media.exists_flag,
+                            notes.media_count, notes.memo_count, notes.related_count
+                     FROM media JOIN notes ON notes.id=media.note_id
+                     WHERE media.note_id=?1 ORDER BY media.ord",
+                )
+                .map_err(|_| CoreError::Database)?;
+            let rows = statement
+                .query_map([note_id], |row| {
+                    Ok(MediaSummary {
+                        id: row.get(0)?,
+                        note_id: row.get(1)?,
+                        is_video: row.get::<_, String>(2)? == "video",
+                        exists: row.get(3)?,
+                        media_count: row.get::<_, i64>(4)? as usize,
+                        memo_count: row.get::<_, i64>(5)? as usize,
+                        related_count: row.get::<_, i64>(6)? as usize,
+                    })
+                })
+                .map_err(|_| CoreError::Database)?;
+            rows.collect::<Result<Vec<_>, _>>()
+                .map_err(|_| CoreError::Database)?
+        };
+        Ok(Some(NoteDetail {
+            id: note_id,
+            path: indexed_path.clone(),
+            title: parsed.title,
+            author: parsed.author,
+            author_url: parsed.author_url,
+            url: parsed.url,
+            published: parsed.published,
+            created: parsed.created,
+            updated: parsed.updated,
+            tags: parsed.tags,
+            body_text: parsed.body_text,
+            memo_lines: parsed
+                .memo_lines
+                .iter()
+                .zip(parsed.memo_bullets.iter())
+                .zip(parsed.memo_indent_levels.iter())
+                .map(|((line, is_bullet), indent_level)| {
+                    detail_line(
+                        &self.connection,
+                        &indexed_path,
+                        line,
+                        *is_bullet,
+                        *indent_level,
+                        self.note_structure.link_resolution,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            related_lines: parsed
+                .related_lines
+                .iter()
+                .zip(parsed.related_bullets.iter())
+                .zip(parsed.related_indent_levels.iter())
+                .map(|((line, is_bullet), indent_level)| {
+                    detail_line(
+                        &self.connection,
+                        &indexed_path,
+                        line,
+                        *is_bullet,
+                        *indent_level,
+                        self.note_structure.link_resolution,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            media,
+        }))
+    }
+
+    fn media_path(&self, media_id: i64) -> Result<Option<(PathBuf, String, bool)>, CoreError> {
         let media = self
             .connection
             .query_row(
-                "SELECT notes.path, media.rel_path, media.exists_flag
+                "SELECT notes.path, media.rel_path, media.exists_flag, media.kind
                  FROM media JOIN notes ON notes.id=media.note_id WHERE media.id=?1",
                 [media_id],
                 |row| {
@@ -921,26 +1475,206 @@ impl Gallery {
                         row.get::<_, String>(0)?,
                         row.get::<_, String>(1)?,
                         row.get::<_, bool>(2)?,
+                        row.get::<_, String>(3)?,
                     ))
                 },
             )
             .optional()
             .map_err(|_| CoreError::Database)?;
-        let Some((note_path, media_path, exists)) = media else {
+        let Some((note_path, media_path, exists, kind)) = media else {
             return Ok(None);
         };
         if !exists {
             return Ok(None);
         }
+
         Ok(
             resolve_media(&self.root, &note_path, &media_path).map(|path| {
                 (
                     path,
                     format!("{}\0{note_path}\0{media_path}", self.root.display()),
+                    kind == "video",
                 )
             }),
         )
     }
+}
+
+fn detail_line(
+    connection: &Connection,
+    source_note_path: &str,
+    tokens: &[InlineToken],
+    is_bullet: bool,
+    indent_level: u8,
+    link_resolution: LinkResolutionMode,
+) -> Result<DetailLine, CoreError> {
+    let mut text = String::new();
+    let mut urls = Vec::new();
+    let mut linked_note_id = None;
+    for token in tokens {
+        match token {
+            InlineToken::Text(value) => text.push_str(value),
+            InlineToken::ExternalLink { label, url } => {
+                text.push_str(label);
+                urls.push(url.clone());
+                if linked_note_id.is_none() {
+                    linked_note_id =
+                        resolve_linked_note_id(connection, source_note_path, url, link_resolution)?;
+                }
+            }
+        }
+    }
+    Ok(DetailLine {
+        text,
+        urls,
+        is_bullet,
+        indent_level,
+        linked_note_id,
+    })
+}
+
+fn resolve_linked_note_id(
+    connection: &Connection,
+    source_note_path: &str,
+    url: &str,
+    mode: LinkResolutionMode,
+) -> Result<Option<i64>, CoreError> {
+    if url.is_empty() || url.starts_with('\\') || url.contains("://") || url.starts_with('#') {
+        return Ok(None);
+    }
+    let target = url.split(['#', '?']).next().unwrap_or_default();
+    if target.is_empty() || target.contains('\\') || target.contains('\0') {
+        return Ok(None);
+    }
+    let Ok(decoded_target) = urlencoding::decode(target) else {
+        return Ok(None);
+    };
+    let target = decoded_target.as_ref();
+    let root_relative = target.trim_start_matches('/');
+    if root_relative.is_empty() {
+        return Ok(None);
+    }
+    let mut candidates = Vec::new();
+    if mode != LinkResolutionMode::AbsolutePath && !target.starts_with('/') {
+        if let Some(candidate) = resolve_relative_path(source_note_path, target) {
+            candidates.push(candidate);
+        }
+    }
+    if mode == LinkResolutionMode::AbsolutePath
+        || target.starts_with('/')
+        || mode == LinkResolutionMode::ShortestPath
+    {
+        if let Some(candidate) = normalize_note_path(root_relative) {
+            candidates.push(candidate);
+        }
+    }
+    for candidate in candidates.into_iter().flat_map(note_path_variants) {
+        let note_id = connection
+            .query_row("SELECT id FROM notes WHERE path=?1", [&candidate], |row| {
+                row.get::<_, i64>(0)
+            })
+            .optional()
+            .map_err(|_| CoreError::Database)?;
+        if note_id.is_some() {
+            return Ok(note_id);
+        }
+    }
+    let basename = Path::new(root_relative)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(CoreError::Database)?;
+    let stem = Path::new(basename)
+        .file_stem()
+        .and_then(|name| name.to_str())
+        .unwrap_or(basename);
+    let filename = format!("{stem}.md");
+    let source_parts = Path::new(source_note_path)
+        .parent()
+        .unwrap_or_else(|| Path::new(""))
+        .components()
+        .filter_map(|component| component.as_os_str().to_str())
+        .collect::<Vec<_>>();
+    let mut statement = connection
+        .prepare(
+            "SELECT id, path FROM notes
+             WHERE filename=?1",
+        )
+        .map_err(|_| CoreError::Database)?;
+    let rows = statement
+        .query_map([&filename], |row| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?))
+        })
+        .map_err(|_| CoreError::Database)?;
+    let mut matches = rows
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(|_| CoreError::Database)?;
+    matches.sort_by_key(|(_, path)| {
+        let parts = Path::new(path)
+            .parent()
+            .unwrap_or_else(|| Path::new(""))
+            .components()
+            .filter_map(|component| component.as_os_str().to_str())
+            .collect::<Vec<_>>();
+        let common = source_parts
+            .iter()
+            .zip(&parts)
+            .take_while(|(left, right)| left == right)
+            .count();
+        (
+            source_parts.len() + parts.len() - common * 2,
+            path.to_lowercase(),
+        )
+    });
+    if let Some((id, _)) = matches.first() {
+        return Ok(Some(*id));
+    }
+
+    connection
+        .query_row(
+            "SELECT id FROM notes WHERE lower(title)=lower(?1) ORDER BY path LIMIT 1",
+            [stem],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(|_| CoreError::Database)
+}
+
+fn resolve_relative_path(source_note_path: &str, target: &str) -> Option<String> {
+    let parent = Path::new(source_note_path)
+        .parent()
+        .unwrap_or_else(|| Path::new(""));
+    normalize_note_path(&parent.join(target).to_string_lossy())
+}
+
+fn tag_matches_prefix(tag: &str, prefix: &str) -> bool {
+    let prefix = prefix.trim_end_matches('/');
+    tag == prefix
+        || tag
+            .strip_prefix(prefix)
+            .is_some_and(|suffix| suffix.starts_with('/'))
+}
+
+fn normalize_note_path(value: &str) -> Option<String> {
+    let mut parts = Vec::new();
+    for component in Path::new(value).components() {
+        match component {
+            Component::Normal(value) => parts.push(value.to_str()?.to_owned()),
+            Component::CurDir => {}
+            Component::ParentDir if !parts.is_empty() => {
+                parts.pop();
+            }
+            Component::ParentDir | Component::RootDir | Component::Prefix(_) => return None,
+        }
+    }
+    (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+fn note_path_variants(path: String) -> Vec<String> {
+    let mut variants = vec![path.clone()];
+    if Path::new(&path).extension().is_none() {
+        variants.push(format!("{path}.md"));
+    }
+    variants
 }
 
 fn resolve_database_path(database: &Path, root: &Path) -> Result<PathBuf, CoreError> {
@@ -975,7 +1709,7 @@ fn resolve_database_path(database: &Path, root: &Path) -> Result<PathBuf, CoreEr
 
 fn all_note_ids(connection: &Connection) -> Result<BTreeSet<i64>, CoreError> {
     let mut statement = connection
-        .prepare("SELECT id FROM notes")
+        .prepare("SELECT id FROM notes WHERE eligible=1")
         .map_err(|_| CoreError::Database)?;
     statement
         .query_map([], |row| row.get::<_, i64>(0))
@@ -986,6 +1720,7 @@ fn all_note_ids(connection: &Connection) -> Result<BTreeSet<i64>, CoreError> {
 
 fn default_labels() -> BTreeMap<String, String> {
     [
+        ("source", "ソース"),
         ("source/service", "ソース"),
         ("source/rating", "レーティング"),
         ("source/gender", "性別"),
@@ -998,12 +1733,6 @@ fn default_labels() -> BTreeMap<String, String> {
     .into_iter()
     .map(|(key, value)| (key.to_owned(), value.to_owned()))
     .collect()
-}
-
-fn is_excluded(tag: &str, excludes: &[String]) -> bool {
-    excludes
-        .iter()
-        .any(|prefix| tag == prefix || tag.starts_with(&format!("{prefix}/")))
 }
 
 fn statement_has_descendant(connection: &Connection, tag: &str) -> Result<bool, CoreError> {
@@ -1042,6 +1771,159 @@ fn filter_category(connection: &Connection, tag: &str) -> Result<String, CoreErr
         .unwrap_or_else(|| "その他".to_owned()))
 }
 
+fn parse_note_search_query(query: &str) -> (String, Vec<String>, Vec<String>, Vec<String>) {
+    let mut text = Vec::new();
+    let mut any_tags = Vec::new();
+    let mut all_tags = Vec::new();
+    let mut excluded_tags = Vec::new();
+    for term in query.split_whitespace() {
+        if let Some(tag) = term.strip_prefix("&#").filter(|tag| !tag.is_empty()) {
+            all_tags.push(tag.to_owned());
+        } else if let Some(tag) = term.strip_prefix("-#").filter(|tag| !tag.is_empty()) {
+            excluded_tags.push(tag.to_owned());
+        } else if let Some(tag) = term.strip_prefix('#').filter(|tag| !tag.is_empty()) {
+            any_tags.push(tag.to_owned());
+        } else {
+            text.push(term);
+        }
+    }
+    (text.join(" "), any_tags, all_tags, excluded_tags)
+}
+
+fn fuzzy_note_match(title: &str, path: &str, query: &str) -> bool {
+    let title = title.chars().take(512).collect::<String>().to_lowercase();
+    let path = path.chars().take(512).collect::<String>().to_lowercase();
+    query.split_whitespace().all(|term| {
+        let term = term.to_lowercase();
+        if title.contains(&term) || path.contains(&term) {
+            return true;
+        }
+        let tolerance = match term.chars().count() {
+            0..=2 => 0,
+            3..=5 => 1,
+            _ => 2,
+        };
+        title
+            .split(|character: char| !character.is_alphanumeric())
+            .chain(path.split(|character: char| !character.is_alphanumeric()))
+            .any(|word| fuzzy_word_match(word, &term, tolerance))
+    })
+}
+
+fn fuzzy_word_match(word: &str, term: &str, tolerance: usize) -> bool {
+    if levenshtein_within(word, term, tolerance) {
+        return true;
+    }
+    let word = word.chars().take(512).collect::<Vec<_>>();
+    let term = term.chars().take(128).collect::<Vec<_>>();
+    let min_length = term.len().saturating_sub(tolerance).max(1);
+    let max_length = term.len().saturating_add(tolerance).min(word.len());
+    let term = term.iter().collect::<String>();
+    (min_length..=max_length).any(|length| {
+        word.windows(length).any(|window| {
+            let candidate = window.iter().collect::<String>();
+            levenshtein_within(&candidate, &term, tolerance)
+        })
+    })
+}
+
+fn levenshtein_within(left: &str, right: &str, tolerance: usize) -> bool {
+    if left
+        .chars()
+        .take(
+            right
+                .chars()
+                .count()
+                .saturating_add(tolerance)
+                .saturating_add(1),
+        )
+        .count()
+        > right.chars().count().saturating_add(tolerance)
+    {
+        return false;
+    }
+    let left = left.chars().collect::<Vec<_>>();
+    let right = right.chars().collect::<Vec<_>>();
+    if left.len().abs_diff(right.len()) > tolerance {
+        return false;
+    }
+    let mut previous = (0..=right.len()).collect::<Vec<_>>();
+    let mut current = vec![0; right.len() + 1];
+    for (left_index, left_char) in left.iter().enumerate() {
+        current[0] = left_index + 1;
+        let mut row_min = current[0];
+        for (right_index, right_char) in right.iter().enumerate() {
+            current[right_index + 1] = (previous[right_index + 1] + 1)
+                .min(current[right_index] + 1)
+                .min(previous[right_index] + usize::from(left_char != right_char));
+            row_min = row_min.min(current[right_index + 1]);
+        }
+        if row_min > tolerance {
+            return false;
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[right.len()] <= tolerance
+}
+
+fn fuzzy_tag_match_score(tag: &str, query: &str) -> Option<usize> {
+    let tag_parts = tag
+        .to_lowercase()
+        .split('/')
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    let query_parts = query
+        .chars()
+        .take(128)
+        .collect::<String>()
+        .to_lowercase()
+        .split('/')
+        .filter(|part| !part.is_empty())
+        .map(str::to_owned)
+        .collect::<Vec<_>>();
+    if query_parts.is_empty() {
+        return None;
+    }
+    query_parts.iter().try_fold(0usize, |score, query_part| {
+        let best_score = tag_parts
+            .iter()
+            .filter_map(|tag_part| {
+                if tag_part == query_part {
+                    return Some(0);
+                }
+                if tag_part.starts_with(query_part) {
+                    return Some(1);
+                }
+                let tolerance = match query_part.chars().count() {
+                    0..=2 => 0,
+                    3..=5 => 1,
+                    _ => 2,
+                };
+                let distance = levenshtein_distance(tag_part, query_part);
+                (distance <= tolerance).then_some(distance + 1)
+            })
+            .min()?;
+        Some(score.saturating_add(best_score))
+    })
+}
+
+fn levenshtein_distance(left: &str, right: &str) -> usize {
+    let left = left.chars().take(128).collect::<Vec<_>>();
+    let right = right.chars().take(128).collect::<Vec<_>>();
+    let mut previous = (0..=right.len()).collect::<Vec<_>>();
+    let mut current = vec![0; right.len() + 1];
+    for (left_index, left_char) in left.iter().enumerate() {
+        current[0] = left_index + 1;
+        for (right_index, right_char) in right.iter().enumerate() {
+            current[right_index + 1] = (previous[right_index + 1] + 1)
+                .min(current[right_index] + 1)
+                .min(previous[right_index] + usize::from(left_char != right_char));
+        }
+        std::mem::swap(&mut previous, &mut current);
+    }
+    previous[right.len()]
+}
+
 fn note_ids_for_virtual_filter(
     connection: &Connection,
     filter: VirtualFilter,
@@ -1052,7 +1934,7 @@ fn note_ids_for_virtual_filter(
         VirtualFilter::HasVideo => "video_count >= 1",
         VirtualFilter::HasRelated => "has_related != 0",
     };
-    let query = format!("SELECT id FROM notes WHERE {condition}");
+    let query = format!("SELECT id FROM notes WHERE eligible=1 AND {condition}");
     let mut statement = connection
         .prepare(&query)
         .map_err(|_| CoreError::Database)?;
@@ -1201,7 +2083,43 @@ fn ignored_name(name: &str) -> bool {
         || name.starts_with("~syncthing~")
 }
 
-fn read_parse_note(path: &Path) -> Result<ParsedNote, &'static str> {
+fn load_note_structure_settings(database_path: &Path) -> Result<NoteStructureSettings, CoreError> {
+    let settings_path = database_path
+        .parent()
+        .ok_or(CoreError::Database)?
+        .join("tag-settings.json");
+    let metadata = match fs::symlink_metadata(&settings_path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(NoteStructureSettings::default());
+        }
+        Err(_) => return Err(CoreError::Database),
+    };
+    if !metadata.file_type().is_file() || metadata.len() > gallery_parse::MAX_SETTINGS_BYTES as u64
+    {
+        return Err(CoreError::Database);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.nlink() > 1 {
+            return Err(CoreError::Database);
+        }
+    }
+    let canonical_settings = fs::canonicalize(&settings_path).map_err(|_| CoreError::Database)?;
+    let canonical_parent = fs::canonicalize(settings_path.parent().ok_or(CoreError::Database)?)
+        .map_err(|_| CoreError::Database)?;
+    if canonical_settings.parent() != Some(canonical_parent.as_path()) {
+        return Err(CoreError::Database);
+    }
+    let contents = fs::read_to_string(canonical_settings).map_err(|_| CoreError::Database)?;
+    parse_note_structure_settings(&contents).map_err(|_| CoreError::Database)
+}
+
+fn read_parse_note(
+    path: &Path,
+    settings: &NoteStructureSettings,
+) -> Result<ParsedNote, &'static str> {
     let metadata = fs::metadata(path).map_err(|_| "read")?;
     if metadata.len() > gallery_parse::MAX_NOTE_BYTES as u64 {
         return Err("oversized");
@@ -1211,7 +2129,7 @@ fn read_parse_note(path: &Path) -> Result<ParsedNote, &'static str> {
     file.take((gallery_parse::MAX_NOTE_BYTES + 1) as u64)
         .read_to_string(&mut content)
         .map_err(|_| "read")?;
-    parse_note(&content).map_err(|error| match error {
+    parse_note_for_link_target(&content, settings).map_err(|error| match error {
         gallery_parse::ParseError::NoteTooLarge
         | gallery_parse::ParseError::FrontmatterTooLarge
         | gallery_parse::ParseError::TooManyTags => "limit",
@@ -1226,7 +2144,12 @@ fn insert_note(
     root: &Path,
     mtime: i64,
     size: i64,
+    eligible: bool,
 ) -> Result<bool, CoreError> {
+    let filename = Path::new(relative)
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or(CoreError::Database)?;
     let videos = note
         .media
         .iter()
@@ -1234,45 +2157,50 @@ fn insert_note(
         .count();
     transaction
         .execute(
-            "INSERT INTO notes(path,title,url,published,created,updated,media_count,video_count,has_memo,has_related,mtime,size) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12)",
-            params![relative, note.title, note.url, note.published, note.created, note.updated, note.media.len() as i64, videos as i64, !note.memo_lines.is_empty(), !note.related_lines.is_empty(), mtime, size],
+            "INSERT INTO notes(path,title,url,published,created,updated,media_count,video_count,has_memo,has_related,memo_count,related_count,mtime,size,eligible,filename)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16)",
+            params![relative, note.title, note.url, note.published, note.created, note.updated, note.media.len() as i64, videos as i64, !note.memo_lines.is_empty(), !note.related_lines.is_empty(), note.memo_lines.len() as i64, note.related_lines.len() as i64, mtime, size, eligible, filename],
         )
         .map_err(|_| CoreError::Database)?;
     let note_id = transaction.last_insert_rowid();
-    for tag in expanded_tags(&note.tags) {
-        transaction
-            .execute("INSERT OR IGNORE INTO tags(name) VALUES (?1)", [&tag])
-            .map_err(|_| CoreError::Database)?;
-        let tag_id: i64 = transaction
-            .query_row("SELECT id FROM tags WHERE name=?1", [&tag], |row| {
-                row.get(0)
-            })
-            .map_err(|_| CoreError::Database)?;
-        transaction
-            .execute(
-                "INSERT INTO note_tags(note_id,tag_id) VALUES (?1,?2)",
-                params![note_id, tag_id],
-            )
-            .map_err(|_| CoreError::Database)?;
+    if eligible {
+        for tag in expanded_tags(&note.tags) {
+            transaction
+                .execute("INSERT OR IGNORE INTO tags(name) VALUES (?1)", [&tag])
+                .map_err(|_| CoreError::Database)?;
+            let tag_id: i64 = transaction
+                .query_row("SELECT id FROM tags WHERE name=?1", [&tag], |row| {
+                    row.get(0)
+                })
+                .map_err(|_| CoreError::Database)?;
+            transaction
+                .execute(
+                    "INSERT INTO note_tags(note_id,tag_id) VALUES (?1,?2)",
+                    params![note_id, tag_id],
+                )
+                .map_err(|_| CoreError::Database)?;
+        }
     }
-    for (ordinal, media) in note.media.iter().enumerate() {
-        let exists = safe_media_exists(root, relative, &media.path);
-        transaction
-            .execute(
-                "INSERT INTO media(note_id,ord,rel_path,kind,exists_flag) VALUES (?1,?2,?3,?4,?5)",
-                params![
-                    note_id,
-                    ordinal as i64,
-                    media.path,
-                    if media.kind == MediaKind::Video {
-                        "video"
-                    } else {
-                        "image"
-                    },
-                    exists
-                ],
-            )
-            .map_err(|_| CoreError::Database)?;
+    if eligible {
+        for (ordinal, media) in note.media.iter().enumerate() {
+            let exists = safe_media_exists(root, relative, &media.path);
+            transaction
+                .execute(
+                    "INSERT INTO media(note_id,ord,rel_path,kind,exists_flag) VALUES (?1,?2,?3,?4,?5)",
+                    params![
+                        note_id,
+                        ordinal as i64,
+                        media.path,
+                        if media.kind == MediaKind::Video {
+                            "video"
+                        } else {
+                            "image"
+                        },
+                        exists
+                    ],
+                )
+                .map_err(|_| CoreError::Database)?;
+        }
     }
     Ok(true)
 }
@@ -1417,28 +2345,67 @@ mod tests {
     }
 
     #[test]
-    fn includes_art_notes_but_hides_excluded_tags_and_filters() {
+    fn fuzzy_note_search_handles_cjk_titles() {
+        assert!(fuzzy_note_match(
+            "雨上がりの観測",
+            "雨上がりの観測.md",
+            "雨上がりの観測"
+        ));
+        assert!(fuzzy_note_match(
+            "雨上がりの観測",
+            "雨上がりの観測.md",
+            "雨上か"
+        ));
+        assert!(!fuzzy_note_match(
+            "雨上がりの観測",
+            "雨上がりの観測.md",
+            "夕暮れ"
+        ));
+    }
+
+    #[test]
+    fn categories_return_tags_for_user_configurable_visibility() {
         let root = temp_dir();
         fs::create_dir_all(&root).expect("create vault");
         fs::write(
             root.join("one.md"),
-            "---\ntags: [source/art, copyright/pin]\n---\n# One\n",
+            "---\ntags: [source/art, copyright/pretty-series]\n---\n# One\n",
         )
         .expect("write note");
+        fs::write(
+            root.join("two.md"),
+            "---\ntags: [source/type/animal, copyright/onepeace]\n---\n# Two\n",
+        )
+        .expect("write second note");
+        fs::write(
+            root.join("three.md"),
+            "---\ntags: [source/type/animal, copyright/pretty-series, copyright/onepeace]\n---\n# Three\n",
+        )
+        .expect("write note with both copyright tags");
+        fs::write(
+            root.join("four.md"),
+            "---\ntags: [source/type/other, copyright/unrelated]\n---\n# Four\n",
+        )
+        .expect("write note with unrelated copyright tag");
         let database = root.parent().expect("parent").join(format!(
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
         let mut gallery = Gallery::open(&root, &database).expect("open");
         let report = gallery.scan().expect("scan");
-        assert_eq!(report.notes_indexed, 1);
+        assert_eq!(report.notes_indexed, 4);
         let categories = gallery.categories().expect("categories");
-        assert!(categories.iter().all(|category| category.path != "source"));
+        assert!(
+            categories
+                .iter()
+                .find(|category| category.path == "source")
+                .is_some_and(|category| category.options.iter().any(|o| o.name == "art"))
+        );
         assert!(
             categories
                 .iter()
                 .any(|category| category.path == "copyright"
-                    && category.options.iter().any(|o| o.name == "pin"))
+                    && category.options.iter().any(|o| o.name == "pretty-series"))
         );
         assert_eq!(
             gallery
@@ -1447,6 +2414,252 @@ mod tests {
                 .len(),
             1
         );
+        let filtered_categories = gallery
+            .categories_with_filters(&["source/art".into()], &[], &[])
+            .expect("filtered categories");
+        let copyright = filtered_categories
+            .iter()
+            .find(|category| category.path == "copyright")
+            .expect("copyright category");
+        let unmatched_copyright = copyright
+            .options
+            .iter()
+            .find(|option| option.full_tag == "copyright/onepeace")
+            .expect("unmatched copyright");
+        assert_eq!(unmatched_copyright.count, 0);
+        assert!(unmatched_copyright.disabled);
+        let both_copyrights = gallery
+            .query_filtered_page_search_with_all(
+                &[],
+                &[
+                    "copyright/pretty-series".into(),
+                    "copyright/onepeace".into(),
+                ],
+                &[],
+                &[],
+                "",
+                0,
+                10,
+            )
+            .expect("AND tags")
+            .into_iter()
+            .map(|note| note.path)
+            .collect::<Vec<_>>();
+        assert_eq!(both_copyrights, ["three.md"]);
+        let and_categories = gallery
+            .categories_with_filter_modes(
+                &[],
+                &[
+                    "copyright/pretty-series".into(),
+                    "copyright/onepeace".into(),
+                ],
+                &[],
+                &[],
+            )
+            .expect("categories for required copyright tags");
+        let unrelated = and_categories
+            .iter()
+            .find(|category| category.path == "copyright")
+            .expect("copyright category")
+            .options
+            .iter()
+            .find(|option| option.full_tag == "copyright/unrelated")
+            .expect("unrelated copyright tag");
+        assert_eq!(unrelated.count, 0);
+        assert!(unrelated.disabled);
+        fs::remove_file(database).expect("remove db");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn note_structure_settings_reparse_custom_headings_and_virtual_filters() {
+        let root = temp_dir();
+        let app_data = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::create_dir_all(&app_data).expect("create app data");
+        fs::write(
+            root.join("custom.md"),
+            "---\ntags: [collection/example]\n---\n# Custom note\nA fictional post.\n## Later\n- keep the blue subtle\n## Sources\n- [study](https://example.invalid/study)\n## End of post\nThis is not post text.\n",
+        )
+        .expect("write fictional note");
+        fs::write(
+            app_data.join("tag-settings.json"),
+            r#"{"noteStructure":{"galleryTagPrefixes":["collection/"],"memoHeadings":["Later"],"relatedHeadings":["Sources"],"postTextEndHeadings":["End of post"]}}"#,
+        )
+        .expect("write custom note structure settings");
+        let database = app_data.join("index.sqlite");
+        let mut gallery = Gallery::open(&root, &database).expect("open with settings");
+        gallery.scan().expect("scan with custom structure");
+        let note = gallery.query(&[], 10).expect("query").remove(0);
+        let detail = gallery
+            .note_detail(note.id)
+            .expect("read detail")
+            .expect("note exists");
+        assert_eq!(detail.body_text, "A fictional post.");
+        assert_eq!(detail.memo_lines[0].text, "keep the blue subtle");
+        assert_eq!(detail.related_lines[0].text, "study");
+
+        let memo_notes = gallery
+            .query_filtered_page(&[], &[VirtualFilter::HasMemo], 0, 10)
+            .expect("memo filter");
+        assert_eq!(memo_notes.len(), 1);
+
+        fs::write(
+            app_data.join("tag-settings.json"),
+            r#"{"noteStructure":{"galleryTagPrefixes":["collection/"],"memoHeadings":["Task list"],"relatedHeadings":["Sources"],"postTextEndHeadings":["End of post"]}}"#,
+        )
+        .expect("change note headings");
+        drop(gallery);
+        let mut gallery = Gallery::open(&root, &database).expect("reopen with settings");
+        gallery.scan().expect("rescan after config change");
+        let note = gallery.query(&[], 10).expect("query").remove(0);
+        let detail = gallery
+            .note_detail(note.id)
+            .expect("read refreshed detail")
+            .expect("note exists");
+        assert!(detail.memo_lines.is_empty());
+        assert_eq!(
+            gallery
+                .query_filtered_page(&[], &[VirtualFilter::HasMemo], 0, 10)
+                .expect("updated memo filter")
+                .len(),
+            0
+        );
+        fs::remove_dir_all(root).expect("remove vault");
+        fs::remove_dir_all(app_data).expect("remove app data");
+    }
+
+    #[test]
+    fn link_resolution_modes_use_vault_bounded_shortest_relative_and_absolute_paths() {
+        let root = temp_dir();
+        let app_data = temp_dir();
+        fs::create_dir_all(root.join("folder/nested")).expect("create nested notes");
+        fs::create_dir_all(root.join("archive")).expect("create archive notes");
+        fs::create_dir_all(&app_data).expect("create app data");
+        fs::write(
+            root.join("folder/nested/source.md"),
+            "---\ntags: [source/example]\n---\n# Source\n## Related\n- [[target]]\n- [[Nearby target]]\n",
+        )
+        .expect("write source");
+        fs::write(
+            root.join("folder/target.md"),
+            "---\ntags: [source/example]\n---\n# Nearby target\n",
+        )
+        .expect("write nearby target");
+        fs::write(
+            root.join("archive/target.md"),
+            "---\ntags: [source/example]\n---\n# Distant target\n",
+        )
+        .expect("write distant target");
+        let database = app_data.join("index.sqlite");
+        fs::write(
+            app_data.join("tag-settings.json"),
+            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"shortestPath"}}"#,
+        )
+        .expect("write shortest path setting");
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        let source = gallery
+            .query(&[], 10)
+            .expect("query")
+            .into_iter()
+            .find(|note| note.path.ends_with("source.md"))
+            .expect("source note");
+        let detail = gallery
+            .note_detail(source.id)
+            .expect("detail")
+            .expect("source detail");
+        let nearest = gallery
+            .query(&[], 10)
+            .expect("query nearest")
+            .into_iter()
+            .find(|note| note.path == "folder/target.md")
+            .expect("nearest note");
+        assert_eq!(detail.related_lines[0].linked_note_id, Some(nearest.id));
+        assert_eq!(detail.related_lines[1].linked_note_id, Some(nearest.id));
+        drop(gallery);
+
+        fs::write(
+            app_data.join("tag-settings.json"),
+            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"relativePath"}}"#,
+        )
+        .expect("write relative setting");
+        let gallery = Gallery::open(&root, &database).expect("reopen relative");
+        let detail = gallery
+            .note_detail(source.id)
+            .expect("relative detail")
+            .expect("source detail");
+        assert_eq!(detail.related_lines[0].linked_note_id, Some(nearest.id));
+        assert_eq!(detail.related_lines[1].linked_note_id, Some(nearest.id));
+        drop(gallery);
+
+        fs::write(
+            root.join("folder/nested/source.md"),
+            "---\ntags: [source/example]\n---\n# Source\n## Related\n- [[/target]]\n",
+        )
+        .expect("replace source with vault-absolute link");
+        fs::write(
+            root.join("target.md"),
+            "---\ntags: [source/example]\n---\n# Root target\n",
+        )
+        .expect("write root target");
+        fs::write(
+            app_data.join("tag-settings.json"),
+            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"absolutePath"}}"#,
+        )
+        .expect("write absolute setting");
+        let mut gallery = Gallery::open(&root, &database).expect("reopen absolute");
+        gallery.scan().expect("rescan absolute");
+        let source = gallery
+            .query(&[], 10)
+            .expect("query source")
+            .into_iter()
+            .find(|note| note.path.ends_with("source.md"))
+            .expect("source note");
+        let root_target = gallery
+            .query(&[], 10)
+            .expect("query root")
+            .into_iter()
+            .find(|note| note.path == "target.md")
+            .expect("root target");
+        let detail = gallery
+            .note_detail(source.id)
+            .expect("absolute detail")
+            .expect("source detail");
+        assert_eq!(detail.related_lines[0].linked_note_id, Some(root_target.id));
+        fs::remove_dir_all(root).expect("remove vault");
+        fs::remove_dir_all(app_data).expect("remove app data");
+    }
+
+    #[test]
+    fn indexes_only_notes_with_source_tags() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(
+            root.join("gallery-note.md"),
+            "---\ntags: [source/rating/safe]\n---\n# Gallery note\n",
+        )
+        .expect("write gallery note");
+        fs::write(
+            root.join("unrelated-note.md"),
+            "---\ntags: [moc]\n---\n# Unrelated note\n",
+        )
+        .expect("write unrelated note");
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+
+        let report = gallery.scan().expect("scan");
+        let notes = gallery.query(&[], 10).expect("query");
+
+        assert_eq!(report.notes_indexed, 1);
+        assert_eq!(report.warnings, 0);
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].path, "gallery-note.md");
+
+        drop(gallery);
         fs::remove_file(database).expect("remove db");
         fs::remove_dir_all(root).expect("remove vault");
     }
@@ -1597,6 +2810,247 @@ mod tests {
             2
         );
         fs::remove_file(database).expect("remove db");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn source_categories_share_one_display_root_without_changing_filter_groups() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        for (name, tags) in [
+            ("one.md", "source/service/pixiv, source/type/animal"),
+            ("two.md", "source/service/mastodon, source/type/human"),
+        ] {
+            fs::write(
+                root.join(name),
+                format!("---\ntags: [{tags}]\n---\n# Fictional\n"),
+            )
+            .expect("write note");
+        }
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        let categories = gallery.categories().expect("categories");
+        let source = categories
+            .iter()
+            .find(|category| category.path == "source")
+            .expect("source grouping");
+        assert_eq!(source.display_name, "ソース");
+        assert!(source.options.is_empty());
+        assert!(
+            categories
+                .iter()
+                .any(|category| category.path == "source/service")
+        );
+        assert!(
+            categories
+                .iter()
+                .any(|category| category.path == "source/type")
+        );
+        assert_eq!(
+            gallery
+                .query(
+                    &[
+                        "source/service/pixiv".to_owned(),
+                        "source/type/animal".to_owned(),
+                    ],
+                    10,
+                )
+                .expect("filter across source subcategories")
+                .len(),
+            1
+        );
+        drop(gallery);
+        fs::remove_file(database).expect("remove index");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn supports_excluded_tags_fuzzy_note_names_and_note_badges() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(
+            root.join("portrait.md"),
+            "---\nurl: https://example.invalid/post\ntags: [source/service/pixiv, source/type/animal, source/art/hidamari]\npublished: 2026-09-01\n---\n# Fictional Portrait\n[@fictional_author](https://example.invalid/author)\n> fictional post text\n![](portrait.webp)\n## 覚書\n- first\n  - second\n## 関連\n- [related note](https://example.invalid/note)\n- [other note](other.md)\n- [[other.md|wiki other note]]\n- [private note](private%20note.md)\n- ![[private note]]\n- ![](private%20note.md)\n",
+        )
+        .expect("write portrait");
+        fs::write(
+            root.join("other.md"),
+            "---\ntags: [source/service/mastodon, source/type/human]\n---\n# Other Artwork\n",
+        )
+        .expect("write other");
+        fs::write(
+            root.join("private note.md"),
+            "# Private Note\nThis note has no frontmatter or tags and is only a link target.\n\n![](linked.webp)\n",
+        )
+        .expect("write non-gallery link target");
+        fs::write(root.join("linked.webp"), b"fictional image fixture")
+            .expect("write linked note media fixture");
+        fs::write(
+            root.join("portrait.webp"),
+            b"fictional portrait media fixture",
+        )
+        .expect("write portrait media fixture");
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let report = gallery.scan().expect("scan");
+        assert_eq!(report.notes_indexed, 2);
+
+        let fuzzy = gallery
+            .query_filtered_page_search(&[], &[], &[], "fictinal", 0, 10)
+            .expect("fuzzy name search");
+        assert_eq!(fuzzy.len(), 1);
+        assert_eq!(fuzzy[0].title, "Fictional Portrait");
+        let tag_name_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "hidamari", 0, 10)
+            .expect("plain-text tag-name search");
+        assert_eq!(tag_name_search.len(), 1);
+        assert_eq!(tag_name_search[0].title, "Fictional Portrait");
+        let fuzzy_tag_name_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "hidamri", 0, 10)
+            .expect("fuzzy plain-text tag-name search");
+        assert_eq!(fuzzy_tag_name_search.len(), 1);
+        assert_eq!(fuzzy_tag_name_search[0].title, "Fictional Portrait");
+        let tag_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "#source/type/animal", 0, 10)
+            .expect("tag search");
+        assert_eq!(tag_search.len(), 1);
+        assert_eq!(tag_search[0].title, "Fictional Portrait");
+        let fuzzy_tag_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "#source/type/animl", 0, 10)
+            .expect("fuzzy tag search");
+        assert_eq!(fuzzy_tag_search.len(), 1);
+        assert_eq!(fuzzy_tag_search[0].title, "Fictional Portrait");
+        let fuzzy_excluded_tag_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "-#source/type/animl", 0, 10)
+            .expect("fuzzy excluded tag search");
+        assert_eq!(fuzzy_excluded_tag_search.len(), 1);
+        assert_eq!(fuzzy_excluded_tag_search[0].title, "Other Artwork");
+        let fuzzy_all_tag_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "&#source/type/animl", 0, 10)
+            .expect("fuzzy all-tags search");
+        assert_eq!(fuzzy_all_tag_search.len(), 1);
+        assert_eq!(fuzzy_all_tag_search[0].title, "Fictional Portrait");
+        let media_search = gallery
+            .query_media_filtered_page_search(&[], &[], &[], "#source/type/animl", 0, 10)
+            .expect("fuzzy tag media search");
+        assert_eq!(media_search.len(), 1);
+        assert_eq!(media_search[0].media_count, 1);
+        assert_eq!(media_search[0].memo_count, 2);
+        assert_eq!(media_search[0].related_count, 6);
+        let excluded_tag_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "-#source/type/animal", 0, 10)
+            .expect("excluded tag search");
+        assert_eq!(excluded_tag_search.len(), 1);
+        assert_eq!(excluded_tag_search[0].title, "Other Artwork");
+        let all_tag_search = gallery
+            .query_filtered_page_search(
+                &[],
+                &[],
+                &[],
+                "&#source/type/animal &#source/service/pixiv",
+                0,
+                10,
+            )
+            .expect("AND tag search");
+        assert_eq!(all_tag_search.len(), 1);
+        assert_eq!(all_tag_search[0].title, "Fictional Portrait");
+        let combined_search = gallery
+            .query_filtered_page_search(&[], &[], &[], "Fictional #source/type/animal", 0, 10)
+            .expect("combined title and tag search");
+        assert_eq!(combined_search.len(), 1);
+        assert_eq!(combined_search[0].title, "Fictional Portrait");
+        assert_eq!(fuzzy[0].memo_count, 2);
+        assert_eq!(fuzzy[0].related_count, 6);
+        let detail = gallery
+            .note_detail(fuzzy[0].id)
+            .expect("read note details")
+            .expect("indexed note details");
+        assert_eq!(detail.url.as_deref(), Some("https://example.invalid/post"));
+        assert_eq!(detail.published.as_deref(), Some("2026-09-01"));
+        assert_eq!(detail.body_text, "fictional post text");
+        assert_eq!(detail.author.as_deref(), Some("@fictional_author"));
+        assert_eq!(
+            detail.author_url.as_deref(),
+            Some("https://example.invalid/author")
+        );
+        assert_eq!(detail.memo_lines[0].text, "first");
+        assert!(detail.memo_lines[0].is_bullet);
+        assert_eq!(detail.memo_lines[0].indent_level, 0);
+        assert_eq!(detail.memo_lines[1].indent_level, 1);
+        assert_eq!(detail.related_lines[0].text, "related note");
+        assert_eq!(
+            detail.related_lines[0].urls,
+            ["https://example.invalid/note"]
+        );
+        assert_eq!(detail.related_lines[0].linked_note_id, None);
+        assert_eq!(
+            detail.related_lines[1].linked_note_id,
+            Some(
+                gallery
+                    .query_filtered_page_search(&[], &[], &[], "Other Artwork", 0, 10)
+                    .expect("query linked note")[0]
+                    .id
+            )
+        );
+        assert_eq!(
+            detail.related_lines[2].linked_note_id,
+            detail.related_lines[1].linked_note_id
+        );
+        assert_eq!(detail.related_lines[2].text, "wiki other note");
+        let private_note_id = detail.related_lines[3]
+            .linked_note_id
+            .expect("non-gallery note link resolves");
+        assert_eq!(detail.related_lines[4].text, "private note");
+        assert_eq!(
+            detail.related_lines[4].linked_note_id,
+            Some(private_note_id)
+        );
+        assert_eq!(detail.related_lines[5].text, "private note");
+        assert_eq!(
+            detail.related_lines[5].linked_note_id,
+            Some(private_note_id)
+        );
+        let private_note = gallery
+            .note_detail(private_note_id)
+            .expect("load linked non-gallery note")
+            .expect("private note detail");
+        assert_eq!(private_note.title, "Private Note");
+        assert_eq!(private_note.path, "private note.md");
+        assert_eq!(private_note.media.len(), 1);
+        assert!(private_note.media[0].exists);
+        assert_eq!(detail.related_lines[3].urls, ["private%20note.md"]);
+        assert!(
+            gallery
+                .query_filtered_page_search(&[], &[], &[], "", 0, 10)
+                .expect("gallery excludes link-only note")
+                .iter()
+                .all(|note| note.path != "private note.md")
+        );
+
+        let excluded = gallery
+            .query_filtered_page_search(&[], &["source/type/animal".to_owned()], &[], "", 0, 10)
+            .expect("negative tag search");
+        assert_eq!(excluded.len(), 1);
+        assert_eq!(excluded[0].path, "other.md");
+        let categories = gallery
+            .categories_with_filters(&[], &["source/type/animal".to_owned()], &[])
+            .expect("categories after exclusion");
+        let animal = categories
+            .iter()
+            .flat_map(|category| &category.options)
+            .find(|option| option.full_tag == "source/type/animal")
+            .expect("excluded tag remains available");
+        assert!(!animal.disabled);
+
+        drop(gallery);
+        fs::remove_file(database).expect("remove index");
         fs::remove_dir_all(root).expect("remove vault");
     }
 
@@ -1986,6 +3440,24 @@ mod tests {
 
         // Grouped by note: two notes, one each.
         assert_eq!(gallery.query(&[], 10).expect("notes").len(), 2);
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all(&[], &[], &[], &[], "")
+                .expect("count all notes"),
+            2
+        );
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all(
+                    &["source/rating/safe".into()],
+                    &[],
+                    &[],
+                    &[],
+                    "Many",
+                )
+                .expect("count filtered notes"),
+            1
+        );
 
         // Flattened: three media items total (two from "many", one from "single"),
         // newest-published note first, in appearance order within a note.
@@ -1993,6 +3465,24 @@ mod tests {
             .query_media_filtered_page(&[], &[], 0, 10)
             .expect("media");
         assert_eq!(media.len(), 3);
+        assert_eq!(
+            gallery
+                .count_filtered_media_with_all(&[], &[], &[], &[], "")
+                .expect("count all media"),
+            3
+        );
+        assert_eq!(
+            gallery
+                .count_filtered_media_with_all(
+                    &["source/rating/safe".into()],
+                    &[],
+                    &[],
+                    &[],
+                    "Many",
+                )
+                .expect("count filtered media"),
+            2
+        );
         assert!(!media[0].is_video);
         assert!(media[1].is_video);
         assert_eq!(media[0].note_id, media[1].note_id);
@@ -2010,6 +3500,93 @@ mod tests {
         assert_eq!(second_page[0].id, media[2].id);
 
         fs::remove_file(&database).expect("remove index");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn video_source_path_is_only_returned_for_existing_vault_video_media() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(root.join("clip.mp4"), b"fictional video bytes").expect("write video");
+        fs::write(root.join("still.png"), b"fictional image bytes").expect("write image");
+        fs::write(
+            root.join("note.md"),
+            "---\ntags: [source/type/video]\ncover: clip.mp4\n---\n# Fictional video\n![](still.png)\n",
+        )
+        .expect("write note");
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        let media = gallery
+            .query_media_filtered_page(&[], &[], 0, 10)
+            .expect("query media");
+        assert_eq!(media.len(), 2);
+        assert!(media[0].is_video);
+        assert!(!media[1].is_video);
+
+        assert_eq!(
+            gallery
+                .video_source_path(media[0].id)
+                .expect("video path")
+                .as_deref(),
+            Some(
+                fs::canonicalize(root.join("clip.mp4"))
+                    .expect("canonical")
+                    .as_path()
+            )
+        );
+        assert_eq!(
+            gallery
+                .media_source_path(media[0].id)
+                .expect("media path")
+                .as_deref(),
+            Some(
+                fs::canonicalize(root.join("clip.mp4"))
+                    .expect("canonical media")
+                    .as_path()
+            )
+        );
+        assert_eq!(
+            gallery
+                .media_source_path(media[1].id)
+                .expect("image source path")
+                .as_deref(),
+            Some(
+                fs::canonicalize(root.join("still.png"))
+                    .expect("canonical image")
+                    .as_path()
+            )
+        );
+        assert!(
+            gallery
+                .video_source_path(media[1].id)
+                .expect("image is not a video")
+                .is_none()
+        );
+        assert!(
+            gallery
+                .media_source_path(-1)
+                .expect("unknown media path")
+                .is_none()
+        );
+        assert!(
+            gallery
+                .video_source_path(-1)
+                .expect("unknown media path")
+                .is_none()
+        );
+        assert!(
+            gallery
+                .get_thumbnail(media[0].id, 320, &root.parent().unwrap().join("cache"))
+                .expect("video has no image thumbnail")
+                .is_none()
+        );
+
+        drop(gallery);
+        fs::remove_file(database).expect("remove index");
         fs::remove_dir_all(root).expect("remove vault");
     }
 

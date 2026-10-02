@@ -1,49 +1,55 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dynamic_color/dynamic_color.dart';
 
+import 'app_theme.dart';
+import 'core_api/gallery_appearance.dart';
+import 'core_api/linux_system_appearance.dart';
 import 'features/gallery/gallery_screen.dart';
 
-class VaultGalleryApp extends StatelessWidget {
+class VaultGalleryApp extends ConsumerWidget {
   const VaultGalleryApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     const seed = Color(0xFF8FA7D9);
-    return MaterialApp(
-      title: 'Vault Gallery',
-      themeMode: ThemeMode.system,
-      theme: _galleryTheme(seed),
-      darkTheme: _galleryTheme(seed, brightness: Brightness.dark),
-      home: const GalleryScreen(),
+    final appearance =
+        ref.watch(galleryAppearanceProvider).asData?.value ??
+        const GalleryAppearance();
+    final portalAccent = appearance.useSystemColor
+        ? ref.watch(linuxPortalAccentColorProvider).asData?.value
+        : null;
+    return DynamicColorBuilder(
+      builder: (lightDynamic, darkDynamic) {
+        final lightSystemScheme = portalAccent == null
+            ? lightDynamic
+            : ColorScheme.fromSeed(seedColor: portalAccent);
+        final darkSystemScheme = portalAccent == null
+            ? darkDynamic
+            : ColorScheme.fromSeed(
+                seedColor: portalAccent,
+                brightness: Brightness.dark,
+              );
+        return MaterialApp(
+          title: 'Kaede Gallery',
+          themeMode: switch (appearance.brightness) {
+            GalleryBrightnessMode.system => ThemeMode.system,
+            GalleryBrightnessMode.light => ThemeMode.light,
+            GalleryBrightnessMode.dark => ThemeMode.dark,
+          },
+          theme: galleryTheme(
+            seed,
+            dynamicScheme: appearance.useSystemColor ? lightSystemScheme : null,
+          ),
+          darkTheme: galleryTheme(
+            seed,
+            brightness: Brightness.dark,
+            dynamicScheme: appearance.useSystemColor ? darkSystemScheme : null,
+            pureBlack: appearance.pureBlack,
+          ),
+          home: const GalleryScreen(),
+        );
+      },
     );
   }
-}
-
-ThemeData _galleryTheme(
-  Color seed, {
-  Brightness brightness = Brightness.light,
-}) {
-  final colorScheme = ColorScheme.fromSeed(
-    seedColor: seed,
-    brightness: brightness,
-  );
-  return ThemeData(
-    colorScheme: colorScheme,
-    useMaterial3: true,
-    appBarTheme: const AppBarTheme(scrolledUnderElevation: 0),
-    cardTheme: CardThemeData(
-      color: colorScheme.surfaceContainerLow,
-      elevation: 0,
-      margin: const EdgeInsets.only(bottom: 8),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-    ),
-    chipTheme: ChipThemeData(
-      showCheckmark: true,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      side: BorderSide.none,
-      backgroundColor: colorScheme.surfaceContainerHighest,
-      selectedColor: colorScheme.secondaryContainer,
-      labelStyle: TextStyle(color: colorScheme.onSurface),
-      secondaryLabelStyle: TextStyle(color: colorScheme.onSecondaryContainer),
-    ),
-  );
 }

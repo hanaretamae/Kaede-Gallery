@@ -6,6 +6,7 @@ class GalleryCategoryOption {
     required this.fullTag,
     required this.count,
     required this.disabled,
+    this.sectionPath,
     this.virtualFilter,
   });
 
@@ -13,6 +14,7 @@ class GalleryCategoryOption {
   final String fullTag;
   final int count;
   final bool disabled;
+  final String? sectionPath;
   final String? virtualFilter;
 }
 
@@ -37,6 +39,8 @@ class GalleryNote {
     required this.title,
     required this.mediaCount,
     required this.videoCount,
+    required this.memoCount,
+    required this.relatedCount,
     required this.representativeMediaId,
   });
 
@@ -45,6 +49,8 @@ class GalleryNote {
   final String title;
   final int mediaCount;
   final int videoCount;
+  final int memoCount;
+  final int relatedCount;
   final int? representativeMediaId;
 }
 
@@ -54,12 +60,68 @@ class GalleryMediaItem {
     required this.noteId,
     required this.isVideo,
     required this.exists,
+    this.mediaCount = 1,
+    this.memoCount = 0,
+    this.relatedCount = 0,
   });
 
   final int id;
   final int noteId;
   final bool isVideo;
   final bool exists;
+  final int mediaCount;
+  final int memoCount;
+  final int relatedCount;
+}
+
+class GalleryDetailLine {
+  const GalleryDetailLine({
+    required this.text,
+    required this.urls,
+    this.isBullet = false,
+    this.indentLevel = 0,
+    this.linkedNoteId,
+  });
+
+  final String text;
+  final List<String> urls;
+  final bool isBullet;
+  final int indentLevel;
+  final int? linkedNoteId;
+}
+
+class GalleryNoteDetail {
+  const GalleryNoteDetail({
+    required this.id,
+    required this.path,
+    required this.title,
+    required this.tags,
+    required this.author,
+    required this.authorUrl,
+    required this.bodyText,
+    required this.memoLines,
+    required this.relatedLines,
+    required this.media,
+    this.url,
+    this.published,
+    this.created,
+    this.updated,
+  });
+
+  final int id;
+  final String path;
+  final String title;
+  final String? author;
+  final String? authorUrl;
+  final String? url;
+  final String? published;
+  final String? created;
+  final String? updated;
+  final List<String> tags;
+  final String bodyText;
+  final List<GalleryDetailLine> memoLines;
+  final List<GalleryDetailLine> relatedLines;
+  final List<GalleryMediaItem> media;
 }
 
 class GalleryScanReport {
@@ -93,28 +155,64 @@ abstract interface class GalleryRepository {
     String vaultPath,
     String indexPath,
     List<String> filters,
+    List<String> excludedFilters,
     List<String> virtualFilters,
   );
   Future<List<GalleryNote>> queryNotes(
     String vaultPath,
     String indexPath,
     List<String> filters, {
+    required List<String> excludedFilters,
     required List<String> virtualFilters,
+    required String searchQuery,
     required int offset,
     required int limit,
+  });
+  Future<int> countNotes(
+    String vaultPath,
+    String indexPath,
+    List<String> filters, {
+    required List<String> excludedFilters,
+    required List<String> virtualFilters,
+    required String searchQuery,
   });
   Future<List<GalleryMediaItem>> queryMedia(
     String vaultPath,
     String indexPath,
     List<String> filters, {
+    required List<String> excludedFilters,
     required List<String> virtualFilters,
+    required String searchQuery,
     required int offset,
     required int limit,
+  });
+  Future<int> countMedia(
+    String vaultPath,
+    String indexPath,
+    List<String> filters, {
+    required List<String> excludedFilters,
+    required List<String> virtualFilters,
+    required String searchQuery,
   });
   Future<Uint8List?> getThumbnail(
     String vaultPath,
     String indexPath,
     String cachePath,
     int mediaId,
+  );
+  Future<String?> getVideoSourcePath(
+    String vaultPath,
+    String indexPath,
+    int mediaId,
+  );
+  Future<String?> getMediaSourcePath(
+    String vaultPath,
+    String indexPath,
+    int mediaId,
+  );
+  Future<GalleryNoteDetail?> getNoteDetail(
+    String vaultPath,
+    String indexPath,
+    int noteId,
   );
 }

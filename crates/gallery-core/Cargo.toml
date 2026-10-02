@@ -11,3 +11,4 @@ rusqlite.workspace = true
 thiserror.workspace = true
 image.workspace = true
 sha2.workspace = true
+urlencoding.workspace = true

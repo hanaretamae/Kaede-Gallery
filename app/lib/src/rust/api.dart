@@ -7,8 +7,8 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `category`, `error_message`, `media_item`, `note_summary`, `open_gallery`, `parse_virtual_filters`, `scan_report`, `virtual_filter_key`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`
+// These functions are ignored because they are not marked as `pub`: `category`, `detail_line`, `error_message`, `media_item`, `note_detail`, `note_summary`, `open_gallery`, `parse_virtual_filters`, `scan_report`, `split_filter_modes`, `virtual_filter_key`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
 
 Future<void> prepareAppDataDirectory({
   required String directoryPath,
@@ -41,11 +41,13 @@ Future<List<Category>> listCategories({
   required String vaultPath,
   required String indexPath,
   required List<String> filters,
+  required List<String> excludedFilters,
   required List<String> virtualFilters,
 }) => RustLib.instance.api.crateApiListCategories(
   vaultPath: vaultPath,
   indexPath: indexPath,
   filters: filters,
+  excludedFilters: excludedFilters,
   virtualFilters: virtualFilters,
 );
 
@@ -53,32 +55,92 @@ Future<List<NoteSummary>> queryNotes({
   required String vaultPath,
   required String indexPath,
   required List<String> filters,
+  required List<String> excludedFilters,
   required List<String> virtualFilters,
+  required String searchQuery,
   required int offset,
   required int limit,
 }) => RustLib.instance.api.crateApiQueryNotes(
   vaultPath: vaultPath,
   indexPath: indexPath,
   filters: filters,
+  excludedFilters: excludedFilters,
   virtualFilters: virtualFilters,
+  searchQuery: searchQuery,
   offset: offset,
   limit: limit,
+);
+
+Future<int> countNotes({
+  required String vaultPath,
+  required String indexPath,
+  required List<String> filters,
+  required List<String> excludedFilters,
+  required List<String> virtualFilters,
+  required String searchQuery,
+}) => RustLib.instance.api.crateApiCountNotes(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  filters: filters,
+  excludedFilters: excludedFilters,
+  virtualFilters: virtualFilters,
+  searchQuery: searchQuery,
 );
 
 Future<List<MediaItem>> queryMedia({
   required String vaultPath,
   required String indexPath,
   required List<String> filters,
+  required List<String> excludedFilters,
   required List<String> virtualFilters,
+  required String searchQuery,
   required int offset,
   required int limit,
 }) => RustLib.instance.api.crateApiQueryMedia(
   vaultPath: vaultPath,
   indexPath: indexPath,
   filters: filters,
+  excludedFilters: excludedFilters,
   virtualFilters: virtualFilters,
+  searchQuery: searchQuery,
   offset: offset,
   limit: limit,
+);
+
+Future<int> countMedia({
+  required String vaultPath,
+  required String indexPath,
+  required List<String> filters,
+  required List<String> excludedFilters,
+  required List<String> virtualFilters,
+  required String searchQuery,
+}) => RustLib.instance.api.crateApiCountMedia(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  filters: filters,
+  excludedFilters: excludedFilters,
+  virtualFilters: virtualFilters,
+  searchQuery: searchQuery,
+);
+
+Future<NoteDetail?> getNoteDetail({
+  required String vaultPath,
+  required String indexPath,
+  required int noteId,
+}) => RustLib.instance.api.crateApiGetNoteDetail(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  noteId: noteId,
+);
+
+Future<String?> getMediaSourcePath({
+  required String vaultPath,
+  required String indexPath,
+  required int mediaId,
+}) => RustLib.instance.api.crateApiGetMediaSourcePath(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  mediaId: mediaId,
 );
 
 Future<int> warningCount({
@@ -101,6 +163,16 @@ Future<Uint8List?> getThumbnail({
   cachePath: cachePath,
   mediaId: mediaId,
   size: size,
+);
+
+Future<String?> getVideoSourcePath({
+  required String vaultPath,
+  required String indexPath,
+  required int mediaId,
+}) => RustLib.instance.api.crateApiGetVideoSourcePath(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  mediaId: mediaId,
 );
 
 class Category {
@@ -166,22 +238,69 @@ class CategoryOption {
           virtualFilter == other.virtualFilter;
 }
 
+class DetailLine {
+  final String text;
+  final List<String> urls;
+  final bool isBullet;
+  final int indentLevel;
+  final int? linkedNoteId;
+
+  const DetailLine({
+    required this.text,
+    required this.urls,
+    required this.isBullet,
+    required this.indentLevel,
+    this.linkedNoteId,
+  });
+
+  @override
+  int get hashCode =>
+      text.hashCode ^
+      urls.hashCode ^
+      isBullet.hashCode ^
+      indentLevel.hashCode ^
+      linkedNoteId.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is DetailLine &&
+          runtimeType == other.runtimeType &&
+          text == other.text &&
+          urls == other.urls &&
+          isBullet == other.isBullet &&
+          indentLevel == other.indentLevel &&
+          linkedNoteId == other.linkedNoteId;
+}
+
 class MediaItem {
   final int id;
   final int noteId;
   final bool isVideo;
   final bool exists;
+  final int mediaCount;
+  final int memoCount;
+  final int relatedCount;
 
   const MediaItem({
     required this.id,
     required this.noteId,
     required this.isVideo,
     required this.exists,
+    required this.mediaCount,
+    required this.memoCount,
+    required this.relatedCount,
   });
 
   @override
   int get hashCode =>
-      id.hashCode ^ noteId.hashCode ^ isVideo.hashCode ^ exists.hashCode;
+      id.hashCode ^
+      noteId.hashCode ^
+      isVideo.hashCode ^
+      exists.hashCode ^
+      mediaCount.hashCode ^
+      memoCount.hashCode ^
+      relatedCount.hashCode;
 
   @override
   bool operator ==(Object other) =>
@@ -191,7 +310,81 @@ class MediaItem {
           id == other.id &&
           noteId == other.noteId &&
           isVideo == other.isVideo &&
-          exists == other.exists;
+          exists == other.exists &&
+          mediaCount == other.mediaCount &&
+          memoCount == other.memoCount &&
+          relatedCount == other.relatedCount;
+}
+
+class NoteDetail {
+  final int id;
+  final String path;
+  final String title;
+  final String? author;
+  final String? authorUrl;
+  final String? url;
+  final String? published;
+  final String? created;
+  final String? updated;
+  final List<String> tags;
+  final String bodyText;
+  final List<DetailLine> memoLines;
+  final List<DetailLine> relatedLines;
+  final List<MediaItem> media;
+
+  const NoteDetail({
+    required this.id,
+    required this.path,
+    required this.title,
+    this.author,
+    this.authorUrl,
+    this.url,
+    this.published,
+    this.created,
+    this.updated,
+    required this.tags,
+    required this.bodyText,
+    required this.memoLines,
+    required this.relatedLines,
+    required this.media,
+  });
+
+  @override
+  int get hashCode =>
+      id.hashCode ^
+      path.hashCode ^
+      title.hashCode ^
+      author.hashCode ^
+      authorUrl.hashCode ^
+      url.hashCode ^
+      published.hashCode ^
+      created.hashCode ^
+      updated.hashCode ^
+      tags.hashCode ^
+      bodyText.hashCode ^
+      memoLines.hashCode ^
+      relatedLines.hashCode ^
+      media.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NoteDetail &&
+          runtimeType == other.runtimeType &&
+          id == other.id &&
+          path == other.path &&
+          title == other.title &&
+          author == other.author &&
+          authorUrl == other.authorUrl &&
+          url == other.url &&
+          published == other.published &&
+          created == other.created &&
+          updated == other.updated &&
+          tags == other.tags &&
+          bodyText == other.bodyText &&
+          memoLines == other.memoLines &&
+          relatedLines == other.relatedLines &&
+          media == other.media;
 }
 
 class NoteSummary {
@@ -200,6 +393,8 @@ class NoteSummary {
   final String title;
   final int mediaCount;
   final int videoCount;
+  final int memoCount;
+  final int relatedCount;
   final int? representativeMediaId;
 
   const NoteSummary({
@@ -208,6 +403,8 @@ class NoteSummary {
     required this.title,
     required this.mediaCount,
     required this.videoCount,
+    required this.memoCount,
+    required this.relatedCount,
     this.representativeMediaId,
   });
 
@@ -218,6 +415,8 @@ class NoteSummary {
       title.hashCode ^
       mediaCount.hashCode ^
       videoCount.hashCode ^
+      memoCount.hashCode ^
+      relatedCount.hashCode ^
       representativeMediaId.hashCode;
 
   @override
@@ -230,6 +429,8 @@ class NoteSummary {
           title == other.title &&
           mediaCount == other.mediaCount &&
           videoCount == other.videoCount &&
+          memoCount == other.memoCount &&
+          relatedCount == other.relatedCount &&
           representativeMediaId == other.representativeMediaId;
 }
 

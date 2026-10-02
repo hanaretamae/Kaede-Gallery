@@ -21,6 +21,10 @@
               rustup
               cargo-deny
               flutter
+              ffmpeg
+              libass
+              mpv
+              libjpeg
               pkg-config
               stdenv.cc
               cmake
@@ -29,7 +33,6 @@
               gtk3
               glib
               libGL
-              python3
             ];
             FLUTTER_SUPPRESS_ANALYTICS = "true";
             DART_SUPPRESS_ANALYTICS = "true";

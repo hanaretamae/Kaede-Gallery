@@ -8,10 +8,88 @@ pub const MAX_NOTE_BYTES: usize = 2 * 1024 * 1024;
 pub const MAX_FRONTMATTER_BYTES: usize = 256 * 1024;
 pub const MAX_TAGS: usize = 256;
 pub const MAX_YAML_DEPTH: usize = 64;
+pub const MAX_SETTINGS_BYTES: usize = 64 * 1024;
+const DEFAULT_MEMO_HEADINGS: [&str; 2] = ["覚書", "メモ"];
+const DEFAULT_RELATED_HEADINGS: [&str; 1] = ["関連"];
+const DEFAULT_POST_TEXT_END_HEADINGS: [&str; 1] = ["文書"];
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct NoteStructureSettings {
+    pub memo_headings: Vec<String>,
+    pub related_headings: Vec<String>,
+    pub post_text_end_headings: Vec<String>,
+    pub gallery_tag_prefixes: Vec<String>,
+    pub frontmatter: FrontmatterSettings,
+    pub link_resolution: LinkResolutionMode,
+    /// When `false`, blockquote (`> `) lines are excluded from the extracted
+    /// post text instead of being kept with the quote marker stripped.
+    pub post_text_include_quote: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct FrontmatterSettings {
+    pub tags_keys: Vec<String>,
+    pub title_keys: Vec<String>,
+    pub url_keys: Vec<String>,
+    pub published_keys: Vec<String>,
+    pub created_keys: Vec<String>,
+    pub updated_keys: Vec<String>,
+    pub cover_keys: Vec<String>,
+}
+
+impl Default for FrontmatterSettings {
+    fn default() -> Self {
+        Self {
+            tags_keys: vec!["tags".into()],
+            title_keys: vec!["title".into()],
+            url_keys: vec!["url".into()],
+            published_keys: vec!["published".into()],
+            created_keys: vec!["created".into()],
+            updated_keys: vec!["updated".into()],
+            cover_keys: vec!["cover".into()],
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum LinkResolutionMode {
+    ShortestPath,
+    #[default]
+    RelativePath,
+    AbsolutePath,
+}
+
+impl Default for NoteStructureSettings {
+    fn default() -> Self {
+        Self {
+            memo_headings: DEFAULT_MEMO_HEADINGS
+                .iter()
+                .map(|value| (*value).into())
+                .collect(),
+            related_headings: DEFAULT_RELATED_HEADINGS
+                .iter()
+                .map(|value| (*value).into())
+                .collect(),
+            post_text_end_headings: DEFAULT_POST_TEXT_END_HEADINGS
+                .iter()
+                .map(|value| (*value).into())
+                .collect(),
+            gallery_tag_prefixes: vec!["source/".into()],
+            frontmatter: FrontmatterSettings::default(),
+            link_resolution: LinkResolutionMode::default(),
+            post_text_include_quote: true,
+        }
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedNote {
     pub title: String,
+    pub author: Option<String>,
+    pub author_url: Option<String>,
     pub url: Option<String>,
     pub published: Option<String>,
     pub created: Option<String>,
@@ -19,8 +97,26 @@ pub struct ParsedNote {
     pub tags: Vec<String>,
     pub media: Vec<MediaReference>,
     pub memo_lines: Vec<Vec<InlineToken>>,
+    pub memo_bullets: Vec<bool>,
+    pub memo_indent_levels: Vec<u8>,
     pub related_lines: Vec<Vec<InlineToken>>,
+    pub related_bullets: Vec<bool>,
+    pub related_indent_levels: Vec<u8>,
     pub body_text: String,
+}
+
+#[test]
+fn tokenizes_obsidian_wikilinks_as_internal_link_targets() {
+    assert_eq!(
+        tokenize_inline("See [[../notes/target.md#Heading|Target note]]"),
+        [
+            InlineToken::Text("See ".to_owned()),
+            InlineToken::ExternalLink {
+                label: "Target note".to_owned(),
+                url: "../notes/target.md#Heading".to_owned(),
+            },
+        ]
+    );
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -58,6 +154,35 @@ fn tokenizes_markdown_links_and_bare_urls_without_rendering_markdown() {
     );
 }
 
+#[test]
+fn tokenizes_angle_bracket_markdown_destinations() {
+    assert_eq!(
+        tokenize_inline("[spaced note](<./notes/my%20note.md#Heading>)"),
+        [InlineToken::ExternalLink {
+            label: "spaced note".to_owned(),
+            url: "./notes/my%20note.md#Heading".to_owned(),
+        }]
+    );
+}
+
+#[test]
+fn tokenizes_embedded_markdown_and_wikilinks_as_navigable_targets() {
+    assert_eq!(
+        tokenize_inline("![[linked note]] ![](notes/linked%20note.md)"),
+        [
+            InlineToken::ExternalLink {
+                label: "linked note".to_owned(),
+                url: "linked note".to_owned(),
+            },
+            InlineToken::Text(" ".to_owned()),
+            InlineToken::ExternalLink {
+                label: "linked note".to_owned(),
+                url: "notes/linked%20note.md".to_owned(),
+            },
+        ]
+    );
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MediaKind {
     Image,
@@ -70,6 +195,8 @@ pub enum ParseError {
     NoteTooLarge,
     #[error("frontmatter exceeds the configured size limit")]
     FrontmatterTooLarge,
+    #[error("settings exceed the configured size limit")]
+    SettingsTooLarge,
     #[error("frontmatter is missing or malformed")]
     InvalidFrontmatter,
     #[error("frontmatter contains unsupported YAML aliases")]
@@ -82,24 +209,40 @@ pub enum ParseError {
     TooManyTags,
 }
 
-#[derive(Debug, Default, Deserialize)]
-struct Frontmatter {
-    url: Option<serde_yaml::Value>,
-    published: Option<serde_yaml::Value>,
-    created: Option<serde_yaml::Value>,
-    updated: Option<serde_yaml::Value>,
-    cover: Option<String>,
-    tags: Option<Vec<String>>,
+pub fn parse_note(input: &str) -> Result<ParsedNote, ParseError> {
+    parse_note_with_settings(input, &NoteStructureSettings::default())
 }
 
-pub fn parse_note(input: &str) -> Result<ParsedNote, ParseError> {
+pub fn parse_note_with_settings(
+    input: &str,
+    settings: &NoteStructureSettings,
+) -> Result<ParsedNote, ParseError> {
+    parse_note_inner(input, settings, false)
+}
+
+pub fn parse_note_for_link_target(
+    input: &str,
+    settings: &NoteStructureSettings,
+) -> Result<ParsedNote, ParseError> {
+    parse_note_inner(input, settings, true)
+}
+
+fn parse_note_inner(
+    input: &str,
+    settings: &NoteStructureSettings,
+    allow_missing_tags: bool,
+) -> Result<ParsedNote, ParseError> {
     if input.len() > MAX_NOTE_BYTES {
         return Err(ParseError::NoteTooLarge);
     }
 
     let input = input.strip_prefix('\u{feff}').unwrap_or(input);
     let normalized = input.replace("\r\n", "\n");
-    let (yaml, body) = split_frontmatter(&normalized)?;
+    let (yaml, body) = if allow_missing_tags && !normalized.starts_with("---\n") {
+        ("", normalized.as_str())
+    } else {
+        split_frontmatter(&normalized)?
+    };
     if yaml.len() > MAX_FRONTMATTER_BYTES {
         return Err(ParseError::FrontmatterTooLarge);
     }
@@ -111,21 +254,45 @@ pub fn parse_note(input: &str) -> Result<ParsedNote, ParseError> {
         // limit. Reject aliases before deserialization to bound expansion.
         return Err(ParseError::UnsupportedYamlAliases);
     }
-    let frontmatter: Frontmatter =
+    let frontmatter: serde_yaml::Mapping =
         serde_yaml::from_str(yaml).map_err(|_| ParseError::InvalidFrontmatter)?;
-    let tags = frontmatter.tags.ok_or(ParseError::MissingTags)?;
-    if tags.is_empty() {
+    let tags_value = first_frontmatter_value(&frontmatter, &settings.frontmatter.tags_keys);
+    let tags = match tags_value {
+        None if allow_missing_tags => Vec::new(),
+        None => return Err(ParseError::MissingTags),
+        Some(serde_yaml::Value::Sequence(values)) => values
+            .iter()
+            .map(frontmatter_string)
+            .collect::<Option<Vec<_>>>()
+            .ok_or(ParseError::MissingTags)?,
+        Some(serde_yaml::Value::String(value)) => value
+            .split(',')
+            .map(str::trim)
+            .filter(|tag| !tag.is_empty())
+            .map(ToOwned::to_owned)
+            .collect(),
+        Some(_) => return Err(ParseError::MissingTags),
+    };
+    if tags.is_empty() && !allow_missing_tags {
         return Err(ParseError::MissingTags);
     }
     if tags.len() > MAX_TAGS {
         return Err(ParseError::TooManyTags);
     }
 
-    let (title, body_without_title) = extract_title(body);
-    let sections = extract_sections(body_without_title);
+    let (body_title, body_without_title) = extract_title(body);
+    let title = first_frontmatter_value(&frontmatter, &settings.frontmatter.title_keys)
+        .and_then(frontmatter_string)
+        .unwrap_or(body_title);
+    let sections = extract_sections(body_without_title, settings);
+    let (author, author_url) = post_author(body_without_title, settings)
+        .map(|(label, url)| (Some(label), Some(url)))
+        .unwrap_or((None, None));
     let mut media = Vec::new();
-    if let Some(cover) = frontmatter.cover.as_deref() {
-        push_media(&mut media, cover);
+    if let Some(cover) = first_frontmatter_value(&frontmatter, &settings.frontmatter.cover_keys)
+        .and_then(frontmatter_string)
+    {
+        push_media(&mut media, &cover);
     }
     for reference in extract_media(body_without_title) {
         push_media(&mut media, &reference);
@@ -133,16 +300,108 @@ pub fn parse_note(input: &str) -> Result<ParsedNote, ParseError> {
 
     Ok(ParsedNote {
         title,
-        url: url_string(frontmatter.url),
-        published: value_string(frontmatter.published),
-        created: value_string(frontmatter.created),
-        updated: value_string(frontmatter.updated),
+        author,
+        author_url,
+        url: url_string(configured_value(
+            &frontmatter,
+            &settings.frontmatter.url_keys,
+        )),
+        published: value_string(configured_value(
+            &frontmatter,
+            &settings.frontmatter.published_keys,
+        )),
+        created: value_string(configured_value(
+            &frontmatter,
+            &settings.frontmatter.created_keys,
+        )),
+        updated: value_string(configured_value(
+            &frontmatter,
+            &settings.frontmatter.updated_keys,
+        )),
         tags,
         media,
         memo_lines: sections.memo,
+        memo_bullets: sections.memo_bullets,
+        memo_indent_levels: sections.memo_indent_levels,
         related_lines: sections.related,
-        body_text: clean_markdown_text(post_text(body_without_title)),
+        related_bullets: sections.related_bullets,
+        related_indent_levels: sections.related_indent_levels,
+        body_text: clean_markdown_text(post_text(body_without_title, settings), settings),
     })
+}
+
+pub fn parse_note_structure_settings(input: &str) -> Result<NoteStructureSettings, ParseError> {
+    if input.len() > MAX_SETTINGS_BYTES {
+        return Err(ParseError::SettingsTooLarge);
+    }
+    if exceeds_yaml_depth(input) {
+        return Err(ParseError::YamlTooDeep);
+    }
+    #[derive(Deserialize, Default)]
+    #[serde(default, rename_all = "camelCase")]
+    struct SettingsFile {
+        note_structure: NoteStructureSettings,
+    }
+    let settings = serde_yaml::from_str::<SettingsFile>(input)
+        .map_err(|_| ParseError::InvalidFrontmatter)?
+        .note_structure;
+    for heading in settings
+        .memo_headings
+        .iter()
+        .chain(settings.related_headings.iter())
+        .chain(settings.post_text_end_headings.iter())
+    {
+        if heading.trim().is_empty() || heading.len() > 256 {
+            return Err(ParseError::InvalidFrontmatter);
+        }
+    }
+    for key in settings
+        .frontmatter
+        .tags_keys
+        .iter()
+        .chain(settings.frontmatter.title_keys.iter())
+        .chain(settings.frontmatter.url_keys.iter())
+        .chain(settings.frontmatter.published_keys.iter())
+        .chain(settings.frontmatter.created_keys.iter())
+        .chain(settings.frontmatter.updated_keys.iter())
+        .chain(settings.frontmatter.cover_keys.iter())
+    {
+        if key.trim().is_empty() || key.len() > 128 {
+            return Err(ParseError::InvalidFrontmatter);
+        }
+    }
+    if settings.frontmatter.tags_keys.is_empty()
+        || settings
+            .gallery_tag_prefixes
+            .iter()
+            .any(|prefix| prefix.trim().is_empty() || prefix.len() > 128)
+    {
+        return Err(ParseError::InvalidFrontmatter);
+    }
+    Ok(settings)
+}
+
+fn first_frontmatter_value<'a>(
+    frontmatter: &'a serde_yaml::Mapping,
+    keys: &[String],
+) -> Option<&'a serde_yaml::Value> {
+    keys.iter()
+        .find_map(|key| frontmatter.get(serde_yaml::Value::String(key.clone())))
+}
+
+fn configured_value(
+    frontmatter: &serde_yaml::Mapping,
+    keys: &[String],
+) -> Option<serde_yaml::Value> {
+    first_frontmatter_value(frontmatter, keys).cloned()
+}
+
+fn frontmatter_string(value: &serde_yaml::Value) -> Option<String> {
+    match value {
+        serde_yaml::Value::String(value) => Some(value.clone()),
+        serde_yaml::Value::Number(value) => Some(value.to_string()),
+        _ => None,
+    }
 }
 
 fn split_frontmatter(input: &str) -> Result<(&str, &str), ParseError> {
@@ -310,45 +569,119 @@ fn extract_title(body: &str) -> (String, &str) {
 #[derive(Default)]
 struct Sections {
     memo: Vec<Vec<InlineToken>>,
+    memo_bullets: Vec<bool>,
+    memo_indent_levels: Vec<u8>,
     related: Vec<Vec<InlineToken>>,
+    related_bullets: Vec<bool>,
+    related_indent_levels: Vec<u8>,
 }
 
-fn extract_sections(body: &str) -> Sections {
+fn extract_sections(body: &str, settings: &NoteStructureSettings) -> Sections {
     let mut sections = Sections::default();
     let mut current: Option<&str> = None;
     for line in body.lines() {
         if let Some((_, heading)) = heading(line) {
             let name = heading.trim().trim_matches('#').trim();
-            current = match name {
-                "覚書" | "メモ" => Some("memo"),
-                "関連" => Some("related"),
-                _ => None,
+            let memo_matches = settings.memo_headings.iter().any(|heading| heading == name);
+            let related_matches = settings
+                .related_headings
+                .iter()
+                .any(|heading| heading == name);
+            current = if memo_matches {
+                Some("memo")
+            } else if related_matches {
+                Some("related")
+            } else {
+                None
             };
             continue;
         }
         let Some(section) = current else {
             continue;
         };
+        let trimmed = line.trim();
+        if trimmed.starts_with("```") || trimmed.starts_with("~~~") {
+            continue;
+        }
+        let indentation = line
+            .chars()
+            .take_while(|ch| matches!(ch, ' ' | '\t'))
+            .map(|ch| if ch == '\t' { 4 } else { 1 })
+            .sum::<usize>();
+        let mut line = line.trim_start();
+        while let Some(quoted) = line.strip_prefix('>') {
+            line = quoted.trim_start();
+        }
+        let (line, is_bullet) = strip_list_marker(line);
         let line = line.trim();
-        let line = line
-            .strip_prefix("- ")
-            .or_else(|| line.strip_prefix("* "))
-            .or_else(|| line.strip_prefix("+ "))
-            .unwrap_or(line)
-            .trim();
         if line.is_empty()
-            || line.starts_with("![")
+            || is_media_embed(line)
             || line.chars().all(|ch| matches!(ch, '-' | '*' | '+' | ' '))
         {
             continue;
         }
         if section == "memo" {
             sections.memo.push(tokenize_inline(line));
+            sections.memo_bullets.push(is_bullet);
+            sections
+                .memo_indent_levels
+                .push((indentation / 2).min(8) as u8);
         } else {
             sections.related.push(tokenize_inline(line));
+            sections.related_bullets.push(is_bullet);
+            sections
+                .related_indent_levels
+                .push((indentation / 2).min(8) as u8);
         }
     }
     sections
+}
+
+fn is_media_embed(line: &str) -> bool {
+    let target = if let Some(target) = line.strip_prefix("![[") {
+        target
+            .split_once("]]")
+            .map(|(target, _)| target.split_once('|').map_or(target, |(target, _)| target))
+    } else if let Some(target) = line.strip_prefix("![") {
+        target
+            .split_once("](")
+            .and_then(|(_, target)| target.split_once(')'))
+            .map(|(target, _)| target.trim().trim_matches(['<', '>']))
+    } else {
+        None
+    };
+    let Some(extension) = target
+        .and_then(|target| target.rsplit('/').next())
+        .and_then(|name| name.rsplit_once('.').map(|(_, extension)| extension))
+    else {
+        return false;
+    };
+    matches!(
+        extension.to_ascii_lowercase().as_str(),
+        "png" | "jpg" | "jpeg" | "webp" | "gif" | "avif" | "mp4" | "webm" | "mov" | "mkv"
+    )
+}
+
+fn strip_list_marker(line: &str) -> (&str, bool) {
+    for marker in ["- ", "* ", "+ "] {
+        if let Some(rest) = line.strip_prefix(marker) {
+            return (rest, true);
+        }
+    }
+    let digit_count = line
+        .bytes()
+        .take_while(|byte| byte.is_ascii_digit())
+        .count();
+    if digit_count > 0
+        && line
+            .as_bytes()
+            .get(digit_count)
+            .is_some_and(|marker| *marker == b'.' || *marker == b')')
+        && line.as_bytes().get(digit_count + 1) == Some(&b' ')
+    {
+        return (&line[digit_count + 2..], true);
+    }
+    (line, false)
 }
 
 fn heading(line: &str) -> Option<(usize, &str)> {
@@ -361,8 +694,16 @@ fn heading(line: &str) -> Option<(usize, &str)> {
     }
 }
 
-fn post_text(body: &str) -> &str {
-    let mut skipped_title = false;
+fn is_content_heading(name: &str, settings: &NoteStructureSettings) -> bool {
+    settings
+        .memo_headings
+        .iter()
+        .chain(settings.related_headings.iter())
+        .chain(settings.post_text_end_headings.iter())
+        .any(|heading| heading == name)
+}
+
+fn post_text<'a>(body: &'a str, settings: &NoteStructureSettings) -> &'a str {
     let mut end = body.len();
     for (offset, line) in body.split_inclusive('\n').scan(0, |position, line| {
         let offset = *position;
@@ -370,25 +711,47 @@ fn post_text(body: &str) -> &str {
         Some((offset, line))
     }) {
         if let Some((_, name)) = heading(line) {
-            if name == "文書" {
+            if is_content_heading(name.trim().trim_matches('#').trim(), settings) {
                 end = offset;
                 break;
             }
-            if !skipped_title {
-                skipped_title = true;
-                continue;
-            }
-        }
-        if !skipped_title {
-            if line.trim().is_empty() {
-                continue;
-            }
-            skipped_title = true;
+            continue;
         }
     }
     &body[..end]
 }
 
+fn post_author(body: &str, settings: &NoteStructureSettings) -> Option<(String, String)> {
+    for line in body.lines() {
+        if let Some((_, name)) = heading(line) {
+            if is_content_heading(name.trim().trim_matches('#').trim(), settings) {
+                return None;
+            }
+            continue;
+        }
+        if line.trim().is_empty() {
+            continue;
+        }
+        if line.trim_start().starts_with("![") {
+            continue;
+        }
+        return standalone_author(line);
+    }
+    None
+}
+
+fn standalone_author(line: &str) -> Option<(String, String)> {
+    let tokens = tokenize_inline(line.trim());
+    match tokens.as_slice() {
+        [InlineToken::ExternalLink { label, url }]
+            if !label.trim().is_empty()
+                && (url.starts_with("https://") || url.starts_with("http://")) =>
+        {
+            Some((label.trim().to_owned(), url.clone()))
+        }
+        _ => None,
+    }
+}
 fn extract_media(body: &str) -> Vec<String> {
     let mut result = Vec::new();
     let mut rest = body;
@@ -443,25 +806,39 @@ fn push_media(media: &mut Vec<MediaReference>, path: &str) {
     media.push(MediaReference { path, kind });
 }
 
-fn clean_markdown_text(body: &str) -> String {
+fn clean_markdown_text(body: &str, settings: &NoteStructureSettings) -> String {
+    let mut awaiting_author = true;
     body.lines()
-        .filter(|line| heading(line).is_none() && !line.trim().starts_with("!["))
-        .map(|line| {
-            let line = line
-                .trim()
-                .strip_prefix("> ")
-                .unwrap_or(line.trim())
-                .strip_prefix("- ")
-                .or_else(|| line.trim().strip_prefix("* "))
-                .or_else(|| line.trim().strip_prefix("+ "))
-                .unwrap_or(line.trim());
-            tokenize_inline(line)
-                .into_iter()
-                .map(|token| match token {
-                    InlineToken::Text(text) => clean_markdown_markers(&text),
-                    InlineToken::ExternalLink { label, .. } => label,
-                })
-                .collect::<String>()
+        .filter_map(|line| {
+            if heading(line).is_some() || line.trim().starts_with("![") {
+                return None;
+            }
+            let mut line = line.trim();
+            if awaiting_author && line.is_empty() {
+                return None;
+            }
+            if awaiting_author {
+                awaiting_author = false;
+                if standalone_author(line).is_some() {
+                    return None;
+                }
+            }
+            if !settings.post_text_include_quote && line.starts_with("> ") {
+                return None;
+            }
+            while let Some(quoted) = line.strip_prefix("> ") {
+                line = quoted.trim_start();
+            }
+            let (line, _) = strip_list_marker(line);
+            Some(
+                tokenize_inline(line)
+                    .into_iter()
+                    .map(|token| match token {
+                        InlineToken::Text(text) => clean_markdown_markers(&text),
+                        InlineToken::ExternalLink { label, .. } => label,
+                    })
+                    .collect::<String>(),
+            )
         })
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
@@ -481,12 +858,27 @@ fn tokenize_inline(line: &str) -> Vec<InlineToken> {
     let mut cursor = 0;
     while cursor < line.len() {
         let remainder = &line[cursor..];
-        let markdown_link = remainder.find('[').and_then(|start| {
-            let label_start = start + 1;
-            let label_end = remainder[label_start..].find("](")? + label_start;
-            let url_start = label_end + 2;
-            let url_end = remainder[url_start..].find(')')? + url_start;
-            Some((start, label_start, label_end, url_start, url_end))
+        let markdown_link = remainder.find("](").and_then(|close| {
+            let label_open = remainder[..close].rfind('[')?;
+            (!remainder[label_open..].starts_with("[[")).then(|| {
+                let label_start = label_open + 1;
+                let label_end = close;
+                let url_start = label_end + 2;
+                let url_end = remainder[url_start..].find(')')? + url_start;
+                Some((label_open, label_start, label_end, url_start, url_end))
+            })?
+        });
+        let wiki_link = remainder.find("[[").and_then(|start| {
+            let inner_start = start + 2;
+            let inner_end = remainder[inner_start..].find("]]")? + inner_start;
+            let target = remainder[inner_start..inner_end]
+                .split_once('|')
+                .map_or(&remainder[inner_start..inner_end], |(target, _)| target)
+                .trim();
+            let label = remainder[inner_start..inner_end]
+                .split_once('|')
+                .map_or(target, |(_, label)| label.trim());
+            (!target.is_empty()).then_some((start, inner_end + 2, target, label))
         });
         let bare_url = ["https://", "http://"]
             .into_iter()
@@ -510,25 +902,47 @@ fn tokenize_inline(line: &str) -> Vec<InlineToken> {
             });
 
         let link_start = markdown_link.as_ref().map(|link| link.0);
+        let wiki_start = wiki_link.as_ref().map(|link| link.0);
         let url_start = bare_url.as_ref().map(|url| url.0);
-        let next = match (link_start, url_start) {
-            (Some(link), Some(url)) if url < link => Some((url, false)),
-            (Some(link), _) => Some((link, true)),
-            (_, Some(url)) => Some((url, false)),
-            _ => None,
-        };
-        let Some((start, is_markdown_link)) = next else {
+        let next = [
+            link_start.map(|start| (start, 0)),
+            wiki_start.map(|start| (start, 1)),
+            url_start.map(|start| (start, 2)),
+        ]
+        .into_iter()
+        .flatten()
+        .min_by_key(|(start, _)| *start);
+        let Some((start, link_kind)) = next else {
             push_text_token(&mut tokens, &line[cursor..]);
             break;
         };
-        push_text_token(&mut tokens, &line[cursor..cursor + start]);
-        if is_markdown_link {
+        let link_prefix = if remainder[..start].ends_with('!') {
+            start - 1
+        } else {
+            start
+        };
+        push_text_token(&mut tokens, &line[cursor..cursor + link_prefix]);
+        if link_kind == 0 {
             if let Some((_, label_start, label_end, url_start, url_end)) = markdown_link {
+                let target = markdown_link_target(&remainder[url_start..url_end]);
+                let label = &remainder[label_start..label_end];
                 tokens.push(InlineToken::ExternalLink {
-                    label: remainder[label_start..label_end].to_owned(),
-                    url: remainder[url_start..url_end].to_owned(),
+                    label: if label.is_empty() {
+                        link_target_label(target)
+                    } else {
+                        label.to_owned()
+                    },
+                    url: target.to_owned(),
                 });
                 cursor += url_end + 1;
+            }
+        } else if link_kind == 1 {
+            if let Some((_, consumed, target, label)) = wiki_link {
+                tokens.push(InlineToken::ExternalLink {
+                    label: label.to_owned(),
+                    url: target.to_owned(),
+                });
+                cursor += consumed;
             }
         } else if let Some((url_start, _, url_end)) = bare_url {
             tokens.push(InlineToken::ExternalLink {
@@ -539,6 +953,29 @@ fn tokenize_inline(line: &str) -> Vec<InlineToken> {
         }
     }
     tokens
+}
+
+fn markdown_link_target(destination: &str) -> &str {
+    let destination = destination.trim();
+    if let Some(destination) = destination.strip_prefix('<') {
+        return destination
+            .find('>')
+            .map_or(destination, |end| &destination[..end]);
+    }
+    destination.split_whitespace().next().unwrap_or(destination)
+}
+
+fn link_target_label(target: &str) -> String {
+    let target = target.split(['#', '?']).next().unwrap_or(target);
+    let decoded = urlencoding::decode(target)
+        .map(|value| value.into_owned())
+        .unwrap_or_else(|_| target.to_owned());
+    decoded
+        .rsplit('/')
+        .next()
+        .unwrap_or(&decoded)
+        .trim_end_matches(".md")
+        .to_owned()
 }
 
 fn push_text_token(tokens: &mut Vec<InlineToken>, text: &str) {
@@ -570,10 +1007,66 @@ mod tests {
     use super::*;
 
     #[test]
+    fn configurable_headings_are_independent_of_heading_depth() {
+        let input = "---\ntags: [source/example]\n---\n# Example\nFictional post\n\n## Notes for later\n- keep the blue subtle\n### References\n- [study](https://example.invalid/study)\n### End of caption\nNot part of the post text\n";
+        let settings = NoteStructureSettings {
+            memo_headings: vec!["Notes for later".to_owned()],
+            related_headings: vec!["References".to_owned()],
+            post_text_end_headings: vec!["End of caption".to_owned()],
+            ..NoteStructureSettings::default()
+        };
+        let note = parse_note_with_settings(input, &settings).expect("valid note");
+        assert_eq!(note.body_text, "Fictional post");
+        assert_eq!(note.memo_lines.len(), 1);
+        assert_eq!(note.related_lines.len(), 1);
+
+        let settings = parse_note_structure_settings(
+            r#"{"noteStructure":{"memoHeadings":["Notes"],"relatedHeadings":["Links"],"postTextEndHeadings":["Details"]}}"#,
+        )
+        .expect("valid settings");
+        assert_eq!(settings.memo_headings, ["Notes"]);
+        assert_eq!(settings.related_headings, ["Links"]);
+        assert_eq!(settings.post_text_end_headings, ["Details"]);
+        assert_eq!(settings.gallery_tag_prefixes, ["source/"]);
+        let custom_prefixes = parse_note_structure_settings(
+            r#"{"noteStructure":{"galleryTagPrefixes":["portfolio","set/"]}}"#,
+        )
+        .expect("valid gallery tag prefixes");
+        assert_eq!(custom_prefixes.gallery_tag_prefixes, ["portfolio", "set/"]);
+        assert_eq!(
+            parse_note_structure_settings(r#"{"noteStructure":{"frontmatter":{"tagsKeys":[]}}}"#),
+            Err(ParseError::InvalidFrontmatter)
+        );
+    }
+
+    #[test]
+    fn configurable_frontmatter_aliases_keep_existing_defaults() {
+        let input = "---\nlabels: [source/example]\nname: YAML title\npage: https://example.invalid/post\nposted: 2026-10-01\nthumbnail: image.webp\n---\n# Body title\nCaption\n";
+        let settings = NoteStructureSettings {
+            frontmatter: FrontmatterSettings {
+                tags_keys: vec!["labels".into()],
+                title_keys: vec!["name".into()],
+                url_keys: vec!["page".into()],
+                published_keys: vec!["posted".into()],
+                cover_keys: vec!["thumbnail".into()],
+                ..FrontmatterSettings::default()
+            },
+            ..NoteStructureSettings::default()
+        };
+        let note = parse_note_with_settings(input, &settings).expect("valid note");
+        assert_eq!(note.tags, ["source/example"]);
+        assert_eq!(note.title, "YAML title");
+        assert_eq!(note.url.as_deref(), Some("https://example.invalid/post"));
+        assert_eq!(note.published.as_deref(), Some("2026-10-01"));
+        assert_eq!(note.media[0].path, "image.webp");
+    }
+
+    #[test]
     fn parses_bom_crlf_video_cover_and_sections() {
         let input = "\u{feff}---\r\nurl: https://example.invalid/post\r\ntags:\r\n  - source/service/example\r\ncover: ../media/clip.mp4\r\npublished: 2026-04-23T16:51:02\r\n---\r\n# Fictional author\r\nFictional **post text**\r\n\r\n# 文書\r\n## 関連\r\n- [related note](https://example.invalid/note)\r\n## 覚書\r\n-\r\n- remember this\r\n![](<image%20one.webp>)\r\n";
         let note = parse_note(input).expect("valid note");
         assert_eq!(note.title, "Fictional author");
+        assert_eq!(note.author, None);
         assert_eq!(note.media.len(), 2);
         assert_eq!(note.media[0].kind, MediaKind::Video);
         assert_eq!(note.media[1].path, "image one.webp");
@@ -581,6 +1074,8 @@ mod tests {
             note.memo_lines,
             [vec![InlineToken::Text("remember this".to_owned())]]
         );
+        assert_eq!(note.memo_bullets, [true]);
+        assert_eq!(note.memo_indent_levels, [0]);
         assert_eq!(
             note.related_lines,
             [vec![InlineToken::ExternalLink {
@@ -588,7 +1083,23 @@ mod tests {
                 url: "https://example.invalid/note".to_owned()
             }]]
         );
+        assert_eq!(note.related_bullets, [true]);
         assert_eq!(note.published.as_deref(), Some("2026-04-23T16:51:02"));
+    }
+
+    #[test]
+    fn preserves_nested_memo_indentation_levels() {
+        let input = "---\ntags: [source/art]\n---\n# title\n# 文書\n## 覚書\n- root\n  - child\n    - grandchild\n";
+        let note = parse_note(input).expect("valid note");
+        assert_eq!(
+            note.memo_lines,
+            [
+                vec![InlineToken::Text("root".to_owned())],
+                vec![InlineToken::Text("child".to_owned())],
+                vec![InlineToken::Text("grandchild".to_owned())],
+            ]
+        );
+        assert_eq!(note.memo_indent_levels, [0, 1, 2]);
     }
 
     #[test]
@@ -609,6 +1120,40 @@ mod tests {
         assert_eq!(note.body_text, "A post text with source link.");
         assert!(note.related_lines.is_empty());
         assert!(note.memo_lines.is_empty());
+    }
+
+    #[test]
+    fn supplied_frontmatter_cover_and_body_embed_are_one_media_item() {
+        let input = "---\nurl: https://example.invalid/posts/aoikasumi-0001\ntags:\n  - source/service/example\n  - source/art\n  - source/rating/safe\n  - source/type/illustration\npublished: 2026-09-18T14:20:00\ncreated: 2026-09-18T15:00:00\nupdated: 2026-09-18T15:10:00\ncover: ../../media/fictional-rainy-window.webp\n---\n# 雨上がりの観測\n\nurl\n\n![](<../../media/fictional-rainy-window.webp>)\n\n> 雨上がりの窓辺で、架空の青い鳥をスケッチしました。\n\n# 文書\n\n## 関連\n\n- [色の記録](./fictional-color-study.md)\n\n## 覚書\n\n- 窓の反射を少し弱める\n  - 青の彩度は控えめにする\n- 次は夕方の光を試す\n";
+        let note = parse_note(input).expect("valid sample note");
+        assert_eq!(note.media.len(), 1);
+        assert_eq!(
+            note.media[0].path,
+            "../../media/fictional-rainy-window.webp"
+        );
+        assert_eq!(note.memo_bullets, [true, true, true]);
+        assert_eq!(note.related_bullets, [true]);
+    }
+
+    #[test]
+    fn separates_leading_author_link_from_post_text() {
+        let input = "---\nurl: https://x.com/noone_oO/status/123\ntags: [source/art]\n---\n# Post title\n[@noone_oO](https://x.com/noone_oO)\n\n![](image.webp)\n\n> ONEちゃん\n";
+        let note = parse_note(input).expect("valid note");
+        assert_eq!(note.author.as_deref(), Some("@noone_oO"));
+        assert_eq!(note.author_url.as_deref(), Some("https://x.com/noone_oO"));
+        assert_eq!(note.body_text, "ONEちゃん");
+        assert!(!note.body_text.contains("noone_oO"));
+
+        let input = "---\ntags: [source/art]\n---\n# Post title\n".to_owned()
+            + "![](fictional.webp)\n\n"
+            + "[fictional artist](https://example.invalid/artist)\n\nPost text";
+        let note = parse_note(&input).expect("valid note");
+        assert_eq!(note.author.as_deref(), Some("fictional artist"));
+        assert_eq!(
+            note.author_url.as_deref(),
+            Some("https://example.invalid/artist")
+        );
+        assert_eq!(note.body_text, "Post text");
     }
 
     #[test]
@@ -635,6 +1180,78 @@ mod tests {
     fn does_not_treat_asterisks_in_quotes_or_comments_as_aliases() {
         let input = "---\ntags: [source/a]\nnote: \"a * b\"\n# *example\n---\n# title\n";
         assert!(parse_note(input).is_ok());
+    }
+
+    #[test]
+    fn memo_and_related_capture_all_content_at_any_heading_depth() {
+        let input = "---\ntags: [source/example]\n---\n# Title\nPost\n\n## 覚書\nplain memo\n> quoted memo\n```text\ncode memo\n```\n\n### 関連\nplain related\n- [related note](./other.md)\n";
+        let settings = parse_note_structure_settings(
+            r#"{"noteStructure":{"memoHeadingLevel":3,"relatedHeadingLevel":2,"memoBulletsRequired":true,"relatedBulletsRequired":true}}"#,
+        )
+        .expect("legacy conditions are ignored");
+        let note = parse_note_with_settings(input, &settings).expect("valid note");
+        assert_eq!(note.memo_lines.len(), 3);
+        assert_eq!(
+            note.memo_lines,
+            [
+                vec![InlineToken::Text("plain memo".to_owned())],
+                vec![InlineToken::Text("quoted memo".to_owned())],
+                vec![InlineToken::Text("code memo".to_owned())],
+            ]
+        );
+        assert_eq!(note.related_lines.len(), 2);
+        assert_eq!(
+            note.related_lines[0],
+            vec![InlineToken::Text("plain related".to_owned())]
+        );
+        assert!(matches!(
+            note.related_lines[1].as_slice(),
+            [InlineToken::ExternalLink { label, url }]
+                if label == "related note" && url == "./other.md"
+        ));
+
+        assert!(
+            parse_note_structure_settings(r#"{"noteStructure":{"memoHeadingLevel":7}}"#).is_ok()
+        );
+    }
+
+    #[test]
+    fn legacy_bullet_only_settings_no_longer_filter_section_content() {
+        let input = "---\ntags: [source/example]\n---\n# Title\nPost\n\n## 覚書\nnot a bullet\n- a bullet\n\n## 関連\n- a related bullet\nnot a bullet related\n";
+        let settings = parse_note_structure_settings(
+            r#"{"noteStructure":{"memoBulletsRequired":true,"relatedBulletsRequired":true}}"#,
+        )
+        .expect("legacy list restriction is ignored");
+        let note = parse_note_with_settings(input, &settings).expect("valid note");
+        assert_eq!(note.memo_lines.len(), 2);
+        assert_eq!(
+            note.memo_lines[0],
+            vec![InlineToken::Text("not a bullet".to_owned())]
+        );
+        assert_eq!(note.related_lines.len(), 2);
+        assert_eq!(
+            note.related_lines[1],
+            vec![InlineToken::Text("not a bullet related".to_owned())]
+        );
+    }
+
+    #[test]
+    fn post_text_include_quote_toggle_controls_blockquote_lines() {
+        let input = "---\ntags: [source/example]\n---\n# Title\nPlain line\n> quoted line\n";
+        let note = parse_note(input).expect("valid note with default settings");
+        assert_eq!(note.body_text, "Plain line\nquoted line");
+
+        let settings = NoteStructureSettings {
+            post_text_include_quote: false,
+            ..NoteStructureSettings::default()
+        };
+        let note = parse_note_with_settings(input, &settings).expect("valid note");
+        assert_eq!(note.body_text, "Plain line");
+
+        let settings =
+            parse_note_structure_settings(r#"{"noteStructure":{"postTextIncludeQuote":false}}"#)
+                .expect("valid settings");
+        assert!(!settings.post_text_include_quote);
     }
 
     #[test]
