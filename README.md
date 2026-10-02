@@ -6,7 +6,7 @@
 </p>
 
 <p align="center">
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux-informational">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20Android-informational">
   <img alt="Rust" src="https://img.shields.io/badge/core-Rust-orange">
   <img alt="Flutter" src="https://img.shields.io/badge/UI-Flutter-02569B">
   <img alt="Offline" src="https://img.shields.io/badge/network-none-success">
@@ -130,7 +130,7 @@ GDK_BACKEND=wayland flutter run -d linux
 
 動画・外部ページ・Obsidian URI は、ユーザーがビューア上のボタンを押したときだけ開きます。
 
-## Android 開発
+## Android APK のビルドと配布
 
 Nix 開発シェルには Android SDK（API 35/36）、Build Tools 36、NDK 28.2、
 CMake 3.22.1、JDK 17 が含まれます。Linux x86_64 で arm64 APK を作る場合、
@@ -183,11 +183,10 @@ gh auth login
 
 リリース時は AI が `CHANGELOG.md` にリリース節を追加し、内容を確認してから
 `app/pubspec.yaml` の version を更新して main に push し、同じバージョンの tag を push します。
-スクリプトは KeePassXC CLI を使って下記データベースのエントリーから鍵とパスワードを読み込みます。
-データベースのマスターパスワード入力が2回求められます。DB とキーファイルの場所は
-端末ごとに異なるため、リポジトリには保存せず、実行時に対話入力します。署名鍵はユーザー専用の
-`XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。署名情報を持つGradleプロセスは
-常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
+スクリプトは KeePassXC CLI を使って、上記エントリーから鍵とパスワードを読み込みます。
+DB とキーファイルの場所は端末ごとに異なるため、リポジトリには保存せず、実行時に環境変数で
+渡します。署名鍵はユーザー専用の `XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。
+署名情報を持つ Gradle プロセスは常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
 
 まず、リポジトリのルートで tag を作成して push します。
 
@@ -219,7 +218,8 @@ nix develop --command ./tools/release-android.sh v1.0.1
 DB とキーファイルは Vault や Git 管理下に置かず、端末上の安全な場所に保管してください。
 実行環境には mode 700 の `XDG_RUNTIME_DIR` が必要です。
 
-スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査し、
+スクリプトは tag/version、clean な作業ツリー、push 済み main/tag（タグは現在の HEAD を指す必要があります）、
+GitHub 認証を検査し、
 Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Release を作成して APK を添付します。
 作成した Release から APK をダウンロードできます。private repository のため、Release も
 リポジトリへのアクセス権があるアカウントだけが取得できます。GitHub Actions は設定せず、
