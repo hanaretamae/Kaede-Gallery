@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+set +x
 
 fail() {
   printf 'error: %s\n' "$1" >&2
@@ -19,6 +20,7 @@ command -v gh >/dev/null || fail "GitHub CLI (gh) is required; enter nix develop
 command -v flutter >/dev/null || fail "Flutter is required; enter nix develop first"
 command -v cargo >/dev/null || fail "Cargo is required; enter nix develop first"
 command -v rustup >/dev/null || fail "Rustup is required; enter nix develop first"
+command -v keepassxc-cli >/dev/null || fail "KeePassXC CLI (keepassxc-cli) is required"
 [[ -n ${ANDROID_HOME:-} && -n ${ANDROID_NDK_HOME:-} ]] || fail "enter nix develop to configure the Android SDK"
 gh auth status --hostname github.com >/dev/null 2>&1 || fail "authenticate with gh auth login first"
 
@@ -39,19 +41,31 @@ remote_tag=$(git ls-remote origin "refs/tags/$tag^{}" "refs/tags/$tag" |
   ')
 [[ $remote_tag == "$tag_commit" ]] || fail "push tag $tag to origin before releasing"
 
-[[ -n ${ANDROID_KEYSTORE_PATH:-} ]] || fail "ANDROID_KEYSTORE_PATH must be set"
-[[ -n ${ANDROID_KEYSTORE_PASSWORD:-} ]] || fail "ANDROID_KEYSTORE_PASSWORD must be set"
-[[ -n ${ANDROID_KEY_ALIAS:-} ]] || fail "ANDROID_KEY_ALIAS must be set"
-[[ -n ${ANDROID_KEY_PASSWORD:-} ]] || fail "ANDROID_KEY_PASSWORD must be set"
-[[ -f $ANDROID_KEYSTORE_PATH ]] || fail "ANDROID_KEYSTORE_PATH does not point to a file"
-
 repo=$(gh repo view --json nameWithOwner --jq .nameWithOwner) || fail "could not identify the GitHub repository"
 if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
   fail "a GitHub Release for $tag already exists"
 fi
 
+keepassxc_database=${KEEPASSXC_DATABASE:-$HOME/Documents/KeePass/password.kdbx}
+keepassxc_entry=${KEEPASSXC_ENTRY:-Kaede Gallery Android signing}
+keepassxc_attachment=${KEEPASSXC_ATTACHMENT:-release.jks}
+[[ -f $keepassxc_database && -r $keepassxc_database ]] ||
+  fail "set KEEPASSXC_DATABASE to a readable KeePassXC database"
+[[ -n ${XDG_RUNTIME_DIR:-} && -d $XDG_RUNTIME_DIR && -O $XDG_RUNTIME_DIR ]] ||
+  fail "XDG_RUNTIME_DIR must be a private runtime directory"
+runtime_mode=$(stat -c '%a' -- "$XDG_RUNTIME_DIR") ||
+  fail "could not inspect XDG_RUNTIME_DIR permissions"
+[[ $runtime_mode == 700 ]] || fail "XDG_RUNTIME_DIR must have mode 700"
+
+key_dir=
+notes_file=
+cleanup() {
+  [[ -z $notes_file ]] || rm -f -- "$notes_file"
+  [[ -z $key_dir ]] || rm -rf -- "$key_dir"
+}
+trap cleanup EXIT
 notes_file=$(mktemp)
-trap 'rm -f "$notes_file"' EXIT
+
 awk -v version="${tag#v}" '
   $0 ~ "^## \\[" version "\\]( - .*)?$" { found = 1; next }
   found && /^## / { exit }
@@ -68,6 +82,22 @@ cargo test --locked --workspace
   flutter test
 )
 
+key_dir=$(mktemp -d "$XDG_RUNTIME_DIR/kaede-gallery-release.XXXXXXXX") ||
+  fail "could not create a private release directory"
+keystore_path="$key_dir/release.jks"
+if ! keepassxc-cli attachment-export \
+  "$keepassxc_database" "$keepassxc_entry" "$keepassxc_attachment" "$keystore_path"; then
+  fail "could not export the signing keystore from KeePassXC"
+fi
+[[ -s $keystore_path ]] || fail "KeePassXC exported an empty signing keystore"
+chmod 600 "$keystore_path"
+
+if ! signing_password=$(keepassxc-cli show --show-protected --attributes Password \
+  "$keepassxc_database" "$keepassxc_entry"); then
+  fail "could not read the signing password from KeePassXC"
+fi
+[[ -n $signing_password ]] || fail "the KeePassXC signing entry has no password"
+
 ndk_bin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
 [[ -x $ndk_bin/aarch64-linux-android35-clang ]] || fail "Android NDK compiler was not found"
 rust_toolchain_bin=$(dirname "$(rustup which rustc)")
@@ -80,8 +110,16 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
 
 (
   cd app
-  flutter build apk --release --target-platform android-arm64
+  ANDROID_KEYSTORE_PATH="$keystore_path" \
+    ANDROID_KEYSTORE_PASSWORD="$signing_password" \
+    ANDROID_KEY_ALIAS=kaede-gallery \
+    ANDROID_KEY_PASSWORD="$signing_password" \
+    flutter build apk --release --target-platform android-arm64
 )
+unset signing_password
+rm -f -- "$keystore_path"
+rmdir -- "$key_dir"
+key_dir=
 
 apk="$repo_root/app/build/app/outputs/flutter-apk/app-release.apk"
 apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"

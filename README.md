@@ -165,15 +165,10 @@ Documents プロバイダ、メディア形式での追加確認は必要です�
 Android APK はローカルで署名・ビルドし、GitHub CLI を使って Release に添付できます。
 GitHub Actions、クラウド runner、Actions artifact は使いません。まず一度だけ専用鍵を作り、
 安全な場所へバックアップします。鍵とそのパスワードのどちらかを失うと、既存インストールを
-更新できません。この開発環境で生成した鍵とパスワードファイルは
-`~/.local/share/kaede-gallery/` に mode 600 で置かれています。KeePassXC データベースを開き、
-「Kaede Gallery Android signing」エントリーを作成し、
-ユーザー名を `kaede-gallery`、パスワード欄に `release-password` の値を登録して、
-添付ファイル欄へ `release.jks` を追加してください。KeePassXC のデータベースは
-強いマスターパスワードで保護し、暗号化バックアップを取ってください。
-添付後もビルドスクリプトが読むローカル keystore は残し、KeePassXC への登録を確認したら
-平文の `release-password` ファイルは削除します。鍵ファイルやパスワードを Git や Release に
-含めないでください。
+更新できません。KeePassXC データベースに「Kaede Gallery Android signing」エントリーを作成し、
+ユーザー名を `kaede-gallery`、パスワード欄に署名パスワードを保存し、添付ファイル欄へ
+`release.jks` を追加してください。KeePassXC のデータベースは強いマスターパスワードで保護し、
+暗号化バックアップを取ってください。鍵ファイルやパスワードを Git や Release に含めないでください。
 
 ```sh
 nix develop
@@ -188,20 +183,21 @@ gh auth login
 
 リリース時は AI が `CHANGELOG.md` にリリース節を追加し、内容を確認してから
 `app/pubspec.yaml` の version を更新して main に push し、同じバージョンの tag を push します。
-以下のパスワード入力はシェル履歴や画面に表示されません。KeePassXC からパスワードを
-クリップボードへコピーして貼り付けられます。keystore と key のパスワードは同一です。
+スクリプトは KeePassXC CLI を使って下記データベースのエントリーから鍵とパスワードを読み込みます。
+データベースのマスターパスワード入力が2回求められます。署名鍵はユーザー専用の
+`XDG_RUNTIME_DIR` に一時展開して、終了時に削除します。`keepassxc-cli` が Nix 開発環境に含まれます。
 
 ```sh
 git tag -a v1.0.1 -m v1.0.1
 git push origin v1.0.1
 nix develop
-export ANDROID_KEYSTORE_PATH="$HOME/.local/share/kaede-gallery/release.jks"
-export ANDROID_KEY_ALIAS=kaede-gallery
-read -rsp 'Keystore password: ' ANDROID_KEYSTORE_PASSWORD; echo
-export ANDROID_KEYSTORE_PASSWORD
-export ANDROID_KEY_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
 ./tools/release-android.sh v1.0.1
 ```
+
+既定のデータベース場所は `~/Documents/KeePass/password.kdbx`、エントリー名は
+`Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。異なる場合は
+`KEEPASSXC_DATABASE`、`KEEPASSXC_ENTRY`、`KEEPASSXC_ATTACHMENT` 環境変数で指定できます。
+実行環境には mode 700 の `XDG_RUNTIME_DIR` が必要です。
 
 スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査し、
 Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Release を作成して APK を添付します。

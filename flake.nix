@@ -139,6 +139,7 @@
                 cargo-deny
                 git
                 github-cli
+                keepassxc
                 flutter
                 ffmpeg
                 libass

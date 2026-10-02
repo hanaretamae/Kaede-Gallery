@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Android リリーススクリプトが KeePassXC から署名鍵とパスワードを一時取得するようになりました。
+
 ## [1.0.0] - 2026-10-03
 
 ### Added
