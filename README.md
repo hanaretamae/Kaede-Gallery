@@ -86,9 +86,11 @@ NixOS では `nixosModules.default` を import するか、
 Home Manager では `homeManagerModules.default` を import するか、
 `home.packages = [ kaede-gallery.packages.${pkgs.system}.default ];` を設定します。
 直接試す場合は `nix profile install github:hanaretamae/Kaede-Gallery` を使えます。
-この flake は x86_64 Linux 向けのビルド定義です。GitHub Actions のバイナリキャッシュは
+この flake は x86_64 Linux 向けのビルド定義です。Kaede Gallery 自体のバイナリキャッシュは
 提供していないため、初回は利用するマシン上でビルドされます。NixOS/Home Manager が
 必要な依存を Nix binary cache から取得できる場合、その依存はキャッシュからダウンロードされます。
+このリポジトリは private のため、flake を評価・取得するユーザーにも GitHub の読み取り権限と
+Nix 用 GitHub 認証設定が必要です。
 
 <details>
 <summary>索引データベースの場所</summary>
@@ -160,12 +162,43 @@ Android 16 の実機では架空の Documents フォルダを使い、SAF での
 権限保持・ノート索引・画像表示・短い MP4 の再生を確認しています。異なる端末や
 Documents プロバイダ、メディア形式での追加確認は必要です。
 
-Android APK は上記コマンドでローカルビルドし、USB・ローカルネットワークなどで端末へ
-移してください。このリポジトリでは GitHub Actions による CI、APK ビルド、Release
-アップロードを実行しません。リポジトリは private のままで、ビルドやファイル共有に
-クラウド runner を使わない運用です。ローカルの debug keystore で署名した APK は
-個人の端末での sideload に使えます。鍵を変えると既存インストールへの上書き更新は
-できないため、継続利用する場合は専用鍵を安全に保管し、ローカルで署名してください。
+Android APK はローカルで署名・ビルドし、GitHub CLI を使って Release に添付できます。
+GitHub Actions、クラウド runner、Actions artifact は使いません。まず一度だけ専用鍵を作り、
+安全な場所へバックアップします。鍵を失うと、既存インストールを更新できません。
+
+```sh
+nix develop
+mkdir -p "$HOME/.local/share/kaede-gallery"
+chmod 700 "$HOME/.local/share/kaede-gallery"
+keytool -genkeypair -v \
+  -keystore "$HOME/.local/share/kaede-gallery/release.jks" \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias kaede-gallery
+chmod 600 "$HOME/.local/share/kaede-gallery/release.jks"
+gh auth login
+```
+
+リリース時は `app/pubspec.yaml` の version を更新して main に push し、
+同じバージョンの tag を push します。以下のパスワード入力はシェル履歴に残りません。
+keytool でキー用パスワードに keystore と同じ値を設定した場合は、両方に入力します。
+
+```sh
+git tag -a v1.0.1 -m v1.0.1
+git push origin v1.0.1
+nix develop
+export ANDROID_KEYSTORE_PATH="$HOME/.local/share/kaede-gallery/release.jks"
+export ANDROID_KEY_ALIAS=kaede-gallery
+read -rsp 'Keystore password: ' ANDROID_KEYSTORE_PASSWORD; echo
+export ANDROID_KEYSTORE_PASSWORD
+read -rsp 'Key password: ' ANDROID_KEY_PASSWORD; echo
+export ANDROID_KEY_PASSWORD
+./tools/release-android.sh v1.0.1
+```
+
+スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査し、
+Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Release を作成して APK を添付します。
+作成した Release から APK をダウンロードできます。private repository のため、Release も
+リポジトリへのアクセス権があるアカウントだけが取得できます。GitHub Actions は設定せず、
+ビルドとアップロードはすべて利用者の PC から行います。
 
 ## 設定の構成
 

@@ -137,6 +137,8 @@
                 clippy
                 rustup
                 cargo-deny
+                git
+                github-cli
                 flutter
                 ffmpeg
                 libass
