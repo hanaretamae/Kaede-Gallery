@@ -166,8 +166,14 @@ Android APK はローカルで署名・ビルドし、GitHub CLI を使って Re
 GitHub Actions、クラウド runner、Actions artifact は使いません。まず一度だけ専用鍵を作り、
 安全な場所へバックアップします。鍵とそのパスワードのどちらかを失うと、既存インストールを
 更新できません。この開発環境で生成した鍵とパスワードファイルは
-`~/.local/share/kaede-gallery/` にあり、どちらも mode 600 です。別の安全な場所に
-暗号化バックアップし、鍵ファイル・パスワードファイルは Git や Release に含めないでください。
+`~/.local/share/kaede-gallery/` に mode 600 で置かれています。KeePassXC データベースを開き、
+「Kaede Gallery Android signing」エントリーを作成し、
+ユーザー名を `kaede-gallery`、パスワード欄に `release-password` の値を登録して、
+添付ファイル欄へ `release.jks` を追加してください。KeePassXC のデータベースは
+強いマスターパスワードで保護し、暗号化バックアップを取ってください。
+添付後もビルドスクリプトが読むローカル keystore は残し、KeePassXC への登録を確認したら
+平文の `release-password` ファイルは削除します。鍵ファイルやパスワードを Git や Release に
+含めないでください。
 
 ```sh
 nix develop
@@ -175,14 +181,15 @@ mkdir -p "$HOME/.local/share/kaede-gallery"
 chmod 700 "$HOME/.local/share/kaede-gallery"
 keytool -genkeypair -v \
   -keystore "$HOME/.local/share/kaede-gallery/release.jks" \
-  -keyalg RSA -keysize 2048 -validity 10000 -alias kaede-gallery
+  -keyalg RSA -keysize 3072 -validity 10000 -alias kaede-gallery
 chmod 600 "$HOME/.local/share/kaede-gallery/release.jks"
 gh auth login
 ```
 
-リリース時は `app/pubspec.yaml` の version を更新して main に push し、
-同じバージョンの tag を push します。以下のパスワード入力はシェル履歴に残りません。
-keytool でキー用パスワードに keystore と同じ値を設定した場合は、両方に入力します。
+リリース時は AI が `CHANGELOG.md` にリリース節を追加し、内容を確認してから
+`app/pubspec.yaml` の version を更新して main に push し、同じバージョンの tag を push します。
+以下のパスワード入力はシェル履歴や画面に表示されません。KeePassXC からパスワードを
+クリップボードへコピーして貼り付けられます。keystore と key のパスワードは同一です。
 
 ```sh
 git tag -a v1.0.1 -m v1.0.1
@@ -192,8 +199,7 @@ export ANDROID_KEYSTORE_PATH="$HOME/.local/share/kaede-gallery/release.jks"
 export ANDROID_KEY_ALIAS=kaede-gallery
 read -rsp 'Keystore password: ' ANDROID_KEYSTORE_PASSWORD; echo
 export ANDROID_KEYSTORE_PASSWORD
-read -rsp 'Key password: ' ANDROID_KEY_PASSWORD; echo
-export ANDROID_KEY_PASSWORD
+export ANDROID_KEY_PASSWORD="$ANDROID_KEYSTORE_PASSWORD"
 ./tools/release-android.sh v1.0.1
 ```
 

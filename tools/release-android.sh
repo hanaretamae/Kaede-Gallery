@@ -50,6 +50,15 @@ if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
   fail "a GitHub Release for $tag already exists"
 fi
 
+notes_file=$(mktemp)
+trap 'rm -f "$notes_file"' EXIT
+awk -v version="${tag#v}" '
+  $0 ~ "^## \\[" version "\\]( - .*)?$" { found = 1; next }
+  found && /^## / { exit }
+  found { print }
+' CHANGELOG.md > "$notes_file"
+[[ -s $notes_file ]] || fail "CHANGELOG.md has no release notes for $tag"
+
 rustup target add aarch64-linux-android
 cargo test --locked --workspace
 (
@@ -82,7 +91,7 @@ apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
 gh release create "$tag" "$apk" \
   --verify-tag \
   --title "$tag" \
-  --generate-notes \
+  --notes-file "$notes_file" \
   --repo "$repo"
 
 printf 'Released %s: %s\n' "$tag" "$apk"
