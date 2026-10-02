@@ -202,12 +202,24 @@ git push origin v1.0.1
 
 ```sh
 nix develop --command bash -c '
-  read -r -p "KeePassXC database path: " KEEPASSXC_DATABASE
-  read -r -p "KeePassXC key-file path: " KEEPASSXC_KEY_FILE
+  read -r -e -p "KeePassXC database path: " KEEPASSXC_DATABASE
+  read -r -e -p "KeePassXC key-file path: " KEEPASSXC_KEY_FILE
   export KEEPASSXC_DATABASE KEEPASSXC_KEY_FILE
   ./tools/release-android.sh v1.0.1
 '
 ```
+
+パスの入力例です（`/home/user/...` は自分の環境のパスに読み替えてください。実在の場所を
+このリポジトリに書かないでください）。
+
+```text
+KeePassXC database path: /home/user/secrets/example.kdbx
+KeePassXC key-file path: /home/user/secrets/example.keyx
+```
+
+- 入力するのは `~` を使わない**絶対パス**です。引用符は不要で、スペースを含んでいてもそのまま入力できます。
+- `-e` を付けているため、Tab キーでパスを補完できます。
+- 入力が違うとスクリプトが「readable ... を指定してください」と表示して止まります。その場合は再実行してください。
 
 実行の流れは次のとおりです。
 
