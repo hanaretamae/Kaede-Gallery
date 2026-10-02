@@ -122,6 +122,7 @@ class RustGalleryRepository implements GalleryRepository {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required GallerySort sort,
     required int offset,
     required int limit,
   }) async {
@@ -132,6 +133,8 @@ class RustGalleryRepository implements GalleryRepository {
       excludedFilters: excludedFilters,
       virtualFilters: virtualFilters,
       searchQuery: searchQuery,
+      sortField: sort.field.apiValue,
+      sortDirection: sort.direction.apiValue,
       offset: offset,
       limit: limit,
     );
@@ -176,6 +179,7 @@ class RustGalleryRepository implements GalleryRepository {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required GallerySort sort,
     required int offset,
     required int limit,
   }) async {
@@ -186,6 +190,8 @@ class RustGalleryRepository implements GalleryRepository {
       excludedFilters: excludedFilters,
       virtualFilters: virtualFilters,
       searchQuery: searchQuery,
+      sortField: sort.field.apiValue,
+      sortDirection: sort.direction.apiValue,
       offset: offset,
       limit: limit,
     );

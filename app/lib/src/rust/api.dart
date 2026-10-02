@@ -7,7 +7,7 @@ import 'frb_generated.dart';
 
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
-// These functions are ignored because they are not marked as `pub`: `category`, `detail_line`, `error_message`, `media_item`, `note_detail`, `note_summary`, `open_gallery`, `parse_virtual_filters`, `scan_report`, `split_filter_modes`, `virtual_filter_key`
+// These functions are ignored because they are not marked as `pub`: `category`, `detail_line`, `error_message`, `media_item`, `note_detail`, `note_summary`, `open_gallery`, `parse_note_sort`, `parse_virtual_filters`, `scan_report`, `split_filter_modes`, `virtual_filter_key`
 // These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
 
 Future<void> prepareAppDataDirectory({
@@ -75,6 +75,8 @@ Future<List<NoteSummary>> queryNotes({
   required List<String> excludedFilters,
   required List<String> virtualFilters,
   required String searchQuery,
+  required String sortField,
+  required String sortDirection,
   required int offset,
   required int limit,
 }) => RustLib.instance.api.crateApiQueryNotes(
@@ -84,6 +86,8 @@ Future<List<NoteSummary>> queryNotes({
   excludedFilters: excludedFilters,
   virtualFilters: virtualFilters,
   searchQuery: searchQuery,
+  sortField: sortField,
+  sortDirection: sortDirection,
   offset: offset,
   limit: limit,
 );
@@ -111,6 +115,8 @@ Future<List<MediaItem>> queryMedia({
   required List<String> excludedFilters,
   required List<String> virtualFilters,
   required String searchQuery,
+  required String sortField,
+  required String sortDirection,
   required int offset,
   required int limit,
 }) => RustLib.instance.api.crateApiQueryMedia(
@@ -120,6 +126,8 @@ Future<List<MediaItem>> queryMedia({
   excludedFilters: excludedFilters,
   virtualFilters: virtualFilters,
   searchQuery: searchQuery,
+  sortField: sortField,
+  sortDirection: sortDirection,
   offset: offset,
   limit: limit,
 );

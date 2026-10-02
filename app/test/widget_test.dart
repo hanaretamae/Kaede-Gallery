@@ -769,6 +769,54 @@ void main() {
     expect(find.text('指定位置の読み込みに失敗しました。'), findsOneWidget);
   });
 
+  testWidgets('tag panel changes the date sort for the gallery', (
+    tester,
+  ) async {
+    final repository = _FakeRepository(savedPath: '/fictional-vault');
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _showCountTagSettingsOverride,
+          galleryRepositoryProvider.overrideWithValue(repository),
+          vaultPlatformProvider.overrideWithValue(_FakeVaultPlatform()),
+        ],
+        child: const VaultGalleryApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('タグで絞り込む'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('並び順'), findsOneWidget);
+    expect(
+      repository.lastNoteSort,
+      const GallerySort(
+        field: GallerySortField.created,
+        direction: GallerySortDirection.descending,
+      ),
+    );
+    await tester.tap(find.text('作成日'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('昇順'));
+    await tester.pumpAndSettle();
+
+    expect(
+      repository.lastNoteSort,
+      const GallerySort(
+        field: GallerySortField.created,
+        direction: GallerySortDirection.ascending,
+      ),
+    );
+    expect(repository.noteQueryOffsets.last, 0);
+    Navigator.of(tester.element(find.text('並び順'))).pop();
+    await tester.pumpAndSettle();
+    await tester.tap(find.byTooltip('表示方法'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('すべてのメディアを表示'));
+    await tester.pumpAndSettle();
+    expect(repository.lastMediaSort, repository.lastNoteSort);
+  });
+
   testWidgets('shows indexed notes and tag filters', (tester) async {
     final repository = _FakeRepository(savedPath: '/fictional-vault');
     tester.view.physicalSize = const Size(1000, 800);
@@ -1936,6 +1984,8 @@ class _FakeRepository implements GalleryRepository {
   List<String> lastCategoryExcludedFilters = const [];
   List<String> lastCategoryVirtualFilters = const [];
   String lastSearchQuery = '';
+  GallerySort? lastNoteSort;
+  GallerySort? lastMediaSort;
   int? lastDetailNoteId;
   int? lastNoteOffset;
   final List<int> noteQueryOffsets = [];
@@ -2088,6 +2138,7 @@ class _FakeRepository implements GalleryRepository {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required GallerySort sort,
     required int offset,
     required int limit,
   }) async {
@@ -2095,6 +2146,7 @@ class _FakeRepository implements GalleryRepository {
     lastExcludedFilters = excludedFilters;
     lastVirtualFilters = virtualFilters;
     lastSearchQuery = searchQuery;
+    lastNoteSort = sort;
     lastNoteOffset = offset;
     noteQueryOffsets.add(offset);
     final pending = nextNotesCompleter;
@@ -2149,28 +2201,32 @@ class _FakeRepository implements GalleryRepository {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required GallerySort sort,
     required int offset,
     required int limit,
-  }) async => const [
-    GalleryMediaItem(
-      id: 1,
-      noteId: 1,
-      isVideo: false,
-      exists: true,
-      mediaCount: 3,
-      memoCount: 2,
-      relatedCount: 6,
-    ),
-    GalleryMediaItem(
-      id: 2,
-      noteId: 1,
-      isVideo: false,
-      exists: true,
-      mediaCount: 3,
-      memoCount: 2,
-      relatedCount: 6,
-    ),
-  ];
+  }) async {
+    lastMediaSort = sort;
+    return const [
+      GalleryMediaItem(
+        id: 1,
+        noteId: 1,
+        isVideo: false,
+        exists: true,
+        mediaCount: 3,
+        memoCount: 2,
+        relatedCount: 6,
+      ),
+      GalleryMediaItem(
+        id: 2,
+        noteId: 1,
+        isVideo: false,
+        exists: true,
+        mediaCount: 3,
+        memoCount: 2,
+        relatedCount: 6,
+      ),
+    ];
+  }
 
   @override
   Future<int> countMedia(

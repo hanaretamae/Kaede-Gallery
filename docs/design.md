@@ -105,6 +105,11 @@ app information, licenses, and the GitHub repository link are grouped under
 does not remove the files or affect Vault notes and the index. Gallery tag
 eligibility has its own section heading in tag settings. Pull-to-refresh is
 disabled; rescanning remains an explicit toolbar/settings action.
+The tag-filter panel also controls gallery ordering by publication or creation
+date, ascending or descending. This order applies consistently to note and
+media grids and across pagination; notes without the selected date stay last,
+and equal dates are ordered by Vault-relative path. The default is newest
+creation date first.
 
 ## Note parsing and gallery selection
 
@@ -279,7 +284,9 @@ shows the author above the media by default; the configured block order can
 place it in the detail area instead. Post text appears in the detail area
 without a post-text label or duplicated author. It fills the app window on
 entry, with black background and centered, fit-contained media; details are
-initially hidden so media fills the app window. A tap reveals a Material 3
+initially hidden so media fills the app window. While an image's note details,
+source path, or display-sized decode is loading, keep the viewer black rather
+than showing the smaller gallery thumbnail. A tap reveals a Material 3
 colored details interface with an animated media and details transition.
 Opening details resets image zoom. Post text and memo cards use elevated
 Material 3 surface containers so they contrast with their parent panel. A post

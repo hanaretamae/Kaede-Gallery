@@ -19,18 +19,10 @@ class _NoteViewerScreen extends ConsumerWidget {
     return detail.when(
       loading: () => Scaffold(
         appBar: AppBar(),
-        body: initialPreview == null
-            ? const Center(child: CircularProgressIndicator())
-            : ColoredBox(
-                color: Colors.black,
-                child: Center(
-                  child: Image.memory(
-                    initialPreview!,
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
-                  ),
-                ),
-              ),
+        body: const ColoredBox(
+          color: Colors.black,
+          child: Center(child: CircularProgressIndicator()),
+        ),
       ),
       error: (_, _) => Scaffold(
         appBar: AppBar(),
@@ -761,7 +753,9 @@ class _ViewerMedia extends ConsumerWidget {
     final thumbnail = media.isVideo
         ? null
         : ref.watch(galleryThumbnailProvider(media.id));
-    final preview = thumbnail?.asData?.value ?? initialPreview;
+    final preview = media.isVideo
+        ? thumbnail?.asData?.value ?? initialPreview
+        : null;
     final source = ref.watch(galleryMediaSourcePathProvider(media.id));
     return source.when(
       loading: () => preview == null
@@ -797,7 +791,6 @@ class _ViewerMedia extends ConsumerWidget {
           key: ValueKey(media.id),
           path: path,
           cacheWidth: pixelWidth,
-          preview: preview,
           onZoomChanged: onImageZoomChanged,
           controlsVisible: controlsVisible,
         );
@@ -811,14 +804,12 @@ class _ViewerImage extends ConsumerStatefulWidget {
     super.key,
     required this.path,
     required this.cacheWidth,
-    required this.preview,
     required this.onZoomChanged,
     required this.controlsVisible,
   });
 
   final String path;
   final int cacheWidth;
-  final Uint8List? preview;
   final ValueChanged<bool> onZoomChanged;
   final bool controlsVisible;
 
@@ -859,69 +850,51 @@ class _ViewerImageState extends ConsumerState<_ViewerImage> {
     if (widget.path.startsWith('content://')) {
       final bytes = ref.watch(gallerySafImageBytesProvider(widget.path));
       final image = bytes.when(
-        loading: _previewOrLoading,
-        error: (_, _) => widget.preview == null
-            ? const _ViewerMessage('画像を表示できませんでした。')
-            : _previewImage(),
-        data: (value) => _imageWithPreview(
-          MemoryImage(value),
-          (context, error, stackTrace) =>
-              const _ViewerMessage('画像を表示できませんでした。'),
-        ),
+        loading: () => const Center(child: CircularProgressIndicator()),
+        error: (_, _) => const _ViewerMessage('画像を表示できませんでした。'),
+        data: (value) => _imageWithFullImage(MemoryImage(value)),
       );
       return _buildImageViewer(image);
     } else {
       return _buildImageViewer(
-        _imageWithPreview(
-          FileImage(File(widget.path)),
-          (context, error, stackTrace) =>
-              const _ViewerMessage('画像を表示できませんでした。'),
-        ),
+        _imageWithFullImage(FileImage(File(widget.path))),
       );
     }
   }
 
-  Widget _previewOrLoading() => widget.preview == null
-      ? const Center(child: CircularProgressIndicator())
-      : _previewImage();
-
-  Widget _previewImage() =>
-      Image.memory(widget.preview!, fit: BoxFit.contain, gaplessPlayback: true);
-
-  Widget _imageWithPreview(
-    ImageProvider<Object> provider,
-    ImageErrorWidgetBuilder errorBuilder,
-  ) => Stack(
+  Widget _imageWithFullImage(ImageProvider<Object> provider) => Stack(
     fit: StackFit.expand,
     children: [
-      if (widget.preview != null) _previewImage(),
+      const ColoredBox(color: Colors.black),
       AnimatedOpacity(
         opacity: fullImageLoaded ? 1 : 0,
         duration: const Duration(milliseconds: 120),
-        child: Image(
-          image: ResizeImage(provider, width: widget.cacheWidth),
-          fit: BoxFit.contain,
-          gaplessPlayback: true,
-          frameBuilder: (context, child, frame, synchronous) {
-            if ((synchronous || frame != null) && !fullImageLoaded) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted && !fullImageLoaded) {
-                  setState(() => fullImageLoaded = true);
-                }
-              });
-            }
-            return child;
-          },
-          errorBuilder: (context, error, stackTrace) {
-            if (!fullImageFailed) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                if (mounted && !fullImageFailed) {
-                  setState(() => fullImageFailed = true);
-                }
-              });
-            }
-            return errorBuilder(context, error, stackTrace);
-          },
+        child: Center(
+          child: Image(
+            image: ResizeImage(provider, width: widget.cacheWidth),
+            fit: BoxFit.contain,
+            gaplessPlayback: true,
+            frameBuilder: (context, child, frame, synchronous) {
+              if ((synchronous || frame != null) && !fullImageLoaded) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && !fullImageLoaded) {
+                    setState(() => fullImageLoaded = true);
+                  }
+                });
+              }
+              return child;
+            },
+            errorBuilder: (context, error, stackTrace) {
+              if (!fullImageFailed) {
+                WidgetsBinding.instance.addPostFrameCallback((_) {
+                  if (mounted && !fullImageFailed) {
+                    setState(() => fullImageFailed = true);
+                  }
+                });
+              }
+              return const SizedBox.shrink();
+            },
+          ),
         ),
       ),
       if (fullImageFailed) const _ViewerMessage('画像を表示できませんでした。'),

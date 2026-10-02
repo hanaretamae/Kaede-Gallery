@@ -1,5 +1,52 @@
 import 'dart:typed_data';
 
+enum GallerySortField {
+  created('created', '作成日'),
+  published('published', '公開日');
+
+  const GallerySortField(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+}
+
+enum GallerySortDirection {
+  ascending('ascending', '昇順'),
+  descending('descending', '降順');
+
+  const GallerySortDirection(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+}
+
+class GallerySort {
+  const GallerySort({
+    this.field = GallerySortField.created,
+    this.direction = GallerySortDirection.descending,
+  });
+
+  final GallerySortField field;
+  final GallerySortDirection direction;
+
+  GallerySort copyWith({
+    GallerySortField? field,
+    GallerySortDirection? direction,
+  }) => GallerySort(
+    field: field ?? this.field,
+    direction: direction ?? this.direction,
+  );
+
+  @override
+  bool operator ==(Object other) =>
+      other is GallerySort &&
+      other.field == field &&
+      other.direction == direction;
+
+  @override
+  int get hashCode => Object.hash(field, direction);
+}
+
 class GalleryCategoryOption {
   const GalleryCategoryOption({
     required this.name,
@@ -165,6 +212,7 @@ abstract interface class GalleryRepository {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required GallerySort sort,
     required int offset,
     required int limit,
   });
@@ -183,6 +231,7 @@ abstract interface class GalleryRepository {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required GallerySort sort,
     required int offset,
     required int limit,
   });

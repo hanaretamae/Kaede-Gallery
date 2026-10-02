@@ -384,6 +384,21 @@ class GallerySearchQueryController extends Notifier<String> {
   void clear() => state = '';
 }
 
+final gallerySortProvider =
+    NotifierProvider<GallerySortController, GallerySort>(
+      GallerySortController.new,
+    );
+
+class GallerySortController extends Notifier<GallerySort> {
+  @override
+  GallerySort build() => const GallerySort();
+
+  void setField(GallerySortField field) => state = state.copyWith(field: field);
+
+  void setDirection(GallerySortDirection direction) =>
+      state = state.copyWith(direction: direction);
+}
+
 final selectedVirtualFiltersProvider =
     NotifierProvider<
       SelectedVirtualFiltersController,
@@ -559,6 +574,7 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
   List<String> _excludedFilters = const [];
   List<String> _virtualFilters = const [];
   String _searchQuery = '';
+  GallerySort _sort = const GallerySort();
   int _pageSize = galleryPageSize;
   bool _hasMore = true;
   bool get isLoadingMore => ref.read(galleryItemsLoadingMoreProvider);
@@ -582,6 +598,9 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
     ref.listen(gallerySearchQueryProvider, (_, _) {
       _resetGalleryPosition();
     });
+    ref.listen(gallerySortProvider, (_, _) {
+      _resetGalleryPosition();
+    });
     ref.listen(galleryPageSizeProvider, (_, _) {
       _resetGalleryPosition();
     });
@@ -595,6 +614,7 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
         .map((filter) => filter.key)
         .toList(growable: false);
     _searchQuery = ref.watch(gallerySearchQueryProvider);
+    _sort = ref.watch(gallerySortProvider);
     _pageSize = ref.watch(galleryPageSizeProvider);
     _session = await ref.watch(vaultSessionProvider.future);
     _hasMore = true;
@@ -610,6 +630,7 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
           excludedFilters: _excludedFilters,
           virtualFilters: _virtualFilters,
           searchQuery: _searchQuery,
+          sort: _sort,
           offset: 0,
           limit: _pageSize,
         );
@@ -634,6 +655,7 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
             excludedFilters: _excludedFilters,
             virtualFilters: _virtualFilters,
             searchQuery: _searchQuery,
+            sort: _sort,
             offset: ref.read(galleryNotesDataOffsetProvider) + current.length,
             limit: _pageSize,
           );
@@ -673,6 +695,7 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
             excludedFilters: _excludedFilters,
             virtualFilters: _virtualFilters,
             searchQuery: _searchQuery,
+            sort: _sort,
             offset: previousOffset,
             limit: currentOffset - previousOffset,
           );
@@ -702,6 +725,7 @@ class GalleryItemsController extends AsyncNotifier<List<GalleryNote>> {
             excludedFilters: _excludedFilters,
             virtualFilters: _virtualFilters,
             searchQuery: _searchQuery,
+            sort: _sort,
             offset: offset,
             limit: limit,
           );
@@ -753,6 +777,7 @@ class GalleryMediaItemsController
   List<String> _excludedFilters = const [];
   List<String> _virtualFilters = const [];
   String _searchQuery = '';
+  GallerySort _sort = const GallerySort();
   int _pageSize = galleryPageSize;
   bool _hasMore = true;
   bool get isLoadingMore => ref.read(galleryMediaItemsLoadingMoreProvider);
@@ -776,6 +801,9 @@ class GalleryMediaItemsController
     ref.listen(gallerySearchQueryProvider, (_, _) {
       _resetGalleryPosition();
     });
+    ref.listen(gallerySortProvider, (_, _) {
+      _resetGalleryPosition();
+    });
     ref.listen(galleryPageSizeProvider, (_, _) {
       _resetGalleryPosition();
     });
@@ -789,6 +817,7 @@ class GalleryMediaItemsController
         .map((filter) => filter.key)
         .toList(growable: false);
     _searchQuery = ref.watch(gallerySearchQueryProvider);
+    _sort = ref.watch(gallerySortProvider);
     _pageSize = ref.watch(galleryPageSizeProvider);
     _session = await ref.watch(vaultSessionProvider.future);
     _hasMore = true;
@@ -804,6 +833,7 @@ class GalleryMediaItemsController
           excludedFilters: _excludedFilters,
           virtualFilters: _virtualFilters,
           searchQuery: _searchQuery,
+          sort: _sort,
           offset: 0,
           limit: _pageSize,
         );
@@ -828,6 +858,7 @@ class GalleryMediaItemsController
             excludedFilters: _excludedFilters,
             virtualFilters: _virtualFilters,
             searchQuery: _searchQuery,
+            sort: _sort,
             offset: ref.read(galleryMediaDataOffsetProvider) + current.length,
             limit: _pageSize,
           );
@@ -867,6 +898,7 @@ class GalleryMediaItemsController
             excludedFilters: _excludedFilters,
             virtualFilters: _virtualFilters,
             searchQuery: _searchQuery,
+            sort: _sort,
             offset: previousOffset,
             limit: currentOffset - previousOffset,
           );
@@ -896,6 +928,7 @@ class GalleryMediaItemsController
             excludedFilters: _excludedFilters,
             virtualFilters: _virtualFilters,
             searchQuery: _searchQuery,
+            sort: _sort,
             offset: offset,
             limit: limit,
           );

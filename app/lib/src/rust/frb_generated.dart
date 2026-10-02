@@ -168,6 +168,8 @@ abstract class RustLibApi extends BaseApi {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required String sortField,
+    required String sortDirection,
     required int offset,
     required int limit,
   });
@@ -179,6 +181,8 @@ abstract class RustLibApi extends BaseApi {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required String sortField,
+    required String sortDirection,
     required int offset,
     required int limit,
   });
@@ -743,6 +747,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required String sortField,
+    required String sortDirection,
     required int offset,
     required int limit,
   }) {
@@ -756,6 +762,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_String(excludedFilters, serializer);
           sse_encode_list_String(virtualFilters, serializer);
           sse_encode_String(searchQuery, serializer);
+          sse_encode_String(sortField, serializer);
+          sse_encode_String(sortDirection, serializer);
           sse_encode_u_32(offset, serializer);
           sse_encode_u_32(limit, serializer);
           pdeCallFfi(
@@ -777,6 +785,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           excludedFilters,
           virtualFilters,
           searchQuery,
+          sortField,
+          sortDirection,
           offset,
           limit,
         ],
@@ -794,6 +804,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       "excludedFilters",
       "virtualFilters",
       "searchQuery",
+      "sortField",
+      "sortDirection",
       "offset",
       "limit",
     ],
@@ -807,6 +819,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     required List<String> excludedFilters,
     required List<String> virtualFilters,
     required String searchQuery,
+    required String sortField,
+    required String sortDirection,
     required int offset,
     required int limit,
   }) {
@@ -820,6 +834,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           sse_encode_list_String(excludedFilters, serializer);
           sse_encode_list_String(virtualFilters, serializer);
           sse_encode_String(searchQuery, serializer);
+          sse_encode_String(sortField, serializer);
+          sse_encode_String(sortDirection, serializer);
           sse_encode_u_32(offset, serializer);
           sse_encode_u_32(limit, serializer);
           pdeCallFfi(
@@ -841,6 +857,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
           excludedFilters,
           virtualFilters,
           searchQuery,
+          sortField,
+          sortDirection,
           offset,
           limit,
         ],
@@ -858,6 +876,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       "excludedFilters",
       "virtualFilters",
       "searchQuery",
+      "sortField",
+      "sortDirection",
       "offset",
       "limit",
     ],

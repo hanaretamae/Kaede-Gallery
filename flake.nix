@@ -11,7 +11,7 @@
         "aarch64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
-      version = "1.0.3";
+      version = "1.1.0";
       mkPkgs =
         system:
         import nixpkgs {

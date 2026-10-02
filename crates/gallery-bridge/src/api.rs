@@ -1,10 +1,11 @@
 use flutter_rust_bridge::frb;
 use gallery_core::{
     Category as CoreCategory, CoreError, DetailLine as CoreDetailLine, Gallery,
-    MediaSummary as CoreMediaSummary, NoteDetail as CoreNoteDetail, NoteSummary as CoreNoteSummary,
-    SafNoteDocument, ScanReport as CoreScanReport, VirtualFilter as CoreVirtualFilter,
-    load_selected_vault, prepare_private_app_directory, prepare_private_app_directory_for_saf,
-    save_selected_vault, save_selected_vault_saf,
+    MediaSummary as CoreMediaSummary, NoteDetail as CoreNoteDetail, NoteSort, NoteSortField,
+    NoteSummary as CoreNoteSummary, SafNoteDocument, ScanReport as CoreScanReport,
+    SortDirection as CoreSortDirection, VirtualFilter as CoreVirtualFilter, load_selected_vault,
+    prepare_private_app_directory, prepare_private_app_directory_for_saf, save_selected_vault,
+    save_selected_vault_saf,
 };
 use std::path::Path;
 
@@ -185,18 +186,22 @@ pub fn query_notes(
     excluded_filters: Vec<String>,
     virtual_filters: Vec<String>,
     search_query: String,
+    sort_field: String,
+    sort_direction: String,
     offset: u32,
     limit: u32,
 ) -> Result<Vec<NoteSummary>, String> {
     let virtual_filters = parse_virtual_filters(virtual_filters)?;
+    let sort = parse_note_sort(&sort_field, &sort_direction)?;
     let (filters, all_filters) = split_filter_modes(filters);
     open_gallery(&vault_path, &index_path)?
-        .query_filtered_page_search_with_all(
+        .query_filtered_page_search_with_all_and_sort(
             &filters,
             &all_filters,
             &excluded_filters,
             &virtual_filters,
             &search_query,
+            sort,
             offset as usize,
             limit as usize,
         )
@@ -234,18 +239,22 @@ pub fn query_media(
     excluded_filters: Vec<String>,
     virtual_filters: Vec<String>,
     search_query: String,
+    sort_field: String,
+    sort_direction: String,
     offset: u32,
     limit: u32,
 ) -> Result<Vec<MediaItem>, String> {
     let virtual_filters = parse_virtual_filters(virtual_filters)?;
+    let sort = parse_note_sort(&sort_field, &sort_direction)?;
     let (filters, all_filters) = split_filter_modes(filters);
     open_gallery(&vault_path, &index_path)?
-        .query_media_filtered_page_search_with_all(
+        .query_media_filtered_page_search_with_all_and_sort(
             &filters,
             &all_filters,
             &excluded_filters,
             &virtual_filters,
             &search_query,
+            sort,
             offset as usize,
             limit as usize,
         )
@@ -276,6 +285,20 @@ pub fn count_media(
 }
 
 const ALL_FILTER_PREFIX: &str = "\u{1f}AND:";
+
+fn parse_note_sort(field: &str, direction: &str) -> Result<NoteSort, String> {
+    let field = match field {
+        "published" => NoteSortField::Published,
+        "created" => NoteSortField::Created,
+        _ => return Err("Invalid date sort field.".to_owned()),
+    };
+    let direction = match direction {
+        "ascending" => CoreSortDirection::Ascending,
+        "descending" => CoreSortDirection::Descending,
+        _ => return Err("Invalid date sort direction.".to_owned()),
+    };
+    Ok(NoteSort { field, direction })
+}
 
 fn split_filter_modes(filters: Vec<String>) -> (Vec<String>, Vec<String>) {
     let mut any_filters = Vec::new();

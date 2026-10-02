@@ -582,6 +582,8 @@ fn wire__crate__api__query_media_impl(
             let api_excluded_filters = <Vec<String>>::sse_decode(&mut deserializer);
             let api_virtual_filters = <Vec<String>>::sse_decode(&mut deserializer);
             let api_search_query = <String>::sse_decode(&mut deserializer);
+            let api_sort_field = <String>::sse_decode(&mut deserializer);
+            let api_sort_direction = <String>::sse_decode(&mut deserializer);
             let api_offset = <u32>::sse_decode(&mut deserializer);
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -594,6 +596,8 @@ fn wire__crate__api__query_media_impl(
                         api_excluded_filters,
                         api_virtual_filters,
                         api_search_query,
+                        api_sort_field,
+                        api_sort_direction,
                         api_offset,
                         api_limit,
                     )?;
@@ -631,6 +635,8 @@ fn wire__crate__api__query_notes_impl(
             let api_excluded_filters = <Vec<String>>::sse_decode(&mut deserializer);
             let api_virtual_filters = <Vec<String>>::sse_decode(&mut deserializer);
             let api_search_query = <String>::sse_decode(&mut deserializer);
+            let api_sort_field = <String>::sse_decode(&mut deserializer);
+            let api_sort_direction = <String>::sse_decode(&mut deserializer);
             let api_offset = <u32>::sse_decode(&mut deserializer);
             let api_limit = <u32>::sse_decode(&mut deserializer);
             deserializer.end();
@@ -643,6 +649,8 @@ fn wire__crate__api__query_notes_impl(
                         api_excluded_filters,
                         api_virtual_filters,
                         api_search_query,
+                        api_sort_field,
+                        api_sort_direction,
                         api_offset,
                         api_limit,
                     )?;

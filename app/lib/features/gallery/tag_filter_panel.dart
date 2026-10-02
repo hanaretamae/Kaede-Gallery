@@ -175,8 +175,71 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
             final matchingTagPaths = matchingCategories
                 .map((category) => category.path)
                 .toSet();
+            final sort = ref.watch(gallerySortProvider);
             return Column(
               children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                  child: Card(
+                    margin: EdgeInsets.zero,
+                    child: Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Text(
+                              '並び順',
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                          ),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              SegmentedButton<GallerySortField>(
+                                segments: [
+                                  for (final field in GallerySortField.values)
+                                    ButtonSegment(
+                                      value: field,
+                                      label: Text(field.label),
+                                    ),
+                                ],
+                                selected: {sort.field},
+                                showSelectedIcon: false,
+                                onSelectionChanged: (selection) => ref
+                                    .read(gallerySortProvider.notifier)
+                                    .setField(selection.single),
+                              ),
+                              SegmentedButton<GallerySortDirection>(
+                                segments: [
+                                  for (final direction
+                                      in GallerySortDirection.values)
+                                    ButtonSegment(
+                                      value: direction,
+                                      icon: Icon(
+                                        direction ==
+                                                GallerySortDirection.ascending
+                                            ? Icons.arrow_upward
+                                            : Icons.arrow_downward,
+                                      ),
+                                      label: Text(direction.label),
+                                    ),
+                                ],
+                                selected: {sort.direction},
+                                showSelectedIcon: false,
+                                onSelectionChanged: (selection) => ref
+                                    .read(gallerySortProvider.notifier)
+                                    .setDirection(selection.single),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
                   child: Row(

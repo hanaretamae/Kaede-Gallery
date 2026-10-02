@@ -42,6 +42,33 @@ pub enum VirtualFilter {
     HasRelated,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NoteSortField {
+    Published,
+    Created,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SortDirection {
+    Ascending,
+    Descending,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NoteSort {
+    pub field: NoteSortField,
+    pub direction: SortDirection,
+}
+
+impl Default for NoteSort {
+    fn default() -> Self {
+        Self {
+            field: NoteSortField::Created,
+            direction: SortDirection::Descending,
+        }
+    }
+}
+
 #[derive(Debug, Error)]
 pub enum CoreError {
     #[error("the vault path is unavailable")]
@@ -1017,12 +1044,37 @@ impl Gallery {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<NoteSummary>, CoreError> {
-        let ordered = self.sorted_note_ids_with_all(
+        self.query_filtered_page_search_with_all_and_sort(
             filters,
             all_filters,
             excluded_filters,
             virtual_filters,
             search_query,
+            NoteSort::default(),
+            offset,
+            limit,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_filtered_page_search_with_all_and_sort(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        sort: NoteSort,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<NoteSummary>, CoreError> {
+        let ordered = self.sorted_note_ids_with_all_and_sort(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            sort,
         )?;
         let mut result = Vec::new();
         for id in ordered.into_iter().skip(offset).take(limit) {
@@ -1122,12 +1174,37 @@ impl Gallery {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<MediaSummary>, CoreError> {
-        let ordered = self.sorted_note_ids_with_all(
+        self.query_media_filtered_page_search_with_all_and_sort(
             filters,
             all_filters,
             excluded_filters,
             virtual_filters,
             search_query,
+            NoteSort::default(),
+            offset,
+            limit,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_media_filtered_page_search_with_all_and_sort(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        sort: NoteSort,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<MediaSummary>, CoreError> {
+        let ordered = self.sorted_note_ids_with_all_and_sort(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            sort,
         )?;
         let mut result = Vec::new();
         let mut skipped = 0usize;
@@ -1220,6 +1297,25 @@ impl Gallery {
         virtual_filters: &[VirtualFilter],
         search_query: &str,
     ) -> Result<Vec<i64>, CoreError> {
+        self.sorted_note_ids_with_all_and_sort(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            NoteSort::default(),
+        )
+    }
+
+    fn sorted_note_ids_with_all_and_sort(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        sort: NoteSort,
+    ) -> Result<Vec<i64>, CoreError> {
         let (search_text, query_filters, query_all_filters, query_excluded_filters) =
             parse_note_search_query(search_query);
         let mut filters = filters.to_vec();
@@ -1267,23 +1363,35 @@ impl Gallery {
             }
             ids = searched_ids;
         }
-        let mut with_published = Vec::with_capacity(ids.len());
+        let mut with_date = Vec::with_capacity(ids.len());
         for id in ids {
-            let published: Option<String> = self
+            let (published, created, path): (Option<String>, Option<String>, String) = self
                 .connection
-                .query_row("SELECT published FROM notes WHERE id=?1", [id], |row| {
-                    row.get(0)
-                })
+                .query_row(
+                    "SELECT published, created, path FROM notes WHERE id=?1",
+                    [id],
+                    |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+                )
                 .map_err(|_| CoreError::Database)?;
-            with_published.push((published, id));
+            let date = match sort.field {
+                NoteSortField::Published => published,
+                NoteSortField::Created => created,
+            };
+            with_date.push((date, path, id));
         }
-        with_published.sort_by(|(left, _), (right, _)| match (left, right) {
-            (Some(left), Some(right)) => right.cmp(left),
-            (Some(_), None) => std::cmp::Ordering::Less,
-            (None, Some(_)) => std::cmp::Ordering::Greater,
-            (None, None) => std::cmp::Ordering::Equal,
+        with_date.sort_by(|(left_date, left_path, _), (right_date, right_path, _)| {
+            let date_order = match (left_date, right_date) {
+                (Some(left), Some(right)) => match sort.direction {
+                    SortDirection::Ascending => left.cmp(right),
+                    SortDirection::Descending => right.cmp(left),
+                },
+                (Some(_), None) => std::cmp::Ordering::Less,
+                (None, Some(_)) => std::cmp::Ordering::Greater,
+                (None, None) => std::cmp::Ordering::Equal,
+            };
+            date_order.then_with(|| left_path.cmp(right_path))
         });
-        Ok(with_published.into_iter().map(|(_, id)| id).collect())
+        Ok(with_date.into_iter().map(|(_, _, id)| id).collect())
     }
 
     fn expand_fuzzy_tag_queries(&self, filters: Vec<String>) -> Result<Vec<String>, CoreError> {
@@ -3768,12 +3876,12 @@ mod tests {
         fs::create_dir_all(&root).expect("create vault");
         fs::write(
             root.join("many.md"),
-            "---\ntags: [source/rating/safe]\npublished: 2026-01-02T00:00:00\ncover: first.png\n---\n# Many\n![](second.mp4)\n",
+            "---\ntags: [source/rating/safe]\npublished: 2026-01-02T00:00:00\ncreated: 2026-01-01T00:00:00\ncover: first.png\n---\n# Many\n![](second.mp4)\n",
         )
         .expect("write multi-media note");
         fs::write(
             root.join("single.md"),
-            "---\ntags: [source/rating/safe]\npublished: 2026-01-01T00:00:00\ncover: only.png\n---\n# Single\n",
+            "---\ntags: [source/rating/safe]\npublished: 2026-01-01T00:00:00\ncreated: 2026-01-02T00:00:00\ncover: only.png\n---\n# Single\n",
         )
         .expect("write single-media note");
         let database = root.parent().expect("parent").join(format!(
@@ -3785,6 +3893,83 @@ mod tests {
 
         // Grouped by note: two notes, one each.
         assert_eq!(gallery.query(&[], 10).expect("notes").len(), 2);
+        let default_order = gallery
+            .query(&[], 10)
+            .expect("default note order")
+            .into_iter()
+            .map(|note| note.path)
+            .collect::<Vec<_>>();
+        assert_eq!(default_order, ["single.md", "many.md"]);
+        let created_ascending = gallery
+            .query_filtered_page_search_with_all_and_sort(
+                &[],
+                &[],
+                &[],
+                &[],
+                "",
+                NoteSort {
+                    field: NoteSortField::Created,
+                    direction: SortDirection::Ascending,
+                },
+                0,
+                10,
+            )
+            .expect("created date ascending")
+            .into_iter()
+            .map(|note| note.path)
+            .collect::<Vec<_>>();
+        assert_eq!(created_ascending, ["many.md", "single.md"]);
+        let created_descending = gallery
+            .query_filtered_page_search_with_all_and_sort(
+                &[],
+                &[],
+                &[],
+                &[],
+                "",
+                NoteSort {
+                    field: NoteSortField::Created,
+                    direction: SortDirection::Descending,
+                },
+                0,
+                10,
+            )
+            .expect("created date descending")
+            .into_iter()
+            .map(|note| note.path)
+            .collect::<Vec<_>>();
+        assert_eq!(created_descending, ["single.md", "many.md"]);
+        let published_ascending_first_page = gallery
+            .query_filtered_page_search_with_all_and_sort(
+                &[],
+                &[],
+                &[],
+                &[],
+                "",
+                NoteSort {
+                    field: NoteSortField::Published,
+                    direction: SortDirection::Ascending,
+                },
+                0,
+                1,
+            )
+            .expect("published date ascending first page");
+        assert_eq!(published_ascending_first_page[0].path, "single.md");
+        let published_ascending_second_page = gallery
+            .query_filtered_page_search_with_all_and_sort(
+                &[],
+                &[],
+                &[],
+                &[],
+                "",
+                NoteSort {
+                    field: NoteSortField::Published,
+                    direction: SortDirection::Ascending,
+                },
+                1,
+                1,
+            )
+            .expect("published date ascending second page");
+        assert_eq!(published_ascending_second_page[0].path, "many.md");
         assert_eq!(
             gallery
                 .count_filtered_notes_with_all(&[], &[], &[], &[], "")
@@ -3805,7 +3990,7 @@ mod tests {
         );
 
         // Flattened: three media items total (two from "many", one from "single"),
-        // newest-published note first, in appearance order within a note.
+        // newest-created note first, in appearance order within a note.
         let media = gallery
             .query_media_filtered_page(&[], &[], 0, 10)
             .expect("media");
@@ -3829,9 +4014,28 @@ mod tests {
             2
         );
         assert!(!media[0].is_video);
-        assert!(media[1].is_video);
-        assert_eq!(media[0].note_id, media[1].note_id);
-        assert_ne!(media[0].note_id, media[2].note_id);
+        assert!(!media[1].is_video);
+        assert!(media[2].is_video);
+        assert_ne!(media[0].note_id, media[1].note_id);
+        assert_eq!(media[1].note_id, media[2].note_id);
+        let created_media = gallery
+            .query_media_filtered_page_search_with_all_and_sort(
+                &[],
+                &[],
+                &[],
+                &[],
+                "",
+                NoteSort {
+                    field: NoteSortField::Created,
+                    direction: SortDirection::Ascending,
+                },
+                0,
+                10,
+            )
+            .expect("created date media order");
+        assert_eq!(created_media.len(), 3);
+        assert_eq!(created_media[0].note_id, created_media[1].note_id);
+        assert_ne!(created_media[1].note_id, created_media[2].note_id);
 
         // Pagination across the flattened list works like the note-level one.
         let first_page = gallery
@@ -3844,6 +4048,53 @@ mod tests {
         assert_eq!(second_page.len(), 1);
         assert_eq!(second_page[0].id, media[2].id);
 
+        fs::remove_file(&database).expect("remove index");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn date_sort_keeps_missing_values_last_and_breaks_ties_by_path() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        for (path, date) in [
+            ("b.md", Some("2026-01-01")),
+            ("a.md", Some("2026-01-01")),
+            ("missing.md", None),
+        ] {
+            let frontmatter = date.map_or_else(String::new, |date| format!("created: {date}\n"));
+            fs::write(
+                root.join(path),
+                format!("---\ntags: [source/rating/safe]\n{frontmatter}---\n# Note\n"),
+            )
+            .expect("write note");
+        }
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        for direction in [SortDirection::Ascending, SortDirection::Descending] {
+            let paths = gallery
+                .query_filtered_page_search_with_all_and_sort(
+                    &[],
+                    &[],
+                    &[],
+                    &[],
+                    "",
+                    NoteSort {
+                        field: NoteSortField::Created,
+                        direction,
+                    },
+                    0,
+                    10,
+                )
+                .expect("sort notes")
+                .into_iter()
+                .map(|note| note.path)
+                .collect::<Vec<_>>();
+            assert_eq!(paths, ["a.md", "b.md", "missing.md"]);
+        }
         fs::remove_file(&database).expect("remove index");
         fs::remove_dir_all(root).expect("remove vault");
     }
