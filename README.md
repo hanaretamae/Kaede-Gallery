@@ -185,7 +185,8 @@ gh auth login
 `app/pubspec.yaml` の version を更新して main に push し、同じバージョンの tag を push します。
 スクリプトは KeePassXC CLI を使って下記データベースのエントリーから鍵とパスワードを読み込みます。
 データベースのマスターパスワード入力が2回求められます。署名鍵はユーザー専用の
-`XDG_RUNTIME_DIR` に一時展開して、終了時に削除します。`keepassxc-cli` が Nix 開発環境に含まれます。
+`XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。署名情報を持つGradleプロセスは
+常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
 
 ```sh
 git tag -a v1.0.1 -m v1.0.1

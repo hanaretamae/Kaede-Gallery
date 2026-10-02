@@ -62,6 +62,7 @@ notes_file=
 cleanup() {
   [[ -z $notes_file ]] || rm -f -- "$notes_file"
   [[ -z $key_dir ]] || rm -rf -- "$key_dir"
+  unset signing_password
 }
 trap cleanup EXIT
 notes_file=$(mktemp)
@@ -114,7 +115,8 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
     ANDROID_KEYSTORE_PASSWORD="$signing_password" \
     ANDROID_KEY_ALIAS=kaede-gallery \
     ANDROID_KEY_PASSWORD="$signing_password" \
-    flutter build apk --release --target-platform android-arm64
+  GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.daemon=false" \
+  flutter build apk --release --target-platform android-arm64
 )
 unset signing_password
 rm -f -- "$keystore_path"
