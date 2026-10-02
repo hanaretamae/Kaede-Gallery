@@ -196,33 +196,9 @@ git tag -a v1.0.1 -m v1.0.1
 git push origin v1.0.1
 ```
 
-次に、署名ビルドと Release 作成を1コマンドで実行します。DB とキーファイルのパスを
-実行時に聞かれるので入力してください（パスはシェル履歴に残らず、変数はこのコマンド内だけで有効です）。
-キーファイルは必須です。
-
-```sh
-nix develop --command bash -c '
-  read -r -e -p "KeePassXC database path: " KEEPASSXC_DATABASE
-  read -r -e -p "KeePassXC key-file path: " KEEPASSXC_KEY_FILE
-  export KEEPASSXC_DATABASE KEEPASSXC_KEY_FILE
-  ./tools/release-android.sh v1.0.1
-'
-```
-
-パスの入力例です（`/home/user/...` は自分の環境のパスに読み替えてください。実在の場所を
-このリポジトリに書かないでください）。
-
-```text
-KeePassXC database path: /home/user/secrets/example.kdbx
-KeePassXC key-file path: /home/user/secrets/example.keyx
-```
-
-- 入力するのは `~` を使わない**絶対パス**です。引用符は不要で、スペースを含んでいてもそのまま入力できます。
-- `-e` を付けているため、Tab キーでパスを補完できます。
-- 入力が違うとスクリプトが「readable ... を指定してください」と表示して止まります。その場合は再実行してください。
-- データベースには `.kdbx` ファイルを指定します。キーファイルを指定したり、2つを取り違えたりすると、スクリプトが検査して止まります（`KeePass データベースではありません` エラーの原因になります）。
-
-環境変数を直接渡す場合は、次のように実在するパスを指定します。
+次に、署名ビルドと Release 作成を1コマンドで実行します。DB（`.kdbx`）とキーファイルの
+絶対パスを環境変数で渡します（`/path/to/...` は自分の環境のパスに読み替えてください。
+実在の場所をこのリポジトリに書かないでください）。キーファイルは必須です。
 
 ```sh
 KEEPASSXC_DATABASE=/path/to/vault.kdbx \
@@ -230,11 +206,13 @@ KEEPASSXC_KEY_FILE=/path/to/key.keyx \
 nix develop --command ./tools/release-android.sh v1.0.1
 ```
 
+データベースが `.kdbx` でない場合や、DB とキーファイルを取り違えた場合は、
+スクリプトが検査して止まります。
+
 実行の流れは次のとおりです。
 
-1. DB のパスとキーファイルのパスを入力する。
-2. テスト・解析の後、KeePassXC のマスターパスワードを2回入力する。
-3. 署名済み APK がビルド・検証され、GitHub Release に添付される。
+1. テスト・解析の後、KeePassXC のマスターパスワードを2回入力する。
+2. 署名済み APK がビルド・検証され、GitHub Release に添付される。
 
 エントリー名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。
 必要に応じて `KEEPASSXC_ENTRY`、`KEEPASSXC_ATTACHMENT` 環境変数で変更できます。
