@@ -5,6 +5,10 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Android リリース時の KeePassXC データベースパスを既定値にせず、実行時に指定するようにしました。
+
 ## [1.0.1] - 2026-10-03
 
 ### Changed

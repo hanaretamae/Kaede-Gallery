@@ -46,10 +46,10 @@ if gh release view "$tag" --repo "$repo" >/dev/null 2>&1; then
   fail "a GitHub Release for $tag already exists"
 fi
 
-keepassxc_database=${KEEPASSXC_DATABASE:-$HOME/Documents/KeePass/password.kdbx}
+keepassxc_database=${KEEPASSXC_DATABASE:-}
 keepassxc_entry=${KEEPASSXC_ENTRY:-Kaede Gallery Android signing}
 keepassxc_attachment=${KEEPASSXC_ATTACHMENT:-release.jks}
-[[ -f $keepassxc_database && -r $keepassxc_database ]] ||
+[[ -n $keepassxc_database && -f $keepassxc_database && -r $keepassxc_database ]] ||
   fail "set KEEPASSXC_DATABASE to a readable KeePassXC database"
 keepassxc_auth=()
 if [[ -n ${KEEPASSXC_KEY_FILE:-} ]]; then

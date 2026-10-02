@@ -184,7 +184,8 @@ gh auth login
 リリース時は AI が `CHANGELOG.md` にリリース節を追加し、内容を確認してから
 `app/pubspec.yaml` の version を更新して main に push し、同じバージョンの tag を push します。
 スクリプトは KeePassXC CLI を使って下記データベースのエントリーから鍵とパスワードを読み込みます。
-データベースのマスターパスワード入力が2回求められます。署名鍵はユーザー専用の
+データベースのマスターパスワード入力が2回求められます。DB とキーファイルの場所は
+端末ごとに異なるため、リポジトリには保存せず、実行時に対話入力します。署名鍵はユーザー専用の
 `XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。署名情報を持つGradleプロセスは
 常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
 
@@ -192,14 +193,17 @@ gh auth login
 git tag -a v1.0.1 -m v1.0.1
 git push origin v1.0.1
 nix develop
+read -r -p 'KeePassXC database path: ' KEEPASSXC_DATABASE
+export KEEPASSXC_DATABASE
+read -r -p 'KeePassXC key-file path (leave blank if unused): ' KEEPASSXC_KEY_FILE
+export KEEPASSXC_KEY_FILE
 ./tools/release-android.sh v1.0.1
+unset KEEPASSXC_DATABASE KEEPASSXC_KEY_FILE
 ```
 
-既定のデータベース場所は `~/Documents/KeePass/password.kdbx`、エントリー名は
-`Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。異なる場合は
-`KEEPASSXC_DATABASE`、`KEEPASSXC_ENTRY`、`KEEPASSXC_ATTACHMENT` 環境変数で指定できます。
-データベースがキーファイルを併用する場合は、`KEEPASSXC_KEY_FILE` にそのパスを指定します
-（Vault や Git 管理下に置かないでください）。
+エントリー名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。
+必要に応じて `KEEPASSXC_ENTRY`、`KEEPASSXC_ATTACHMENT` 環境変数で変更できます。
+DB とキーファイルは Vault や Git 管理下に置かず、端末上の安全な場所に保管してください。
 実行環境には mode 700 の `XDG_RUNTIME_DIR` が必要です。
 
 スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査し、
