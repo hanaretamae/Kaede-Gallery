@@ -51,12 +51,9 @@ keepassxc_entry=${KEEPASSXC_ENTRY:-Kaede Gallery Android signing}
 keepassxc_attachment=${KEEPASSXC_ATTACHMENT:-release.jks}
 [[ -n $keepassxc_database && -f $keepassxc_database && -r $keepassxc_database ]] ||
   fail "set KEEPASSXC_DATABASE to a readable KeePassXC database"
-keepassxc_auth=()
-if [[ -n ${KEEPASSXC_KEY_FILE:-} ]]; then
-  [[ -f $KEEPASSXC_KEY_FILE && -r $KEEPASSXC_KEY_FILE ]] ||
-    fail "KEEPASSXC_KEY_FILE must point to a readable key file"
-  keepassxc_auth=(--key-file "$KEEPASSXC_KEY_FILE")
-fi
+[[ -n ${KEEPASSXC_KEY_FILE:-} && -f $KEEPASSXC_KEY_FILE && -r $KEEPASSXC_KEY_FILE ]] ||
+  fail "set KEEPASSXC_KEY_FILE to a readable key file"
+keepassxc_auth=(--key-file "$KEEPASSXC_KEY_FILE")
 [[ -n ${XDG_RUNTIME_DIR:-} && -d $XDG_RUNTIME_DIR && -O $XDG_RUNTIME_DIR ]] ||
   fail "XDG_RUNTIME_DIR must be a private runtime directory"
 runtime_mode=$(stat -c '%a' -- "$XDG_RUNTIME_DIR") ||

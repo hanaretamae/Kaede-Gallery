@@ -189,17 +189,31 @@ gh auth login
 `XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。署名情報を持つGradleプロセスは
 常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
 
+まず、リポジトリのルートで tag を作成して push します。
+
 ```sh
 git tag -a v1.0.1 -m v1.0.1
 git push origin v1.0.1
-nix develop
-read -r -p 'KeePassXC database path: ' KEEPASSXC_DATABASE
-export KEEPASSXC_DATABASE
-read -r -p 'KeePassXC key-file path (leave blank if unused): ' KEEPASSXC_KEY_FILE
-export KEEPASSXC_KEY_FILE
-./tools/release-android.sh v1.0.1
-unset KEEPASSXC_DATABASE KEEPASSXC_KEY_FILE
 ```
+
+次に、署名ビルドと Release 作成を1コマンドで実行します。DB とキーファイルのパスを
+実行時に聞かれるので入力してください（パスはシェル履歴に残らず、変数はこのコマンド内だけで有効です）。
+キーファイルは必須です。
+
+```sh
+nix develop --command bash -c '
+  read -r -p "KeePassXC database path: " KEEPASSXC_DATABASE
+  read -r -p "KeePassXC key-file path: " KEEPASSXC_KEY_FILE
+  export KEEPASSXC_DATABASE KEEPASSXC_KEY_FILE
+  ./tools/release-android.sh v1.0.1
+'
+```
+
+実行の流れは次のとおりです。
+
+1. DB のパスとキーファイルのパスを入力する。
+2. テスト・解析の後、KeePassXC のマスターパスワードを2回入力する。
+3. 署名済み APK がビルド・検証され、GitHub Release に添付される。
 
 エントリー名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。
 必要に応じて `KEEPASSXC_ENTRY`、`KEEPASSXC_ATTACHMENT` 環境変数で変更できます。
