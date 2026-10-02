@@ -220,6 +220,15 @@ KeePassXC key-file path: /home/user/secrets/example.keyx
 - 入力するのは `~` を使わない**絶対パス**です。引用符は不要で、スペースを含んでいてもそのまま入力できます。
 - `-e` を付けているため、Tab キーでパスを補完できます。
 - 入力が違うとスクリプトが「readable ... を指定してください」と表示して止まります。その場合は再実行してください。
+- データベースには `.kdbx` ファイルを指定します。キーファイルを指定したり、2つを取り違えたりすると、スクリプトが検査して止まります（`KeePass データベースではありません` エラーの原因になります）。
+
+環境変数を直接渡す場合は、次のように実在するパスを指定します。
+
+```sh
+KEEPASSXC_DATABASE=/path/to/vault.kdbx \
+KEEPASSXC_KEY_FILE=/path/to/key.keyx \
+nix develop --command ./tools/release-android.sh v1.0.1
+```
 
 実行の流れは次のとおりです。
 
