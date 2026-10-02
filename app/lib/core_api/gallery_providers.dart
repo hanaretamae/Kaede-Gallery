@@ -1,7 +1,13 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 
 import 'package:fc_native_video_thumbnail/fc_native_video_thumbnail.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:media_kit/media_kit.dart';
+import 'package:media_kit_video/media_kit_video.dart';
 
 import 'gallery_repository.dart';
 import 'gallery_tag_settings.dart';
@@ -158,6 +164,20 @@ class VaultController extends AsyncNotifier<VaultSession?> {
     if (vaultPath == null) {
       return null;
     }
+    if (vaultPath.startsWith('content://') &&
+        await const AndroidSafAccess().loadVault() != vaultPath) {
+      throw StateError('選択したフォルダへのアクセス権がありません。Vault を選び直してください。');
+    }
+    if (vaultPath.startsWith('content://')) {
+      final cached = await _readSafScanCache(vaultPath, paths);
+      if (cached != null) {
+        return VaultSession(
+          vaultPath: vaultPath,
+          paths: paths,
+          scanReport: cached,
+        );
+      }
+    }
     return _openVault(vaultPath, paths);
   }
 
@@ -186,6 +206,10 @@ class VaultController extends AsyncNotifier<VaultSession?> {
       final report = await ref
           .read(galleryRepositoryProvider)
           .scan(session.vaultPath, session.paths.indexPath);
+      if (session.vaultPath.startsWith('content://')) {
+        await _invalidateSafThumbnailCache(session.paths.thumbnailDirectory);
+        await _writeSafScanCache(session.vaultPath, session.paths, report);
+      }
       state = AsyncData(
         VaultSession(
           vaultPath: session.vaultPath,
@@ -206,11 +230,79 @@ class VaultController extends AsyncNotifier<VaultSession?> {
       vaultPath,
     );
     final report = await repository.scan(canonicalPath, paths.indexPath);
+    if (canonicalPath.startsWith('content://')) {
+      await _invalidateSafThumbnailCache(paths.thumbnailDirectory);
+      await _writeSafScanCache(canonicalPath, paths, report);
+    }
     return VaultSession(
       vaultPath: canonicalPath,
       paths: paths,
       scanReport: report,
     );
+  }
+}
+
+const _safScanCacheVersion = 1;
+
+File _safScanCacheFile(GalleryPaths paths) =>
+    File('${paths.dataDirectory}/saf-scan-cache.json');
+
+Future<GalleryScanReport?> _readSafScanCache(
+  String vaultPath,
+  GalleryPaths paths,
+) async {
+  try {
+    if (!await File(paths.indexPath).exists()) return null;
+    final decoded = jsonDecode(await _safScanCacheFile(paths).readAsString());
+    if (decoded is! Map<String, dynamic> ||
+        decoded['version'] != _safScanCacheVersion ||
+        decoded['vaultPath'] != vaultPath ||
+        decoded['indexPath'] != paths.indexPath ||
+        decoded['notesIndexed'] is! int ||
+        decoded['warnings'] is! int) {
+      return null;
+    }
+    return GalleryScanReport(
+      notesIndexed: decoded['notesIndexed']! as int,
+      warnings: decoded['warnings']! as int,
+    );
+  } on FileSystemException {
+    return null;
+  } on FormatException {
+    return null;
+  }
+}
+
+Future<void> _writeSafScanCache(
+  String vaultPath,
+  GalleryPaths paths,
+  GalleryScanReport report,
+) async {
+  final cacheFile = _safScanCacheFile(paths);
+  await Directory(paths.dataDirectory).create(recursive: true);
+  final temporaryFile = File('${cacheFile.path}.tmp');
+  await temporaryFile.writeAsString(
+    jsonEncode({
+      'version': _safScanCacheVersion,
+      'vaultPath': vaultPath,
+      'indexPath': paths.indexPath,
+      'notesIndexed': report.notesIndexed,
+      'warnings': report.warnings,
+    }),
+    flush: true,
+  );
+  await temporaryFile.rename(cacheFile.path);
+}
+
+Future<void> _invalidateSafThumbnailCache(String directoryPath) async {
+  final directory = Directory(directoryPath);
+  if (!await directory.exists()) return;
+  await for (final entity in directory.list(followLinks: false)) {
+    if (entity is File &&
+        RegExp(r'^saf-(?:v[2-7]-)?[1-9]\d*\.png$')
+            .hasMatch(entity.uri.pathSegments.last)) {
+      await entity.delete();
+    }
   }
 }
 
@@ -843,38 +935,177 @@ class GalleryMediaItemsController
   }
 }
 
-final galleryThumbnailProvider = FutureProvider.family<Uint8List?, int>((
+final galleryThumbnailProvider = FutureProvider.autoDispose
+    .family<Uint8List?, int>((ref, mediaId) async {
+      final session = await ref.watch(vaultSessionProvider.future);
+      if (session == null) {
+        return null;
+      }
+      final repository = ref.read(galleryRepositoryProvider);
+      if (session.vaultPath.startsWith('content://')) {
+        final videoPath = await repository.getVideoSourcePath(
+          session.vaultPath,
+          session.paths.indexPath,
+          mediaId,
+        );
+        if (videoPath != null) {
+          final thumbnail = await _safVideoThumbnail(
+            session.vaultPath,
+            videoPath,
+            session.paths.thumbnailDirectory,
+            mediaId,
+          );
+          if (thumbnail != null) return thumbnail;
+        }
+        return repository.getThumbnail(
+          session.vaultPath,
+          session.paths.indexPath,
+          session.paths.thumbnailDirectory,
+          mediaId,
+        );
+      }
+      final thumbnail = await repository.getThumbnail(
+        session.vaultPath,
+        session.paths.indexPath,
+        session.paths.thumbnailDirectory,
+        mediaId,
+      );
+      if (thumbnail != null) {
+        return thumbnail;
+      }
+      final videoPath = await repository.getVideoSourcePath(
+        session.vaultPath,
+        session.paths.indexPath,
+        mediaId,
+      );
+      if (videoPath == null) {
+        return null;
+      }
+      return FcNativeVideoThumbnail().saveThumbnailToBytes(
+        srcFile: videoPath,
+        width: 320,
+        height: 320,
+        quality: 75,
+      );
+    });
+
+Future<Uint8List?> _safVideoThumbnail(
+  String vaultUri,
+  String source,
+  String cacheDirectory,
+  int mediaId,
+) async {
+  final cacheFile = File('$cacheDirectory/saf-v6-$mediaId.png');
+  if (await cacheFile.exists()) {
+    final size = await cacheFile.length();
+    if (size > 0 && size <= 4 * 1024 * 1024) {
+      await cacheFile.setLastModified(DateTime.now());
+      return cacheFile.readAsBytes();
+    }
+    await cacheFile.delete();
+  }
+  const safAccess = AndroidSafAccess();
+  final descriptor = await safAccess.openMediaFileDescriptor(vaultUri, source);
+  if (descriptor == null) return null;
+  final player = Player(
+    configuration: const PlayerConfiguration(
+      muted: true,
+      bufferSize: 4 * 1024 * 1024,
+      logLevel: MPVLogLevel.error,
+    ),
+  );
+  try {
+    final videoController = VideoController(player);
+    await videoController.platform.future.timeout(const Duration(seconds: 8));
+    final hasVideo = player.stream.videoParams
+        .firstWhere((params) => params.w != null && params.h != null)
+        .timeout(const Duration(seconds: 12));
+    await player.open(Media('fd://$descriptor'));
+    final videoParams = await hasVideo;
+    final sourceWidth = videoParams.w!;
+    final sourceHeight = videoParams.h!;
+    if (sourceWidth < 1 ||
+        sourceHeight < 1 ||
+        sourceWidth > 16384 ||
+        sourceHeight > 16384 ||
+        sourceWidth * sourceHeight > 16 * 1024 * 1024) {
+      return null;
+    }
+    try {
+      await player.stream.position
+          .firstWhere((position) => position > Duration.zero)
+          .timeout(const Duration(seconds: 3));
+    } on TimeoutException {
+      return null;
+    }
+    for (var attempt = 0; attempt < 3; attempt++) {
+      final bytes = await player.screenshot(format: 'image/png');
+      if (bytes != null && bytes.isNotEmpty) {
+        final thumbnail = await _resizeSafVideoThumbnail(bytes, videoParams);
+        if (thumbnail != null) {
+          await Directory(cacheDirectory).create(recursive: true);
+          final temporaryFile = File('${cacheFile.path}.tmp');
+          await temporaryFile.writeAsBytes(thumbnail, flush: true);
+          await temporaryFile.rename(cacheFile.path);
+          return thumbnail;
+        }
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 100));
+    }
+    return null;
+  } finally {
+    await player.dispose();
+    await safAccess.closeMediaFileDescriptor(descriptor);
+  }
+}
+
+Future<Uint8List?> _resizeSafVideoThumbnail(
+  Uint8List bytes,
+  VideoParams params,
+) async {
+  final width = params.dw ?? params.w;
+  final height = params.dh ?? params.h;
+  if (width == null ||
+      height == null ||
+      width < 1 ||
+      height < 1 ||
+      width > 16384 ||
+      height > 16384 ||
+      width * height > 16 * 1024 * 1024) {
+    return null;
+  }
+  final scale = 320 / (width > height ? width : height);
+  final codec = await ui.instantiateImageCodec(
+    bytes,
+    targetWidth: (width * scale).round().clamp(1, 320),
+    targetHeight: (height * scale).round().clamp(1, 320),
+  );
+  try {
+    final image = (await codec.getNextFrame()).image;
+    try {
+      final thumbnail = await image.toByteData(format: ui.ImageByteFormat.png);
+      if (thumbnail == null) return null;
+      return thumbnail.buffer.asUint8List(
+        thumbnail.offsetInBytes,
+        thumbnail.lengthInBytes,
+      );
+    } finally {
+      image.dispose();
+    }
+  } finally {
+    codec.dispose();
+  }
+}
+
+final gallerySafImageBytesProvider = FutureProvider.family<Uint8List, String>((
   ref,
-  mediaId,
+  mediaUri,
 ) async {
   final session = await ref.watch(vaultSessionProvider.future);
-  if (session == null) {
-    return null;
+  if (session == null || !session.vaultPath.startsWith('content://')) {
+    throw StateError('Folder access is not active.');
   }
-  final repository = ref.read(galleryRepositoryProvider);
-  final thumbnail = await repository.getThumbnail(
-    session.vaultPath,
-    session.paths.indexPath,
-    session.paths.thumbnailDirectory,
-    mediaId,
-  );
-  if (thumbnail != null) {
-    return thumbnail;
-  }
-  final videoPath = await repository.getVideoSourcePath(
-    session.vaultPath,
-    session.paths.indexPath,
-    mediaId,
-  );
-  if (videoPath == null) {
-    return null;
-  }
-  return FcNativeVideoThumbnail().saveThumbnailToBytes(
-    srcFile: videoPath,
-    width: 320,
-    height: 320,
-    quality: 75,
-  );
+  return const AndroidSafAccess().readMedia(session.vaultPath, mediaUri);
 });
 
 final galleryNoteDetailProvider =

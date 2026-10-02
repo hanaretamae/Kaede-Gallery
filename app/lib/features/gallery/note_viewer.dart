@@ -4,11 +4,13 @@ class _NoteViewerScreen extends ConsumerWidget {
   const _NoteViewerScreen({
     required this.noteId,
     required this.initialMediaId,
+    this.initialPreview,
     this.initiallyShowDetails = false,
   });
 
   final int noteId;
   final int? initialMediaId;
+  final Uint8List? initialPreview;
   final bool initiallyShowDetails;
 
   @override
@@ -17,7 +19,18 @@ class _NoteViewerScreen extends ConsumerWidget {
     return detail.when(
       loading: () => Scaffold(
         appBar: AppBar(),
-        body: const Center(child: CircularProgressIndicator()),
+        body: initialPreview == null
+            ? const Center(child: CircularProgressIndicator())
+            : ColoredBox(
+                color: Colors.black,
+                child: Center(
+                  child: Image.memory(
+                    initialPreview!,
+                    fit: BoxFit.contain,
+                    gaplessPlayback: true,
+                  ),
+                ),
+              ),
       ),
       error: (_, _) => Scaffold(
         appBar: AppBar(),
@@ -31,6 +44,7 @@ class _NoteViewerScreen extends ConsumerWidget {
           : _NoteViewerContent(
               note: note,
               initialMediaId: initialMediaId,
+              initialPreview: initialPreview,
               initiallyShowDetails: initiallyShowDetails,
             ),
     );
@@ -41,11 +55,13 @@ class _NoteViewerContent extends ConsumerStatefulWidget {
   const _NoteViewerContent({
     required this.note,
     required this.initialMediaId,
+    this.initialPreview,
     this.initiallyShowDetails = false,
   });
 
   final GalleryNoteDetail note;
   final int? initialMediaId;
+  final Uint8List? initialPreview;
   final bool initiallyShowDetails;
 
   @override
@@ -73,13 +89,17 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
   bool imageZoomed = false;
   bool controlsVisible = false;
   bool fullscreen = false;
-  double horizontalOverlayDrag = 0;
   double detailsScrollOffset = 0;
+  Timer? horizontalPageChangeCooldown;
+  double trackpadPanDistance = 0;
+  double horizontalDragDistance = 0;
 
   @override
   void initState() {
     super.initState();
     controlsVisible = widget.initiallyShowDetails;
+    fullscreen = Platform.isAndroid && !controlsVisible;
+    if (fullscreen) unawaited(_setFullscreen(true));
     final initialIndex = widget.note.media.indexWhere(
       (media) => media.id == widget.initialMediaId,
     );
@@ -102,6 +122,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
   void dispose() {
     pageController.dispose();
     detailsScrollController.dispose();
+    horizontalPageChangeCooldown?.cancel();
     if (fullscreen) unawaited(_setFullscreen(false));
     super.dispose();
   }
@@ -130,7 +151,9 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
     setState(() {
       controlsVisible = false;
       imageZoomed = false;
+      if (Platform.isAndroid) fullscreen = true;
     });
+    if (Platform.isAndroid) unawaited(_setFullscreen(true));
   }
 
   Future<void> _setFullscreen(bool value) async {
@@ -195,6 +218,17 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
     );
   }
 
+  void _handleTrackpadPageDelta(double delta, {bool invertDirection = false}) {
+    if (delta.abs() < 8 || imageZoomed || widget.note.media.length < 2) return;
+    if (horizontalPageChangeCooldown?.isActive ?? false) return;
+    final next = (delta > 0) != invertDirection;
+    _changePage(next ? 1 : -1);
+    horizontalPageChangeCooldown = Timer(
+      GalleryMotion.medium,
+      () => horizontalPageChangeCooldown = null,
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final note = widget.note;
@@ -255,10 +289,24 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
         },
         child: Listener(
           onPointerSignal: (event) {
-            if (event is! PointerScrollEvent || imageZoomed) return;
-            final delta = event.scrollDelta.dx;
-            if (delta.abs() > event.scrollDelta.dy.abs() && delta.abs() > 24) {
-              _changePage(delta > 0 ? 1 : -1);
+            if (event is PointerScrollEvent) {
+              final delta = event.scrollDelta.dx;
+              if (delta.abs() > event.scrollDelta.dy.abs()) {
+                _handleTrackpadPageDelta(delta);
+              }
+            }
+          },
+          onPointerPanZoomUpdate: (event) {
+            final delta = event.panDelta.dx;
+            if (delta.abs() > event.panDelta.dy.abs()) {
+              trackpadPanDistance += delta;
+              if (trackpadPanDistance.abs() >= 24) {
+                _handleTrackpadPageDelta(
+                  trackpadPanDistance,
+                  invertDirection: true,
+                );
+                trackpadPanDistance = 0;
+              }
             }
           },
           child: LayoutBuilder(
@@ -279,15 +327,21 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                   (maxDetailsHeight - baseDetailsHeight) * expansion;
               final mediaBottom = controlsVisible ? detailsHeight : 0.0;
               return GestureDetector(
-                onHorizontalDragStart: (_) => horizontalOverlayDrag = 0,
+                onHorizontalDragStart: (_) => horizontalDragDistance = 0,
                 onHorizontalDragUpdate: (details) {
-                  horizontalOverlayDrag += details.primaryDelta ?? 0;
+                  horizontalDragDistance += details.primaryDelta ?? 0;
                 },
-                onHorizontalDragEnd: (_) {
-                  final delta = horizontalOverlayDrag;
-                  horizontalOverlayDrag = 0;
+                onHorizontalDragEnd: (details) {
+                  final drag = horizontalDragDistance;
+                  horizontalDragDistance = 0;
                   if (imageZoomed || note.media.length < 2) return;
-                  if (delta.abs() > 60) _changePage(delta < 0 ? 1 : -1);
+                  if (drag.abs() >= 24 ||
+                      (details.primaryVelocity?.abs() ?? 0) >= 250) {
+                    final direction = drag.abs() >= 24
+                        ? drag
+                        : details.primaryVelocity!;
+                    _changePage(direction < 0 ? 1 : -1);
+                  }
                 },
                 child: Stack(
                   fit: StackFit.expand,
@@ -337,6 +391,13 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                                 : _ViewerMedia(
                                     media: note.media[index],
                                     active: index == currentPage,
+                                    key: ValueKey(note.media[index].id),
+                                    initialPreview:
+                                        index == currentPage &&
+                                            note.media[index].id ==
+                                                widget.initialMediaId
+                                        ? widget.initialPreview
+                                        : null,
                                     onImageZoomChanged: (zoomed) =>
                                         setState(() => imageZoomed = zoomed),
                                     controlsVisible: controlsVisible,
@@ -386,7 +447,9 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                       onOpenProfile: profileUrl == null
                           ? null
                           : () => _openExternalUri(context, profileUrl),
-                      onOpenObsidian: session == null
+                      onOpenObsidian:
+                          session == null ||
+                              session.vaultPath.startsWith('content://')
                           ? null
                           : () => _openExternalUri(
                               context,
@@ -417,6 +480,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                               }
                             },
                       mediaPath: mediaSource?.asData?.value,
+                      vaultPath: session?.vaultPath,
                     ),
                     AnimatedPositioned(
                       duration: GalleryMotion.emphasized,
@@ -468,6 +532,7 @@ class _ViewerTopOverlay extends StatelessWidget {
     required this.onOpenPost,
     required this.onCopyPostUrl,
     required this.mediaPath,
+    required this.vaultPath,
   });
 
   final bool visible;
@@ -483,6 +548,7 @@ class _ViewerTopOverlay extends StatelessWidget {
   final VoidCallback? onOpenPost;
   final VoidCallback? onCopyPostUrl;
   final String? mediaPath;
+  final String? vaultPath;
 
   @override
   Widget build(BuildContext context) => Positioned(
@@ -558,8 +624,11 @@ class _ViewerTopOverlay extends StatelessWidget {
                   if (mediaPath != null)
                     IconButton(
                       tooltip: 'メディアを開く',
-                      onPressed: () =>
-                          _showMediaOpenActions(context, mediaPath!),
+                      onPressed: () => _showMediaOpenActions(
+                        context,
+                        mediaPath!,
+                        vaultPath: vaultPath,
+                      ),
                       icon: const Icon(Icons.perm_media_outlined),
                     ),
                   if (onOpenObsidian != null)
@@ -580,8 +649,9 @@ class _ViewerTopOverlay extends StatelessWidget {
 
 Future<void> _showMediaOpenActions(
   BuildContext context,
-  String mediaPath,
-) async {
+  String mediaPath, {
+  String? vaultPath,
+}) async {
   final openFolder = await showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
@@ -596,7 +666,8 @@ Future<void> _showMediaOpenActions(
           ),
           ListTile(
             leading: const Icon(Icons.folder_open),
-            title: const Text('ファイルマネージャで開く'),
+            title: const Text('ファイルマネージャーでフォルダーを開く'),
+            subtitle: const Text('開くアプリを選択します'),
             onTap: () => Navigator.of(context).pop(true),
           ),
         ],
@@ -604,6 +675,28 @@ Future<void> _showMediaOpenActions(
     ),
   );
   if (openFolder == null || !context.mounted) return;
+  if (mediaPath.startsWith('content://')) {
+    if (vaultPath == null || !vaultPath.startsWith('content://')) return;
+    try {
+      await const AndroidSafAccess().openMedia(
+        vaultPath,
+        mediaPath,
+        openFolder: openFolder,
+      );
+    } on PlatformException catch (error) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            error.code == 'SAF_UNSUPPORTED'
+                ? '選択したアプリで開けませんでした。'
+                : 'メディアまたはフォルダーを開けませんでした。',
+          ),
+        ),
+      );
+    }
+    return;
+  }
   final uri = openFolder
       ? Uri.directory(p.dirname(mediaPath))
       : Uri.file(mediaPath);
@@ -646,14 +739,17 @@ class _ViewerBottomOverlay extends StatelessWidget {
 
 class _ViewerMedia extends ConsumerWidget {
   const _ViewerMedia({
+    super.key,
     required this.media,
     required this.active,
+    this.initialPreview,
     required this.onImageZoomChanged,
     required this.controlsVisible,
   });
 
   final GalleryMediaItem media;
   final bool active;
+  final Uint8List? initialPreview;
   final ValueChanged<bool> onImageZoomChanged;
   final bool controlsVisible;
 
@@ -662,17 +758,34 @@ class _ViewerMedia extends ConsumerWidget {
     if (!media.exists) {
       return const _ViewerMessage('メディアファイルが見つかりません。再走査してください。');
     }
+    final thumbnail = media.isVideo
+        ? null
+        : ref.watch(galleryThumbnailProvider(media.id));
+    final preview = thumbnail?.asData?.value ?? initialPreview;
     final source = ref.watch(galleryMediaSourcePathProvider(media.id));
     return source.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
-      error: (_, _) => const _ViewerMessage('Vault のメディアを開けませんでした。'),
+      loading: () => preview == null
+          ? const Center(child: CircularProgressIndicator())
+          : Image.memory(preview, fit: BoxFit.contain, gaplessPlayback: true),
+      error: (_, _) => preview == null
+          ? const _ViewerMessage('Vault のメディアを開けませんでした。')
+          : Image.memory(preview, fit: BoxFit.contain, gaplessPlayback: true),
       data: (path) {
         if (path == null) {
           return const _ViewerMessage('メディアファイルにアクセスできません。');
         }
         if (media.isVideo) {
           return active
-              ? _LocalVideoPlayer(path: path, controlsVisible: controlsVisible)
+              ? Platform.isAndroid
+                    ? _AndroidVideoPlayer(
+                        key: ValueKey(media.id),
+                        path: path,
+                        controlsVisible: controlsVisible,
+                      )
+                    : _LocalVideoPlayer(
+                        path: path,
+                        controlsVisible: controlsVisible,
+                      )
               : _VideoPreview(mediaId: media.id);
         }
         final pixelWidth =
@@ -681,8 +794,10 @@ class _ViewerMedia extends ConsumerWidget {
                 .round()
                 .clamp(1, 4096);
         return _ViewerImage(
+          key: ValueKey(media.id),
           path: path,
           cacheWidth: pixelWidth,
+          preview: preview,
           onZoomChanged: onImageZoomChanged,
           controlsVisible: controlsVisible,
         );
@@ -691,31 +806,40 @@ class _ViewerMedia extends ConsumerWidget {
   }
 }
 
-class _ViewerImage extends StatefulWidget {
+class _ViewerImage extends ConsumerStatefulWidget {
   const _ViewerImage({
+    super.key,
     required this.path,
     required this.cacheWidth,
+    required this.preview,
     required this.onZoomChanged,
     required this.controlsVisible,
   });
 
   final String path;
   final int cacheWidth;
+  final Uint8List? preview;
   final ValueChanged<bool> onZoomChanged;
   final bool controlsVisible;
 
   @override
-  State<_ViewerImage> createState() => _ViewerImageState();
+  ConsumerState<_ViewerImage> createState() => _ViewerImageState();
 }
 
-class _ViewerImageState extends State<_ViewerImage> {
+class _ViewerImageState extends ConsumerState<_ViewerImage> {
   final TransformationController transformationController =
       TransformationController();
   bool zoomed = false;
+  bool fullImageLoaded = false;
+  bool fullImageFailed = false;
 
   @override
   void didUpdateWidget(covariant _ViewerImage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.path != widget.path) {
+      fullImageLoaded = false;
+      fullImageFailed = false;
+    }
     if (!oldWidget.controlsVisible &&
         widget.controlsVisible &&
         transformationController.value.getMaxScaleOnAxis() > 1.001) {
@@ -731,30 +855,97 @@ class _ViewerImageState extends State<_ViewerImage> {
   }
 
   @override
-  Widget build(BuildContext context) => InteractiveViewer(
-    transformationController: transformationController,
-    minScale: 0.5,
-    maxScale: 5,
-    panEnabled: zoomed,
-    onInteractionUpdate: (_) {
-      final isZoomed =
-          transformationController.value.getMaxScaleOnAxis() > 1.001;
-      if (zoomed != isZoomed) setState(() => zoomed = isZoomed);
-    },
-    onInteractionEnd: (_) {
-      zoomed = transformationController.value.getMaxScaleOnAxis() > 1.001;
-      widget.onZoomChanged(zoomed);
-    },
-    child: Center(
-      child: Image.file(
-        File(widget.path),
-        fit: BoxFit.cover,
-        cacheWidth: widget.cacheWidth,
-        errorBuilder: (context, error, stackTrace) =>
-            const _ViewerMessage('画像を表示できませんでした。'),
+  Widget build(BuildContext context) {
+    if (widget.path.startsWith('content://')) {
+      final bytes = ref.watch(gallerySafImageBytesProvider(widget.path));
+      final image = bytes.when(
+        loading: _previewOrLoading,
+        error: (_, _) => widget.preview == null
+            ? const _ViewerMessage('画像を表示できませんでした。')
+            : _previewImage(),
+        data: (value) => _imageWithPreview(
+          MemoryImage(value),
+          (context, error, stackTrace) =>
+              const _ViewerMessage('画像を表示できませんでした。'),
+        ),
+      );
+      return _buildImageViewer(image);
+    } else {
+      return _buildImageViewer(
+        _imageWithPreview(
+          FileImage(File(widget.path)),
+          (context, error, stackTrace) =>
+              const _ViewerMessage('画像を表示できませんでした。'),
+        ),
+      );
+    }
+  }
+
+  Widget _previewOrLoading() => widget.preview == null
+      ? const Center(child: CircularProgressIndicator())
+      : _previewImage();
+
+  Widget _previewImage() =>
+      Image.memory(widget.preview!, fit: BoxFit.contain, gaplessPlayback: true);
+
+  Widget _imageWithPreview(
+    ImageProvider<Object> provider,
+    ImageErrorWidgetBuilder errorBuilder,
+  ) => Stack(
+    fit: StackFit.expand,
+    children: [
+      if (widget.preview != null) _previewImage(),
+      AnimatedOpacity(
+        opacity: fullImageLoaded ? 1 : 0,
+        duration: const Duration(milliseconds: 120),
+        child: Image(
+          image: ResizeImage(provider, width: widget.cacheWidth),
+          fit: BoxFit.contain,
+          gaplessPlayback: true,
+          frameBuilder: (context, child, frame, synchronous) {
+            if ((synchronous || frame != null) && !fullImageLoaded) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && !fullImageLoaded) {
+                  setState(() => fullImageLoaded = true);
+                }
+              });
+            }
+            return child;
+          },
+          errorBuilder: (context, error, stackTrace) {
+            if (!fullImageFailed) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                if (mounted && !fullImageFailed) {
+                  setState(() => fullImageFailed = true);
+                }
+              });
+            }
+            return errorBuilder(context, error, stackTrace);
+          },
+        ),
       ),
-    ),
+      if (fullImageFailed) const _ViewerMessage('画像を表示できませんでした。'),
+    ],
   );
+
+  Widget _buildImageViewer(Widget image) {
+    return InteractiveViewer(
+      transformationController: transformationController,
+      minScale: 0.5,
+      maxScale: 5,
+      panEnabled: zoomed,
+      onInteractionUpdate: (_) {
+        final isZoomed =
+            transformationController.value.getMaxScaleOnAxis() > 1.001;
+        if (zoomed != isZoomed) setState(() => zoomed = isZoomed);
+      },
+      onInteractionEnd: (_) {
+        zoomed = transformationController.value.getMaxScaleOnAxis() > 1.001;
+        widget.onZoomChanged(zoomed);
+      },
+      child: Center(child: image),
+    );
+  }
 }
 
 class _ViewerMessage extends StatelessWidget {
@@ -900,13 +1091,15 @@ class _LocalVideoPlayerState extends State<_LocalVideoPlayer> {
                   opacity: widget.controlsVisible ? 1 : 0,
                   duration: GalleryMotion.medium,
                   child: _VideoControlBar(
-                    player: player,
                     playing: playing,
                     looping: looping,
                     muted: muted,
                     position: position,
                     duration: duration,
                     rate: rate,
+                    onPlayPause: () => playing ? player.pause() : player.play(),
+                    onSeek: player.seek,
+                    onRate: player.setRate,
                     onLoopChanged: (value) => player.setPlaylistMode(
                       value ? PlaylistMode.single : PlaylistMode.none,
                     ),
@@ -928,26 +1121,160 @@ class _LocalVideoPlayerState extends State<_LocalVideoPlayer> {
         );
 }
 
+class _AndroidVideoPlayer extends StatefulWidget {
+  const _AndroidVideoPlayer({
+    super.key,
+    required this.path,
+    required this.controlsVisible,
+  });
+
+  final String path;
+  final bool controlsVisible;
+
+  @override
+  State<_AndroidVideoPlayer> createState() => _AndroidVideoPlayerState();
+}
+
+class _AndroidVideoPlayerState extends State<_AndroidVideoPlayer> {
+  late final VideoPlayerController controller;
+  bool playbackFailed = false;
+  bool playing = false;
+  bool looping = false;
+  bool muted = false;
+  Duration position = Duration.zero;
+  Duration duration = Duration.zero;
+  double rate = 1;
+  double previousVolume = 1;
+
+  @override
+  void initState() {
+    super.initState();
+    controller = androidVideoControllerForSource(widget.path);
+    controller.addListener(_synchronizeState);
+    _openMedia();
+  }
+
+  Future<void> _openMedia() async {
+    try {
+      await controller.initialize();
+      if (!mounted) return;
+      await controller.setVolume(1);
+      await controller.play();
+      _synchronizeState();
+    } catch (_) {
+      if (mounted) setState(() => playbackFailed = true);
+    }
+  }
+
+  void _synchronizeState() {
+    if (!mounted) return;
+    final value = controller.value;
+    setState(() {
+      playbackFailed = value.hasError;
+      playing = value.isPlaying;
+      position = value.position;
+      duration = value.duration;
+      rate = value.playbackSpeed;
+    });
+  }
+
+  Future<void> _toggleMute(bool value) async {
+    if (value) {
+      previousVolume = controller.value.volume > 0
+          ? controller.value.volume
+          : previousVolume;
+      await controller.setVolume(0);
+    } else {
+      await controller.setVolume(previousVolume);
+    }
+    if (mounted) setState(() => muted = value);
+  }
+
+  @override
+  void dispose() {
+    controller.removeListener(_synchronizeState);
+    unawaited(controller.dispose());
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (playbackFailed) {
+      return const _ViewerMessage('この動画を再生できませんでした。');
+    }
+    final value = controller.value;
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (!value.isInitialized)
+          const Center(child: CircularProgressIndicator())
+        else
+          Center(
+            child: AspectRatio(
+              aspectRatio: value.aspectRatio.isFinite && value.aspectRatio > 0
+                  ? value.aspectRatio
+                  : 1,
+              child: VideoPlayer(controller),
+            ),
+          ),
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: IgnorePointer(
+            ignoring: !widget.controlsVisible || !value.isInitialized,
+            child: AnimatedOpacity(
+              opacity: widget.controlsVisible && value.isInitialized ? 1 : 0,
+              duration: GalleryMotion.medium,
+              child: _VideoControlBar(
+                playing: playing,
+                looping: looping,
+                muted: muted,
+                position: position,
+                duration: duration,
+                rate: rate,
+                onPlayPause: () =>
+                    playing ? controller.pause() : controller.play(),
+                onSeek: controller.seekTo,
+                onRate: controller.setPlaybackSpeed,
+                onLoopChanged: (value) async {
+                  await controller.setLooping(value);
+                  if (mounted) setState(() => looping = value);
+                },
+                onMuteChanged: _toggleMute,
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _VideoControlBar extends StatelessWidget {
   const _VideoControlBar({
-    required this.player,
     required this.playing,
     required this.looping,
     required this.muted,
     required this.position,
     required this.duration,
     required this.rate,
+    required this.onPlayPause,
+    required this.onSeek,
+    required this.onRate,
     required this.onLoopChanged,
     required this.onMuteChanged,
   });
 
-  final Player player;
   final bool playing;
   final bool looping;
   final bool muted;
   final Duration position;
   final Duration duration;
   final double rate;
+  final VoidCallback onPlayPause;
+  final ValueChanged<Duration> onSeek;
+  final ValueChanged<double> onRate;
   final ValueChanged<bool> onLoopChanged;
   final ValueChanged<bool> onMuteChanged;
 
@@ -980,15 +1307,14 @@ class _VideoControlBar extends StatelessWidget {
               max: maxSeconds,
               onChanged: duration == Duration.zero
                   ? null
-                  : (value) =>
-                        player.seek(Duration(milliseconds: value.round())),
+                  : (value) => onSeek(Duration(milliseconds: value.round())),
             ),
           ),
           Row(
             children: [
               IconButton(
                 tooltip: playing ? '一時停止' : '再生',
-                onPressed: () => playing ? player.pause() : player.play(),
+                onPressed: onPlayPause,
                 color: Colors.white,
                 icon: Icon(playing ? Icons.pause : Icons.play_arrow),
               ),
@@ -1002,7 +1328,7 @@ class _VideoControlBar extends StatelessWidget {
               PopupMenuButton<double>(
                 tooltip: '再生速度',
                 initialValue: rate,
-                onSelected: player.setRate,
+                onSelected: onRate,
                 itemBuilder: (context) => [
                   for (final value in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
                     PopupMenuItem(

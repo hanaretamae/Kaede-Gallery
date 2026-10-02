@@ -90,6 +90,10 @@ class _NoteGrid extends ConsumerWidget {
                   .set(absoluteStart);
             }
           },
+          onPrefetchIndex: (index) {
+            final mediaId = notes[index].representativeMediaId;
+            if (mediaId != null) _prefetchGalleryThumbnail(ref, mediaId);
+          },
           itemBuilder: (context, index) => _GalleryTile(
             note: notes[index],
             itemNumber: dataOffset + index + 1,
@@ -180,6 +184,8 @@ class _MediaGrid extends ConsumerWidget {
                   .set(absoluteStart);
             }
           },
+          onPrefetchIndex: (index) =>
+              _prefetchGalleryThumbnail(ref, items[index].id),
           itemBuilder: (context, index) => _MediaTile(
             item: items[index],
             itemNumber: dataOffset + index + 1,
@@ -189,6 +195,33 @@ class _MediaGrid extends ConsumerWidget {
       skipLoadingOnReload: true,
     );
   }
+}
+
+void _prefetchGalleryThumbnail(WidgetRef ref, int mediaId) {
+  final session = ref.read(vaultSessionProvider).asData?.value;
+  if (session == null || !session.vaultPath.startsWith('content://')) return;
+  final repository = ref.read(galleryRepositoryProvider);
+  unawaited(
+    repository
+        .getThumbnail(
+          session.vaultPath,
+          session.paths.indexPath,
+          session.paths.thumbnailDirectory,
+          mediaId,
+        )
+        .then<void>(
+          (_) {},
+          onError: (Object error, StackTrace stackTrace) {
+            FlutterError.reportError(
+              FlutterErrorDetails(
+                exception: error,
+                stack: stackTrace,
+                library: 'gallery thumbnail prefetch',
+              ),
+            );
+          },
+        ),
+  );
 }
 
 class _ThumbnailGrid extends StatefulWidget {
@@ -210,6 +243,7 @@ class _ThumbnailGrid extends StatefulWidget {
     required this.onTargetConsumed,
     required this.onTargetNotFound,
     required this.onVisiblePageChanged,
+    required this.onPrefetchIndex,
   });
 
   final int itemCount;
@@ -228,6 +262,7 @@ class _ThumbnailGrid extends StatefulWidget {
   final ValueChanged<int> onTargetConsumed;
   final VoidCallback onTargetNotFound;
   final ValueChanged<int> onVisiblePageChanged;
+  final ValueChanged<int> onPrefetchIndex;
 
   @override
   State<_ThumbnailGrid> createState() => _ThumbnailGridState();
@@ -242,11 +277,17 @@ class _ThumbnailGridState extends State<_ThumbnailGrid> {
   Timer? _highlightTimer;
   int _columns = 2;
   double _rowExtent = 1;
+  final Set<int> _prefetchedIndices = {};
 
   @override
   void initState() {
     super.initState();
     _scheduleTargetCheck();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _scrollController.hasClients) {
+        _prefetchAhead(_scrollController.position);
+      }
+    });
   }
 
   @override
@@ -257,6 +298,7 @@ class _ThumbnailGridState extends State<_ThumbnailGrid> {
       _highlightTimer?.cancel();
       _highlightedAbsoluteIndex = null;
       _requestedPrevious = false;
+      _prefetchedIndices.clear();
     }
     if (oldWidget.isLoadingMore && !widget.isLoadingMore) {
       _requestedPrevious = false;
@@ -271,6 +313,11 @@ class _ThumbnailGridState extends State<_ThumbnailGrid> {
         widget.hasMore != oldWidget.hasMore ||
         widget.targetReady != oldWidget.targetReady) {
       _scheduleTargetCheck();
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _scrollController.hasClients) {
+          _prefetchAhead(_scrollController.position);
+        }
+      });
     }
   }
 
@@ -343,6 +390,22 @@ class _ThumbnailGridState extends State<_ThumbnailGrid> {
     );
   }
 
+  void _prefetchAhead(ScrollMetrics metrics) {
+    if (widget.itemCount == 0 || _rowExtent <= 0) return;
+    final firstVisibleRow =
+        ((metrics.pixels - 12).clamp(0.0, double.infinity) / _rowExtent)
+            .floor();
+    final visibleRows = (metrics.viewportDimension / _rowExtent).ceil();
+    final startIndex = (firstVisibleRow + visibleRows) * _columns;
+    final endIndex = (startIndex + 2 * _columns).clamp(0, widget.itemCount);
+    _prefetchedIndices.removeWhere(
+      (index) => index < firstVisibleRow * _columns - 2 * _columns,
+    );
+    for (var index = startIndex; index < endIndex; index++) {
+      if (_prefetchedIndices.add(index)) widget.onPrefetchIndex(index);
+    }
+  }
+
   @override
   Widget build(BuildContext context) => LayoutBuilder(
     builder: (context, constraints) {
@@ -361,6 +424,7 @@ class _ThumbnailGridState extends State<_ThumbnailGrid> {
           }
           if (notification is ScrollUpdateNotification ||
               notification is ScrollEndNotification) {
+            _prefetchAhead(notification.metrics);
             final top = (notification.metrics.pixels - 12).clamp(
               0.0,
               double.infinity,
@@ -562,8 +626,11 @@ class _GalleryTile extends ConsumerWidget {
       child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (context) =>
-                _NoteViewerScreen(noteId: note.id, initialMediaId: mediaId),
+            builder: (context) => _NoteViewerScreen(
+              noteId: note.id,
+              initialMediaId: mediaId,
+              initialPreview: thumbnail?.asData?.value,
+            ),
           ),
         ),
         child: Stack(
@@ -701,8 +768,11 @@ class _MediaTile extends ConsumerWidget {
       child: InkWell(
         onTap: () => Navigator.of(context).push(
           MaterialPageRoute<void>(
-            builder: (context) =>
-                _NoteViewerScreen(noteId: item.noteId, initialMediaId: item.id),
+            builder: (context) => _NoteViewerScreen(
+              noteId: item.noteId,
+              initialMediaId: item.id,
+              initialPreview: thumbnail.asData?.value,
+            ),
           ),
         ),
         child: Stack(
@@ -775,23 +845,38 @@ class _GalleryTileThumbnail extends ConsumerWidget {
   final AsyncValue<Uint8List?> thumbnail;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    Widget image(Uint8List bytes) => Image.memory(
-      bytes,
-      fit: BoxFit.cover,
-      gaplessPlayback: true,
-      filterQuality: FilterQuality.low,
-    );
+  Widget build(BuildContext context, WidgetRef ref) => LayoutBuilder(
+    builder: (context, constraints) {
+      final cacheWidth =
+          (constraints.maxWidth * MediaQuery.devicePixelRatioOf(context))
+              .ceil()
+              .clamp(160, 2048)
+              .toInt();
+      Widget image(Uint8List bytes) => Image.memory(
+        bytes,
+        cacheWidth: cacheWidth,
+        fit: BoxFit.cover,
+        gaplessPlayback: true,
+        filterQuality: FilterQuality.low,
+        errorBuilder: (context, error, stackTrace) =>
+            _MediaPlaceholder(hasVideo: isVideo),
+      );
 
-    return thumbnail.when(
-      loading: () => const _MediaPlaceholder(),
-      error: (_, _) => _sourceOrPlaceholder(context, ref),
-      data: (bytes) =>
-          bytes != null ? image(bytes) : _sourceOrPlaceholder(context, ref),
-    );
-  }
+      return thumbnail.when(
+        loading: () => _MediaPlaceholder(hasVideo: isVideo),
+        error: (_, _) => _sourceOrPlaceholder(context, ref, cacheWidth),
+        data: (bytes) => bytes != null
+            ? image(bytes)
+            : _sourceOrPlaceholder(context, ref, cacheWidth),
+      );
+    },
+  );
 
-  Widget _sourceOrPlaceholder(BuildContext context, WidgetRef ref) {
+  Widget _sourceOrPlaceholder(
+    BuildContext context,
+    WidgetRef ref,
+    int cacheWidth,
+  ) {
     final id = mediaId;
     if (id == null || isVideo) {
       return _MediaPlaceholder(hasVideo: isVideo);
@@ -804,6 +889,7 @@ class _GalleryTileThumbnail extends ConsumerWidget {
           ? const _MediaPlaceholder()
           : Image.file(
               File(value),
+              cacheWidth: cacheWidth,
               fit: BoxFit.cover,
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,

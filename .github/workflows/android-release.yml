@@ -1,0 +1,98 @@
+name: Android APK
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build signed arm64 APK
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: 1.98.1
+          targets: aarch64-linux-android
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+      - uses: android-actions/setup-android@v3
+      - name: Install Android SDK components
+        run: sdkmanager "platforms;android-36" "build-tools;36.0.0" "ndk;28.2.13676358" "cmake;3.22.1"
+      - name: Run Rust tests
+        run: cargo test --locked --workspace
+      - name: Get Flutter dependencies
+        working-directory: app
+        run: flutter pub get --enforce-lockfile
+      - name: Analyze and test Flutter
+        working-directory: app
+        run: |
+          flutter analyze
+          flutter test
+      - name: Configure release signing
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          test -n "$ANDROID_KEYSTORE_BASE64" || {
+            echo "::error::Configure the Android signing secrets before building a release."
+            exit 1
+          }
+          test -n "$ANDROID_KEYSTORE_PASSWORD" || {
+            echo "::error::ANDROID_KEYSTORE_PASSWORD is not configured."
+            exit 1
+          }
+          test -n "$ANDROID_KEY_ALIAS" || {
+            echo "::error::ANDROID_KEY_ALIAS is not configured."
+            exit 1
+          }
+          test -n "$ANDROID_KEY_PASSWORD" || {
+            echo "::error::ANDROID_KEY_PASSWORD is not configured."
+            exit 1
+          }
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/kaede-gallery-release.jks"
+      - name: Build release APK
+        working-directory: app
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/kaede-gallery-release.jks
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: flutter build apk --release --target-platform android-arm64 --build-number "$GITHUB_RUN_NUMBER"
+      - name: Build sideload test APK
+        if: github.event_name == 'workflow_dispatch'
+        working-directory: app
+        run: flutter build apk --release --target-platform android-arm64 --build-number "$GITHUB_RUN_NUMBER"
+      - name: Name APK
+        run: cp app/build/app/outputs/flutter-apk/app-release.apk Kaede-Gallery-android-arm64.apk
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'workflow_dispatch'
+        with:
+          name: kaede-gallery-android-arm64
+          path: Kaede-Gallery-android-arm64.apk
+          if-no-files-found: error
+          retention-days: 1
+      - name: Attach APK to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: Kaede-Gallery-android-arm64.apk

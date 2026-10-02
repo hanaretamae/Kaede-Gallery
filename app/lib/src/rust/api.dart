@@ -8,7 +8,7 @@ import 'frb_generated.dart';
 import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart';
 
 // These functions are ignored because they are not marked as `pub`: `category`, `detail_line`, `error_message`, `media_item`, `note_detail`, `note_summary`, `open_gallery`, `parse_virtual_filters`, `scan_report`, `split_filter_modes`, `virtual_filter_key`
-// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
+// These function are ignored because they are on traits that is not defined in current crate (put an empty `#[frb]` on it to unignore): `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`, `clone`
 
 Future<void> prepareAppDataDirectory({
   required String directoryPath,
@@ -17,6 +17,11 @@ Future<void> prepareAppDataDirectory({
   directoryPath: directoryPath,
   vaultPath: vaultPath,
 );
+
+Future<void> prepareAppDataDirectorySaf({required String directoryPath}) =>
+    RustLib.instance.api.crateApiPrepareAppDataDirectorySaf(
+      directoryPath: directoryPath,
+    );
 
 Future<String?> loadVaultPath({required String directoryPath}) =>
     RustLib.instance.api.crateApiLoadVaultPath(directoryPath: directoryPath);
@@ -35,6 +40,18 @@ Future<ScanReport> scan({
 }) => RustLib.instance.api.crateApiScan(
   vaultPath: vaultPath,
   indexPath: indexPath,
+);
+
+Future<ScanReport> scanSaf({
+  required String vaultPath,
+  required String indexPath,
+  required List<SafNote> notes,
+  required List<String> filePaths,
+}) => RustLib.instance.api.crateApiScanSaf(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  notes: notes,
+  filePaths: filePaths,
 );
 
 Future<List<Category>> listCategories({
@@ -133,11 +150,43 @@ Future<NoteDetail?> getNoteDetail({
   noteId: noteId,
 );
 
+Future<NoteDetail?> getNoteDetailSaf({
+  required String vaultPath,
+  required String indexPath,
+  required int noteId,
+  required List<int> content,
+}) => RustLib.instance.api.crateApiGetNoteDetailSaf(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  noteId: noteId,
+  content: content,
+);
+
+Future<String?> getNotePath({
+  required String vaultPath,
+  required String indexPath,
+  required int noteId,
+}) => RustLib.instance.api.crateApiGetNotePath(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  noteId: noteId,
+);
+
 Future<String?> getMediaSourcePath({
   required String vaultPath,
   required String indexPath,
   required int mediaId,
 }) => RustLib.instance.api.crateApiGetMediaSourcePath(
+  vaultPath: vaultPath,
+  indexPath: indexPath,
+  mediaId: mediaId,
+);
+
+Future<String?> getMediaRelativePath({
+  required String vaultPath,
+  required String indexPath,
+  required int mediaId,
+}) => RustLib.instance.api.crateApiGetMediaRelativePath(
   vaultPath: vaultPath,
   indexPath: indexPath,
   mediaId: mediaId,
@@ -432,6 +481,34 @@ class NoteSummary {
           memoCount == other.memoCount &&
           relatedCount == other.relatedCount &&
           representativeMediaId == other.representativeMediaId;
+}
+
+class SafNote {
+  final String path;
+  final PlatformInt64 modifiedNanos;
+  final PlatformInt64 size;
+  final Uint8List? content;
+
+  const SafNote({
+    required this.path,
+    required this.modifiedNanos,
+    required this.size,
+    this.content,
+  });
+
+  @override
+  int get hashCode =>
+      path.hashCode ^ modifiedNanos.hashCode ^ size.hashCode ^ content.hashCode;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SafNote &&
+          runtimeType == other.runtimeType &&
+          path == other.path &&
+          modifiedNanos == other.modifiedNanos &&
+          size == other.size &&
+          content == other.content;
 }
 
 class ScanReport {

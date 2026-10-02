@@ -22,10 +22,20 @@ class VaultGalleryApp extends ConsumerWidget {
     return DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
         final lightSystemScheme = portalAccent == null
-            ? lightDynamic
+            ? lightDynamic == null
+                  ? null
+                  : materialYouScheme(
+                      lightDynamic,
+                      brightness: Brightness.light,
+                    )
             : ColorScheme.fromSeed(seedColor: portalAccent);
         final darkSystemScheme = portalAccent == null
-            ? darkDynamic
+            ? darkDynamic == null
+                  ? null
+                  : materialYouScheme(
+                      darkDynamic,
+                      brightness: Brightness.dark,
+                    )
             : ColorScheme.fromSeed(
                 seedColor: portalAccent,
                 brightness: Brightness.dark,

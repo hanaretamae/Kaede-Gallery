@@ -23,6 +23,9 @@ const MAX_THUMBNAIL_PIXELS: u64 = 32 * 1024 * 1024;
 const MAX_THUMBNAIL_DIMENSION: u32 = 16_384;
 const MAX_THUMBNAIL_ALLOCATION: u64 = 192 * 1024 * 1024;
 const MAX_THUMBNAIL_SIZE: u32 = 1_024;
+const MAX_SAF_DOCUMENTS: usize = 100_000;
+const MAX_SAF_NOTE_BYTES_TOTAL: usize = 128 * 1024 * 1024;
+const MAX_SAF_PATH_BYTES_TOTAL: usize = 32 * 1024 * 1024;
 static THUMBNAIL_LOCK: Mutex<()> = Mutex::new(());
 const VIRTUAL_FILTERS: [(VirtualFilter, &str); 4] = [
     (VirtualFilter::MultipleMedia, "複数画像"),
@@ -57,6 +60,14 @@ pub enum CoreError {
 pub struct ScanReport {
     pub notes_indexed: usize,
     pub warnings: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct SafNoteDocument {
+    pub path: String,
+    pub modified_nanos: i64,
+    pub size: i64,
+    pub content: Option<Vec<u8>>,
 }
 
 #[derive(Debug, Clone)]
@@ -135,6 +146,7 @@ struct ScanItem {
 
 pub struct Gallery {
     root: PathBuf,
+    saf: bool,
     connection: Connection,
     labels: BTreeMap<String, String>,
     note_structure: NoteStructureSettings,
@@ -142,7 +154,12 @@ pub struct Gallery {
 
 pub fn prepare_private_app_directory(directory: &Path, vault: &Path) -> Result<(), CoreError> {
     let vault_root = fs::canonicalize(vault).map_err(|_| CoreError::VaultUnavailable)?;
-    let canonical = ensure_private_child_directory(directory, &vault_root)?;
+    let canonical = ensure_private_child_directory(directory, Some(&vault_root))?;
+    set_private_directory(&canonical)
+}
+
+pub fn prepare_private_app_directory_for_saf(directory: &Path) -> Result<(), CoreError> {
+    let canonical = ensure_private_child_directory(directory, None)?;
     set_private_directory(&canonical)
 }
 
@@ -174,6 +191,10 @@ pub fn save_selected_vault(directory: &Path, vault: &Path) -> Result<String, Cor
     if value.len() > 4_096 || value.contains('\0') {
         return Err(CoreError::Io);
     }
+    save_selected_vault_value(directory, value)
+}
+
+fn save_selected_vault_value(directory: &Path, value: &str) -> Result<String, CoreError> {
     let path = directory.join("vault-path");
     let temporary = directory.join("vault-path.tmp");
     match fs::symlink_metadata(&temporary) {
@@ -196,6 +217,14 @@ pub fn save_selected_vault(directory: &Path, vault: &Path) -> Result<String, Cor
     Ok(value.to_owned())
 }
 
+pub fn save_selected_vault_saf(directory: &Path, vault_uri: &str) -> Result<String, CoreError> {
+    if !vault_uri.starts_with("content://") || vault_uri.len() > 4_096 || vault_uri.contains('\0') {
+        return Err(CoreError::InvalidVault);
+    }
+    prepare_private_app_directory_for_saf(directory)?;
+    save_selected_vault_value(directory, vault_uri)
+}
+
 impl Gallery {
     pub fn open(vault: &Path, database: &Path) -> Result<Self, CoreError> {
         let root = fs::canonicalize(vault).map_err(|_| CoreError::VaultUnavailable)?;
@@ -203,6 +232,29 @@ impl Gallery {
             return Err(CoreError::InvalidVault);
         }
         let database_path = resolve_database_path(database, &root)?;
+        Self::open_at(
+            root.clone(),
+            root.to_string_lossy().into_owned(),
+            false,
+            database_path,
+        )
+    }
+
+    pub fn open_saf(vault_uri: &str, database: &Path) -> Result<Self, CoreError> {
+        if !vault_uri.starts_with("content://") || vault_uri.len() > 4_096 {
+            return Err(CoreError::InvalidVault);
+        }
+        let identity = format!("saf:{vault_uri}");
+        let database_path = resolve_saf_database_path(database)?;
+        Self::open_at(PathBuf::new(), identity, true, database_path)
+    }
+
+    fn open_at(
+        root: PathBuf,
+        vault_identity: String,
+        saf: bool,
+        database_path: PathBuf,
+    ) -> Result<Self, CoreError> {
         let mut connection = Connection::open(&database_path).map_err(|_| CoreError::Database)?;
         #[cfg(unix)]
         {
@@ -309,8 +361,7 @@ impl Gallery {
             })
             .optional()
             .map_err(|_| CoreError::Database)?;
-        let vault_identity = root.to_string_lossy();
-        if indexed_vault.as_deref() != Some(vault_identity.as_ref()) {
+        if indexed_vault.as_deref() != Some(vault_identity.as_str()) {
             transaction
                 .execute_batch(
                     "DELETE FROM note_tags;
@@ -325,7 +376,7 @@ impl Gallery {
         transaction
             .execute(
                 "INSERT OR REPLACE INTO meta(key,value) VALUES ('vault_root',?1)",
-                [vault_identity.as_ref()],
+                [vault_identity.as_str()],
             )
             .map_err(|_| CoreError::Database)?;
         transaction.commit().map_err(|_| CoreError::Database)?;
@@ -353,6 +404,7 @@ impl Gallery {
 
         Ok(Self {
             root,
+            saf,
             connection,
             labels: default_labels(),
             note_structure,
@@ -360,6 +412,9 @@ impl Gallery {
     }
 
     pub fn scan(&mut self) -> Result<ScanReport, CoreError> {
+        if self.saf {
+            return Err(CoreError::InvalidVault);
+        }
         let (files, traversal_warnings) = collect_notes(&self.root)?;
         let mut traversal_complete = traversal_warnings == 0;
         let mut warnings = traversal_warnings;
@@ -523,6 +578,7 @@ impl Gallery {
                             item.mtime,
                             item.size,
                             eligible,
+                            None,
                         )?;
                         if eligible {
                             notes_indexed += 1;
@@ -554,6 +610,134 @@ impl Gallery {
         transaction
             .execute("DELETE FROM tags WHERE NOT EXISTS (SELECT 1 FROM note_tags WHERE note_tags.tag_id=tags.id)", [])
             .map_err(|_| CoreError::Database)?;
+        transaction.commit().map_err(|_| CoreError::Database)?;
+        Ok(ScanReport {
+            notes_indexed,
+            warnings,
+        })
+    }
+
+    pub fn scan_saf(
+        &mut self,
+        documents: Vec<SafNoteDocument>,
+        file_paths: Vec<String>,
+    ) -> Result<ScanReport, CoreError> {
+        if !self.saf || documents.len() > MAX_SAF_DOCUMENTS || file_paths.len() > MAX_SAF_DOCUMENTS
+        {
+            return Err(CoreError::InvalidVault);
+        }
+
+        let mut available_files = BTreeSet::new();
+        let mut path_bytes = 0_usize;
+        for path in file_paths {
+            path_bytes = path_bytes
+                .checked_add(path.len())
+                .ok_or(CoreError::InvalidVault)?;
+            if path_bytes > MAX_SAF_PATH_BYTES_TOTAL {
+                return Err(CoreError::InvalidVault);
+            }
+            if let Some(path) = normalize_note_path(&path)
+                && !relative_path_is_ignored(&path)
+            {
+                available_files.insert(path);
+            }
+        }
+
+        let mut note_bytes = 0_usize;
+        let mut warnings = 0;
+        let mut notes_indexed = 0;
+        let transaction = self
+            .connection
+            .transaction()
+            .map_err(|_| CoreError::Database)?;
+        transaction
+            .execute_batch(
+                "DELETE FROM note_tags;
+                 DELETE FROM media;
+                 DELETE FROM notes;
+                 DELETE FROM tags;
+                 DELETE FROM scan_state;
+                 DELETE FROM warnings;",
+            )
+            .map_err(|_| CoreError::Database)?;
+
+        for document in documents {
+            path_bytes = path_bytes
+                .checked_add(document.path.len())
+                .ok_or(CoreError::InvalidVault)?;
+            if path_bytes > MAX_SAF_PATH_BYTES_TOTAL {
+                return Err(CoreError::InvalidVault);
+            }
+            let Some(relative) = normalize_note_path(&document.path) else {
+                warnings += 1;
+                transaction
+                    .execute("INSERT INTO warnings(category) VALUES ('read')", [])
+                    .map_err(|_| CoreError::Database)?;
+                continue;
+            };
+            if relative_path_is_ignored(&relative) {
+                continue;
+            }
+            if !relative.to_ascii_lowercase().ends_with(".md") {
+                continue;
+            }
+            let Some(content) = document.content else {
+                warnings += 1;
+                transaction
+                    .execute("INSERT INTO warnings(category) VALUES ('read')", [])
+                    .map_err(|_| CoreError::Database)?;
+                continue;
+            };
+            if document.size > 0 && usize::try_from(document.size).ok() != Some(content.len()) {
+                warnings += 1;
+                transaction
+                    .execute("INSERT INTO warnings(category) VALUES ('read')", [])
+                    .map_err(|_| CoreError::Database)?;
+                continue;
+            }
+            note_bytes = note_bytes
+                .checked_add(content.len())
+                .ok_or(CoreError::InvalidVault)?;
+            if note_bytes > MAX_SAF_NOTE_BYTES_TOTAL {
+                return Err(CoreError::InvalidVault);
+            }
+            let size = i64::try_from(content.len()).map_err(|_| CoreError::InvalidVault)?;
+            let parsed = parse_note_bytes(&content, &self.note_structure);
+            match parsed {
+                Ok(parsed) => {
+                    transaction
+                        .execute(
+                            "INSERT INTO scan_state(path,mtime,size) VALUES (?1,?2,?3)",
+                            params![relative, document.modified_nanos, size],
+                        )
+                        .map_err(|_| CoreError::Database)?;
+                    let eligible = parsed.tags.iter().any(|tag| {
+                        self.note_structure
+                            .gallery_tag_prefixes
+                            .iter()
+                            .any(|prefix| tag_matches_prefix(tag, prefix))
+                    });
+                    insert_note(
+                        &transaction,
+                        &relative,
+                        &parsed,
+                        &self.root,
+                        document.modified_nanos,
+                        size,
+                        eligible,
+                        Some(&available_files),
+                    )?;
+                    notes_indexed += usize::from(eligible);
+                }
+                Err(category) => {
+                    transaction
+                        .execute("INSERT INTO warnings(category) VALUES (?1)", [category])
+                        .map_err(|_| CoreError::Database)?;
+                    warnings += 1;
+                }
+            }
+        }
+
         transaction.commit().map_err(|_| CoreError::Database)?;
         Ok(ScanReport {
             notes_indexed,
@@ -1187,6 +1371,15 @@ impl Gallery {
             .map_err(|_| CoreError::Database)
     }
 
+    pub fn note_path(&self, note_id: i64) -> Result<Option<String>, CoreError> {
+        self.connection
+            .query_row("SELECT path FROM notes WHERE id=?1", [note_id], |row| {
+                row.get::<_, String>(0)
+            })
+            .optional()
+            .map_err(|_| CoreError::Database)
+    }
+
     pub fn get_thumbnail(
         &self,
         media_id: i64,
@@ -1339,7 +1532,68 @@ impl Gallery {
         Ok(Some(source))
     }
 
+    pub fn media_relative_path(&self, media_id: i64) -> Result<Option<String>, CoreError> {
+        self.media_relative_path_for_kind(media_id, None)
+    }
+
+    pub fn video_media_relative_path(&self, media_id: i64) -> Result<Option<String>, CoreError> {
+        self.media_relative_path_for_kind(media_id, Some("video"))
+    }
+
+    fn media_relative_path_for_kind(
+        &self,
+        media_id: i64,
+        kind: Option<&str>,
+    ) -> Result<Option<String>, CoreError> {
+        if !self.saf {
+            return Err(CoreError::InvalidVault);
+        }
+        let media = self
+            .connection
+            .query_row(
+                "SELECT notes.path, media.rel_path, media.exists_flag, media.kind
+                 FROM media JOIN notes ON notes.id=media.note_id WHERE media.id=?1",
+                [media_id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, bool>(2)?,
+                        row.get::<_, String>(3)?,
+                    ))
+                },
+            )
+            .optional()
+            .map_err(|_| CoreError::Database)?;
+        let Some((note_path, media_path, exists, actual_kind)) = media else {
+            return Ok(None);
+        };
+        if !exists || kind.is_some_and(|kind| kind != actual_kind) {
+            return Ok(None);
+        }
+        Ok(resolve_media_relative_path(&note_path, &media_path))
+    }
+
     pub fn note_detail(&self, note_id: i64) -> Result<Option<NoteDetail>, CoreError> {
+        self.note_detail_with_content(note_id, None)
+    }
+
+    pub fn note_detail_saf(
+        &self,
+        note_id: i64,
+        content: &[u8],
+    ) -> Result<Option<NoteDetail>, CoreError> {
+        if !self.saf {
+            return Err(CoreError::InvalidVault);
+        }
+        self.note_detail_with_content(note_id, Some(content))
+    }
+
+    fn note_detail_with_content(
+        &self,
+        note_id: i64,
+        content: Option<&[u8]>,
+    ) -> Result<Option<NoteDetail>, CoreError> {
         let indexed_note = self
             .connection
             .query_row(
@@ -1352,11 +1606,17 @@ impl Gallery {
         let Some((indexed_path, eligible)) = indexed_note else {
             return Ok(None);
         };
-        let path = fs::canonicalize(self.root.join(&indexed_path)).map_err(|_| CoreError::Io)?;
-        if !path.starts_with(&self.root) || !path.is_file() {
-            return Err(CoreError::Io);
-        }
-        let parsed = read_parse_note(&path, &self.note_structure).map_err(|_| CoreError::Io)?;
+        let parsed = if self.saf {
+            parse_note_bytes(content.ok_or(CoreError::Io)?, &self.note_structure)
+                .map_err(|_| CoreError::Io)?
+        } else {
+            let path =
+                fs::canonicalize(self.root.join(&indexed_path)).map_err(|_| CoreError::Io)?;
+            if !path.starts_with(&self.root) || !path.is_file() {
+                return Err(CoreError::Io);
+            }
+            read_parse_note(&path, &self.note_structure).map_err(|_| CoreError::Io)?
+        };
         if !eligible {
             let has_media: bool = self
                 .connection
@@ -1368,7 +1628,8 @@ impl Gallery {
                 .map_err(|_| CoreError::Database)?;
             if !has_media {
                 for (ordinal, media) in parsed.media.iter().enumerate() {
-                    let exists = safe_media_exists(&self.root, &indexed_path, &media.path);
+                    let exists =
+                        !self.saf && safe_media_exists(&self.root, &indexed_path, &media.path);
                     self.connection
                         .execute(
                             "INSERT INTO media(note_id,ord,rel_path,kind,exists_flag)
@@ -1692,6 +1953,33 @@ fn resolve_database_path(database: &Path, root: &Path) -> Result<PathBuf, CoreEr
     if resolved.starts_with(root) {
         return Err(CoreError::Database);
     }
+    if let Ok(metadata) = fs::metadata(&resolved) {
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if metadata.nlink() > 1 {
+                return Err(CoreError::Database);
+            }
+        }
+        if !metadata.is_file() {
+            return Err(CoreError::Database);
+        }
+    }
+    Ok(resolved)
+}
+
+fn resolve_saf_database_path(database: &Path) -> Result<PathBuf, CoreError> {
+    let resolved = if fs::symlink_metadata(database).is_ok() {
+        fs::canonicalize(database).map_err(|_| CoreError::Database)?
+    } else {
+        let parent = database
+            .parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."));
+        let canonical_parent = fs::canonicalize(parent).map_err(|_| CoreError::Database)?;
+        let name = database.file_name().ok_or(CoreError::Database)?;
+        canonical_parent.join(name)
+    };
     if let Ok(metadata) = fs::metadata(&resolved) {
         #[cfg(unix)]
         {
@@ -2129,7 +2417,25 @@ fn read_parse_note(
     file.take((gallery_parse::MAX_NOTE_BYTES + 1) as u64)
         .read_to_string(&mut content)
         .map_err(|_| "read")?;
-    parse_note_for_link_target(&content, settings).map_err(|error| match error {
+    parse_note_content(&content, settings)
+}
+
+fn parse_note_bytes(
+    content: &[u8],
+    settings: &NoteStructureSettings,
+) -> Result<ParsedNote, &'static str> {
+    if content.len() > gallery_parse::MAX_NOTE_BYTES {
+        return Err("oversized");
+    }
+    let content = std::str::from_utf8(content).map_err(|_| "read")?;
+    parse_note_content(content, settings)
+}
+
+fn parse_note_content(
+    content: &str,
+    settings: &NoteStructureSettings,
+) -> Result<ParsedNote, &'static str> {
+    parse_note_for_link_target(content, settings).map_err(|error| match error {
         gallery_parse::ParseError::NoteTooLarge
         | gallery_parse::ParseError::FrontmatterTooLarge
         | gallery_parse::ParseError::TooManyTags => "limit",
@@ -2145,6 +2451,7 @@ fn insert_note(
     mtime: i64,
     size: i64,
     eligible: bool,
+    available_files: Option<&BTreeSet<String>>,
 ) -> Result<bool, CoreError> {
     let filename = Path::new(relative)
         .file_name()
@@ -2183,7 +2490,12 @@ fn insert_note(
     }
     if eligible {
         for (ordinal, media) in note.media.iter().enumerate() {
-            let exists = safe_media_exists(root, relative, &media.path);
+            let exists = if let Some(available_files) = available_files {
+                resolve_media_relative_path(relative, &media.path)
+                    .is_some_and(|path| available_files.contains(&path))
+            } else {
+                safe_media_exists(root, relative, &media.path)
+            };
             transaction
                 .execute(
                     "INSERT INTO media(note_id,ord,rel_path,kind,exists_flag) VALUES (?1,?2,?3,?4,?5)",
@@ -2203,6 +2515,23 @@ fn insert_note(
         }
     }
     Ok(true)
+}
+
+fn resolve_media_relative_path(note_path: &str, media_path: &str) -> Option<String> {
+    let parent = Path::new(note_path)
+        .parent()
+        .unwrap_or_else(|| Path::new(""));
+    normalize_note_path(&parent.join(media_path).to_string_lossy())
+}
+
+fn relative_path_is_ignored(path: &str) -> bool {
+    Path::new(path)
+        .components()
+        .filter_map(|component| match component {
+            Component::Normal(name) => name.to_str(),
+            _ => None,
+        })
+        .any(ignored_name)
 }
 
 fn refresh_media_existence(transaction: &Transaction<'_>, root: &Path) -> Result<(), CoreError> {
@@ -2261,14 +2590,14 @@ fn resolve_media(root: &Path, note_path: &str, media_path: &str) -> Option<PathB
 }
 
 fn prepare_thumbnail_cache(cache_root: &Path, vault_root: &Path) -> Result<PathBuf, CoreError> {
-    let canonical = ensure_private_child_directory(cache_root, vault_root)?;
+    let canonical = ensure_private_child_directory(cache_root, Some(vault_root))?;
     set_private_directory(&canonical)?;
     Ok(canonical)
 }
 
 fn ensure_private_child_directory(
     directory: &Path,
-    vault_root: &Path,
+    vault_root: Option<&Path>,
 ) -> Result<PathBuf, CoreError> {
     let absolute = if directory.is_absolute() {
         directory.to_path_buf()
@@ -2301,7 +2630,7 @@ fn ensure_private_child_directory(
     for component in missing.iter().rev().chain(std::iter::once(&name)) {
         requested.push(component);
     }
-    if requested.starts_with(vault_root) {
+    if vault_root.is_some_and(|vault_root| requested.starts_with(vault_root)) {
         return Err(CoreError::Io);
     }
     for component in missing.iter().rev().chain(std::iter::once(&name)) {
@@ -2315,7 +2644,7 @@ fn ensure_private_child_directory(
             Err(_) => return Err(CoreError::Io),
         }
         canonical_ancestor = fs::canonicalize(&canonical_ancestor).map_err(|_| CoreError::Io)?;
-        if canonical_ancestor.starts_with(vault_root) {
+        if vault_root.is_some_and(|vault_root| canonical_ancestor.starts_with(vault_root)) {
             return Err(CoreError::Io);
         }
     }
@@ -3624,5 +3953,89 @@ mod tests {
         assert!(!by_path.contains_key("ok.md"));
 
         fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn saf_scans_in_memory_documents_without_copying_vault_data() {
+        let app_data = temp_dir();
+        fs::create_dir_all(&app_data).expect("create private data directory");
+        let database = app_data.join("index.sqlite");
+        let vault_uri =
+            "content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FNotes";
+        assert_eq!(
+            save_selected_vault_saf(&app_data, vault_uri).expect("save selected folder"),
+            vault_uri
+        );
+        assert_eq!(
+            load_selected_vault(&app_data).expect("load selected folder"),
+            Some(vault_uri.to_owned())
+        );
+        let note = b"---\ntags: [source/rating/safe]\ncover: media/cover.png\n---\n# Sample\n![](media/cover.png)\n![](../../outside.png)\n## \xe9\x96\xa2\xe9\x80\xa3\n- [[Other]]\n";
+        let mut gallery = Gallery::open_saf(vault_uri, &database).expect("open SAF index");
+        let report = gallery
+            .scan_saf(
+                vec![SafNoteDocument {
+                    path: "sample.md".to_owned(),
+                    modified_nanos: 1_000,
+                    size: note.len() as i64,
+                    content: Some(note.to_vec()),
+                }],
+                vec![
+                    "sample.md".to_owned(),
+                    "media/cover.png".to_owned(),
+                    ".obsidian/config".to_owned(),
+                ],
+            )
+            .expect("scan SAF documents");
+
+        assert_eq!(report.notes_indexed, 1);
+        assert_eq!(report.warnings, 0);
+        let notes = gallery.query(&[], 10).expect("query SAF notes");
+        assert_eq!(notes.len(), 1);
+        assert_eq!(notes[0].path, "sample.md");
+        let media = gallery
+            .query_media_filtered_page(&[], &[], 0, 10)
+            .expect("query SAF media");
+        assert_eq!(media.len(), 2);
+        assert!(media[0].exists);
+        assert!(!media[1].exists);
+        assert_eq!(
+            gallery
+                .media_relative_path(media[0].id)
+                .expect("resolve SAF media")
+                .as_deref(),
+            Some("media/cover.png")
+        );
+        let details = gallery
+            .note_detail_saf(notes[0].id, note)
+            .expect("parse SAF note details")
+            .expect("SAF note exists");
+        assert_eq!(details.title, "Sample");
+        assert_eq!(details.media.len(), 2);
+        assert!(!app_data.join("sample.md").exists());
+
+        drop(gallery);
+        fs::remove_dir_all(app_data).expect("remove private data directory");
+    }
+
+    #[test]
+    fn saf_rejects_invalid_tree_uris_and_unbounded_scans() {
+        let app_data = temp_dir();
+        fs::create_dir_all(&app_data).expect("create private data directory");
+        let database = app_data.join("index.sqlite");
+        assert!(Gallery::open_saf("/storage/emulated/0/Documents", &database).is_err());
+
+        let mut gallery = Gallery::open_saf(
+            "content://com.android.externalstorage.documents/tree/primary%3ADocuments",
+            &database,
+        )
+        .expect("open SAF index");
+        assert!(
+            gallery
+                .scan_saf(Vec::new(), vec!["x".to_owned(); MAX_SAF_DOCUMENTS + 1],)
+                .is_err()
+        );
+        drop(gallery);
+        fs::remove_dir_all(app_data).expect("remove private data directory");
     }
 }

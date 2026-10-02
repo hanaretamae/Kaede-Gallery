@@ -38,6 +38,43 @@ interface and keeps OS-specific behavior in `platform/`.
 
 Complete and verify one phase before starting another.
 
+Phase 4 initially targets a privately sideloaded APK; this does not imply
+store-distribution readiness. Android Vault access is an open implementation
+boundary: the target is an ordinary user-selected folder, such as one under
+Documents; no Syncthing-specific integration is needed. The current core scans
+ordinary filesystem paths, while Android's Storage Access Framework grants
+access to document URIs that are not necessarily usable as filesystem paths,
+even when the selected folder is an ordinary Documents directory. Android
+uses `ACTION_OPEN_DOCUMENT_TREE` with a persisted read-only grant; the native
+platform layer enumerates the selected tree and reads bounded note/media
+content through `ContentResolver` in batches capped by note count and payload
+size, with at most four note reads concurrent per batch. This avoids one
+platform-channel round trip per note while keeping memory use bounded. Rust
+receives only normalized relative paths and bounded note bytes for
+parsing/indexing. Vault files are not copied to app storage; only the
+disposable index and thumbnails are stored there.
+Media document IDs are resolved beneath the selected tree before opening, and
+the SAF path applies document-count, depth, path, note-size, and aggregate-byte
+limits. On Android, a successful scan is reused on later launches to avoid
+re-reading the whole Vault at startup; the index and scan summary stay in
+private app data. The validated relative-path-to-document-URI lookup is also
+cached in a private SQLite database, so thumbnails do not need to re-enumerate
+deep folder paths after process restart. SAF thumbnails are cached privately
+with bounded count and size, and discarded on rescan. Android image reads are
+decoded and downscaled natively to display resolution before crossing the
+platform channel. On SAF-backed Vaults, video thumbnails use the bundled media
+decoder through a validated read-only file descriptor before falling back to
+the platform frame extractor. Only the resulting thumbnail is cached in app
+data.
+Nearby thumbnails are prefetched while scrolling. Rescanning remains explicit,
+so users can refresh after changing Vault contents. Keep this behavior
+read-only and do not request broad all-files access.
+Opening a media item's containing folder offers the read-only folder document to
+the system `ACTION_VIEW` resolver so the user can select an installed file
+manager. Some file managers may not support directory documents; report that
+failure rather than opening a folder picker. Opening an individual media file
+may also use a read-only `ACTION_VIEW` grant.
+
 Material 3 Expressive has official design guidance, including expanded tonal
 color, typographic hierarchy, flexible shape, and more natural motion:
 https://m3.material.io/blog/building-with-m3-expressive
@@ -53,9 +90,10 @@ community component package to replace Flutter's Material library.
 The settings page groups brightness, system accent color, and pure-black
 controls in one appearance card, using a segmented control for the mutually
 exclusive brightness choice and switches for the independent preferences.
-Pure black applies only to dark mode: all base surface roles remain true black,
-while the selected system/dynamic scheme continues to supply accent and
-foreground roles. Video controls remain transparent over media; the seek
+Pure black applies only to dark mode: the app background remains true black
+while item surfaces retain a subtle dark distinction; the selected
+system/dynamic scheme continues to supply accent and foreground roles. Video
+controls remain transparent over media; the seek
 indicator uses the active theme's primary color while text and transport
 controls remain high-contrast white.
 Settings are ordered as appearance, list pagination, storage, notes, then
@@ -81,9 +119,11 @@ internal-link targets; they are excluded from gallery results, tag counts, and
 pagination totals.
 Read/parse failures are reported as aggregate scan warnings because their tags
 cannot be checked to decide whether they belong in the gallery. Display
-exclusions never remove eligible notes from the index. The Flutter gallery requests validated
-video paths from the core and asks the platform thumbnail API for a frame;
-Linux development requires FFmpeg libraries.
+exclusions never remove eligible notes from the index. The Flutter gallery requests validated video paths from the core. For
+SAF-backed folders, it tries the platform thumbnail API first and falls back to
+the bundled media decoder through a validated file descriptor; filesystem
+galleries use the platform video-thumbnail backend. Linux development requires
+FFmpeg libraries.
 The settings screen explains that aggregate warning count, typical read/parse/
 limit causes, and that these entries are neither confirmed gallery exclusions
 nor added to the gallery. It does not reveal note names or contents.
@@ -259,8 +299,10 @@ mode. The page counter is shown in the media
 area when not full-screen. Viewer and filter tags use consistent category
 colors and selection remains attached to stable tag identities.
 Dates show a space instead of the ISO `T` separator.
-Media controls provide play/pause, seeking, rate, single-item looping, and
-mute with fully transparent controls. The existing display-mode `PopupMenuButton`
+On Android, the media-only viewer automatically hides system bars and restores
+them when note details are shown. Media controls provide play/pause, seeking,
+rate, single-item looping, and mute with fully transparent controls. The
+existing display-mode `PopupMenuButton`
 uses Flutter's Material 3 menu styling with a selected-item checkmark.
 Video playback uses `media_kit`/mpv on Linux; the development environment
 provides mpv and libass for its native plugin build. Android ExoPlayer belongs

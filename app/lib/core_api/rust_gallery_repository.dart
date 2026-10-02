@@ -1,8 +1,13 @@
+import 'dart:io';
 import 'dart:typed_data';
+
+import '../platform/vault_platform.dart';
 
 import 'package:vault_gallery/src/rust/api.dart' as rust;
 
 import 'gallery_repository.dart';
+
+final Map<String, Future<Uint8List?>> _safThumbnailLoads = {};
 
 class RustGalleryRepository implements GalleryRepository {
   const RustGalleryRepository();
@@ -12,10 +17,14 @@ class RustGalleryRepository implements GalleryRepository {
     String directoryPath,
     String vaultPath,
   ) async {
-    await rust.prepareAppDataDirectory(
-      directoryPath: directoryPath,
-      vaultPath: vaultPath,
-    );
+    if (vaultPath.startsWith('content://')) {
+      await rust.prepareAppDataDirectorySaf(directoryPath: directoryPath);
+    } else {
+      await rust.prepareAppDataDirectory(
+        directoryPath: directoryPath,
+        vaultPath: vaultPath,
+      );
+    }
   }
 
   @override
@@ -28,10 +37,42 @@ class RustGalleryRepository implements GalleryRepository {
 
   @override
   Future<GalleryScanReport> scan(String vaultPath, String indexPath) async {
-    final report = await rust.scan(vaultPath: vaultPath, indexPath: indexPath);
+    final report = vaultPath.startsWith('content://')
+        ? await _scanSaf(vaultPath, indexPath)
+        : await rust.scan(vaultPath: vaultPath, indexPath: indexPath);
     return GalleryScanReport(
       notesIndexed: report.notesIndexed,
       warnings: report.warnings,
+    );
+  }
+
+  Future<rust.ScanReport> _scanSaf(String vaultUri, String indexPath) async {
+    const access = AndroidSafAccess();
+    final files = await access.listFiles(vaultUri);
+    final notes = <rust.SafNote>[];
+    final noteFiles = files
+        .where(
+          (file) =>
+              file.path.toLowerCase().endsWith('.md') &&
+              !_isIgnoredVaultPath(file.path),
+        )
+        .toList(growable: false);
+    final noteContents = await access.readListedFiles(vaultUri, noteFiles);
+    for (final file in noteFiles) {
+      notes.add(
+        rust.SafNote(
+          path: file.path,
+          modifiedNanos: file.modifiedNanos,
+          size: file.size,
+          content: noteContents[file.path],
+        ),
+      );
+    }
+    return rust.scanSaf(
+      vaultPath: vaultUri,
+      indexPath: indexPath,
+      notes: notes,
+      filePaths: files.map((file) => file.path).toList(growable: false),
     );
   }
 
@@ -186,35 +227,103 @@ class RustGalleryRepository implements GalleryRepository {
     String indexPath,
     String cachePath,
     int mediaId,
-  ) => rust.getThumbnail(
-    vaultPath: vaultPath,
-    indexPath: indexPath,
-    cachePath: cachePath,
-    mediaId: mediaId,
-    size: 320,
-  );
+  ) async {
+    if (vaultPath.startsWith('content://')) {
+      final cacheKey = '$vaultPath:$indexPath:$mediaId';
+      final pending = _safThumbnailLoads[cacheKey];
+      if (pending != null) return pending;
+      late final Future<Uint8List?> loading;
+      loading = _loadSafThumbnail(vaultPath, indexPath, cachePath, mediaId)
+          .whenComplete(() {
+            if (identical(_safThumbnailLoads[cacheKey], loading)) {
+              _safThumbnailLoads.remove(cacheKey);
+            }
+          });
+      _safThumbnailLoads[cacheKey] = loading;
+      return loading;
+    }
+
+    return rust.getThumbnail(
+      vaultPath: vaultPath,
+      indexPath: indexPath,
+      cachePath: cachePath,
+      mediaId: mediaId,
+      size: 320,
+    );
+  }
+
+  Future<Uint8List?> _loadSafThumbnail(
+    String vaultPath,
+    String indexPath,
+    String cachePath,
+    int mediaId,
+  ) async {
+    if (mediaId <= 0) return null;
+    final thumbnailFile = File('$cachePath/saf-v7-$mediaId.png');
+    if (await thumbnailFile.exists()) {
+      final size = await thumbnailFile.length();
+      if (size > 0 && size <= 4 * 1024 * 1024) {
+        await thumbnailFile.setLastModified(DateTime.now());
+        return thumbnailFile.readAsBytes();
+      }
+      await thumbnailFile.delete();
+    }
+    final relativePath = await rust.getMediaRelativePath(
+      vaultPath: vaultPath,
+      indexPath: indexPath,
+      mediaId: mediaId,
+    );
+    if (relativePath == null) return null;
+    final isVideo =
+        await rust.getVideoSourcePath(
+          vaultPath: vaultPath,
+          indexPath: indexPath,
+          mediaId: mediaId,
+        ) !=
+        null;
+    final thumbnail = await const AndroidSafAccess().thumbnail(
+      vaultPath,
+      relativePath,
+      video: isVideo,
+    );
+    if (thumbnail == null) return null;
+    await Directory(cachePath).create(recursive: true);
+    final temporaryFile = File('${thumbnailFile.path}.tmp');
+    await temporaryFile.writeAsBytes(thumbnail, flush: true);
+    await temporaryFile.rename(thumbnailFile.path);
+    await _trimSafThumbnailCache(Directory(cachePath));
+    return thumbnail;
+  }
 
   @override
   Future<String?> getVideoSourcePath(
     String vaultPath,
     String indexPath,
     int mediaId,
-  ) => rust.getVideoSourcePath(
-    vaultPath: vaultPath,
-    indexPath: indexPath,
-    mediaId: mediaId,
-  );
+  ) async {
+    final source = await rust.getVideoSourcePath(
+      vaultPath: vaultPath,
+      indexPath: indexPath,
+      mediaId: mediaId,
+    );
+    if (source == null || !vaultPath.startsWith('content://')) return source;
+    return const AndroidSafAccess().resolveFile(vaultPath, source, video: true);
+  }
 
   @override
   Future<String?> getMediaSourcePath(
     String vaultPath,
     String indexPath,
     int mediaId,
-  ) => rust.getMediaSourcePath(
-    vaultPath: vaultPath,
-    indexPath: indexPath,
-    mediaId: mediaId,
-  );
+  ) async {
+    final source = await rust.getMediaSourcePath(
+      vaultPath: vaultPath,
+      indexPath: indexPath,
+      mediaId: mediaId,
+    );
+    if (source == null || !vaultPath.startsWith('content://')) return source;
+    return const AndroidSafAccess().resolveFile(vaultPath, source);
+  }
 
   @override
   Future<GalleryNoteDetail?> getNoteDetail(
@@ -222,11 +331,31 @@ class RustGalleryRepository implements GalleryRepository {
     String indexPath,
     int noteId,
   ) async {
-    final detail = await rust.getNoteDetail(
-      vaultPath: vaultPath,
-      indexPath: indexPath,
-      noteId: noteId,
-    );
+    final rust.NoteDetail? detail;
+    if (vaultPath.startsWith('content://')) {
+      final path = await rust.getNotePath(
+        vaultPath: vaultPath,
+        indexPath: indexPath,
+        noteId: noteId,
+      );
+      if (path == null) return null;
+      final content = await const AndroidSafAccess().readFile(vaultPath, path);
+      if (content == null) {
+        throw StateError('ノートを読み込めません。アクセス権を確認してください。');
+      }
+      detail = await rust.getNoteDetailSaf(
+        vaultPath: vaultPath,
+        indexPath: indexPath,
+        noteId: noteId,
+        content: content,
+      );
+    } else {
+      detail = await rust.getNoteDetail(
+        vaultPath: vaultPath,
+        indexPath: indexPath,
+        noteId: noteId,
+      );
+    }
     if (detail == null) return null;
     return GalleryNoteDetail(
       id: detail.id,
@@ -277,4 +406,41 @@ class RustGalleryRepository implements GalleryRepository {
           .toList(growable: false),
     );
   }
+}
+
+Future<void> _trimSafThumbnailCache(Directory directory) async {
+  final thumbnails = <({File file, int size, DateTime modified})>[];
+  var totalBytes = 0;
+  await for (final entity in directory.list(followLinks: false)) {
+    if (entity is! File ||
+        !RegExp(r'^saf-(?:v[2-7]-)?[1-9]\d*\.png$')
+            .hasMatch(entity.uri.pathSegments.last)) {
+      continue;
+    }
+    final size = await entity.length();
+    thumbnails.add((
+      file: entity,
+      size: size,
+      modified: await entity.lastModified(),
+    ));
+    totalBytes += size;
+  }
+  thumbnails.sort((left, right) => left.modified.compareTo(right.modified));
+  while (thumbnails.length > 256 || totalBytes > 64 * 1024 * 1024) {
+    final oldest = thumbnails.removeAt(0);
+    await oldest.file.delete();
+    totalBytes -= oldest.size;
+  }
+}
+
+bool _isIgnoredVaultPath(String value) {
+  for (final component in value.split('/')) {
+    if (component.startsWith('.') ||
+        component.contains('.sync-conflict-') ||
+        (component.startsWith('.syncthing.') && component.endsWith('.tmp')) ||
+        component.startsWith('~syncthing~')) {
+      return true;
+    }
+  }
+  return false;
 }

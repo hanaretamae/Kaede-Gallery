@@ -13,6 +13,7 @@ import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import 'package:window_manager/window_manager.dart';
 
 import '../../app_theme.dart';
@@ -20,6 +21,8 @@ import '../../core_api/gallery_appearance.dart';
 import '../../core_api/gallery_providers.dart';
 import '../../core_api/gallery_repository.dart';
 import '../../core_api/gallery_tag_settings.dart';
+import '../../platform/android_video_source.dart';
+import '../../platform/vault_platform.dart';
 
 part 'gallery_jump_dialog.dart';
 part 'gallery_settings_screens.dart';
@@ -158,7 +161,7 @@ class _GalleryLayout extends ConsumerWidget {
         ref.watch(excludedTagsProvider).length +
         ref.watch(selectedVirtualFiltersProvider).length +
         (ref.watch(gallerySearchQueryProvider).isEmpty ? 0 : 1);
-    final vaultName = p.basename(session.vaultPath);
+    final vaultName = vaultDisplayName(session.vaultPath);
     final showItemCount = ref.watch(galleryShowItemCountProvider);
     final displayMode = ref.watch(galleryDisplayModeProvider);
     final loadedCount = showItemCount
@@ -217,7 +220,7 @@ class _GalleryLayout extends ConsumerWidget {
             ),
           const _DisplayModeButton(),
           IconButton(
-            tooltip: '再走査',
+            tooltip: 'Vault の変更を再読み込み',
             onPressed: () => ref.read(vaultSessionProvider.notifier).rescan(),
             icon: const Icon(Icons.refresh),
           ),

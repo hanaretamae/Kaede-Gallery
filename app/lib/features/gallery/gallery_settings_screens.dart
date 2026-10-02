@@ -20,11 +20,10 @@ class _GallerySettingsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('設定')),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Text('外観', style: Theme.of(context).textTheme.titleLarge),
+          _settingsSectionHeading(context, '外観', first: true),
           const _AppearanceSettings(),
-          const SizedBox(height: 16),
           Card(
             color: colorScheme.surfaceContainerLow,
             child: ListTile(
@@ -38,14 +37,13 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text('保管庫', style: Theme.of(context).textTheme.titleLarge),
+          _settingsSectionHeading(context, '保管庫'),
           Card(
             color: colorScheme.surfaceContainerLow,
             child: ListTile(
               leading: const Icon(Icons.folder_outlined),
               title: const Text('選択中の Vault'),
-              subtitle: Text(session.vaultPath),
+              subtitle: Text(vaultDisplayName(session.vaultPath)),
               trailing: IconButton(
                 tooltip: 'Vault を切り替え',
                 icon: const Icon(Icons.folder_open),
@@ -145,8 +143,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text('ノート', style: Theme.of(context).textTheme.titleLarge),
+          _settingsSectionHeading(context, 'ノート'),
           Card(
             color: colorScheme.surfaceContainerLow,
             child: ListTile(
@@ -173,8 +170,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
           ),
-          const SizedBox(height: 16),
-          Text('このアプリについて', style: Theme.of(context).textTheme.titleLarge),
+          _settingsSectionHeading(context, 'このアプリについて'),
           Card(
             color: colorScheme.surfaceContainerLow,
             child: ListTile(
@@ -216,6 +212,21 @@ class _GallerySettingsScreen extends ConsumerWidget {
     );
   }
 }
+
+Widget _settingsSectionHeading(
+  BuildContext context,
+  String title, {
+  bool first = false,
+}) => Padding(
+  padding: EdgeInsets.fromLTRB(4, first ? 8 : 20, 4, 4),
+  child: Text(
+    title,
+    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+      color: Theme.of(context).colorScheme.primary,
+      fontWeight: FontWeight.w600,
+    ),
+  ),
+);
 
 class _PaginationSettingsScreen extends ConsumerWidget {
   const _PaginationSettingsScreen();
@@ -417,6 +428,22 @@ class _DataSettingsScreen extends ConsumerWidget {
     try {
       final appearance = await ref.read(galleryAppearanceProvider.future);
       final tagSettings = await ref.read(galleryTagSettingsProvider.future);
+      final json = const JsonEncoder.withIndent('  ').convert({
+        'version': 1,
+        'appearance': appearance.toJson(),
+        'tags': tagSettings.toJson(),
+      });
+      if (Platform.isAndroid) {
+        final saved = await const AndroidSafAccess().saveJson(
+          'vault-gallery-settings.json',
+          '$json\n',
+        );
+        if (saved && context.mounted) {
+          ScaffoldMessenger.of(context)
+              .showSnackBar(const SnackBar(content: Text('設定をJSONで保存しました。')));
+        }
+        return;
+      }
       final outputPath = await getSaveLocation(
         suggestedName: 'vault-gallery-settings.json',
         acceptedTypeGroups: [
@@ -424,11 +451,15 @@ class _DataSettingsScreen extends ConsumerWidget {
         ],
       );
       if (outputPath == null) return;
-      final json = const JsonEncoder.withIndent('  ').convert({
-        'version': 1,
-        'appearance': appearance.toJson(),
-        'tags': tagSettings.toJson(),
-      });
+      final session = ref.read(vaultSessionProvider).asData?.value;
+      if (await _destinationIsInsideVault(outputPath.path, session)) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Vault 内には保存できません。別の保存先を選択してください。')),
+          );
+        }
+        return;
+      }
       await File(outputPath.path).writeAsString('$json\n', flush: true);
       if (context.mounted) {
         ScaffoldMessenger.of(context)
@@ -445,13 +476,39 @@ class _DataSettingsScreen extends ConsumerWidget {
           const SnackBar(content: Text('設定を読み取れないため、JSONに保存できませんでした。')),
         );
       }
-    } on PlatformException {
+    } on PlatformException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('設定ファイルの保存先を開けませんでした。')));
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              error.code == 'VAULT_READ_ONLY'
+                  ? 'Vault 内には保存できません。別の保存先を選択してください。'
+                  : '設定ファイルの保存先を開けませんでした。',
+            ),
+          ),
+        );
       }
     }
+  }
+
+  Future<bool> _destinationIsInsideVault(
+    String destination,
+    VaultSession? session,
+  ) async {
+    if (session == null || session.vaultPath.startsWith('content://')) {
+      return false;
+    }
+    final vaultRoot = await Directory(session.vaultPath).resolveSymbolicLinks();
+    final outputFile = File(destination);
+    late final String resolvedDestination;
+    if (await outputFile.exists()) {
+      resolvedDestination = await outputFile.resolveSymbolicLinks();
+    } else {
+      final parent = await Directory(p.dirname(destination))
+          .resolveSymbolicLinks();
+      resolvedDestination = p.join(parent, p.basename(destination));
+    }
+    return p.isWithin(vaultRoot, resolvedDestination);
   }
 
   Future<void> _importSettings(BuildContext context, WidgetRef ref) async {
@@ -566,7 +623,6 @@ class _DataSettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.save_alt),
               title: const Text('設定をJSONでエクスポート'),
               subtitle: const Text('外観とタグ設定を1つのJSONファイルに保存します'),
-              trailing: const Icon(Icons.file_download_outlined),
               onTap: () => _exportSettings(context, ref),
             ),
           ),
@@ -576,7 +632,6 @@ class _DataSettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.file_open_outlined),
               title: const Text('設定をJSONからインポート'),
               subtitle: const Text('以前にエクスポートした設定を読み込みます'),
-              trailing: const Icon(Icons.file_upload_outlined),
               onTap: () => _importSettings(context, ref),
             ),
           ),
@@ -586,7 +641,6 @@ class _DataSettingsScreen extends ConsumerWidget {
               leading: const Icon(Icons.settings_backup_restore_outlined),
               title: const Text('設定をリセット'),
               subtitle: const Text('外観・ノート設定を既定値に戻します'),
-              trailing: const Icon(Icons.restart_alt),
               onTap: () => _resetSettings(context, ref),
             ),
           ),

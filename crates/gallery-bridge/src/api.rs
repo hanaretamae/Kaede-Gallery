@@ -2,8 +2,9 @@ use flutter_rust_bridge::frb;
 use gallery_core::{
     Category as CoreCategory, CoreError, DetailLine as CoreDetailLine, Gallery,
     MediaSummary as CoreMediaSummary, NoteDetail as CoreNoteDetail, NoteSummary as CoreNoteSummary,
-    ScanReport as CoreScanReport, VirtualFilter as CoreVirtualFilter, load_selected_vault,
-    prepare_private_app_directory, save_selected_vault,
+    SafNoteDocument, ScanReport as CoreScanReport, VirtualFilter as CoreVirtualFilter,
+    load_selected_vault, prepare_private_app_directory, prepare_private_app_directory_for_saf,
+    save_selected_vault, save_selected_vault_saf,
 };
 use std::path::Path;
 
@@ -12,6 +13,15 @@ use std::path::Path;
 pub struct ScanReport {
     pub notes_indexed: u32,
     pub warnings: u32,
+}
+
+#[frb(non_opaque)]
+#[derive(Clone)]
+pub struct SafNote {
+    pub path: String,
+    pub modified_nanos: i64,
+    pub size: i64,
+    pub content: Option<Vec<u8>>,
 }
 
 #[frb(non_opaque)]
@@ -88,7 +98,11 @@ pub struct NoteDetail {
 }
 
 fn open_gallery(vault_path: &str, index_path: &str) -> Result<Gallery, String> {
-    Gallery::open(Path::new(vault_path), Path::new(index_path)).map_err(error_message)
+    if vault_path.starts_with("content://") {
+        Gallery::open_saf(vault_path, Path::new(index_path)).map_err(error_message)
+    } else {
+        Gallery::open(Path::new(vault_path), Path::new(index_path)).map_err(error_message)
+    }
 }
 
 fn error_message(error: CoreError) -> String {
@@ -103,17 +117,47 @@ pub fn prepare_app_data_directory(
         .map_err(error_message)
 }
 
+pub fn prepare_app_data_directory_saf(directory_path: String) -> Result<(), String> {
+    prepare_private_app_directory_for_saf(Path::new(&directory_path)).map_err(error_message)
+}
+
 pub fn load_vault_path(directory_path: String) -> Result<Option<String>, String> {
     load_selected_vault(Path::new(&directory_path)).map_err(error_message)
 }
 
 pub fn save_vault_path(directory_path: String, vault_path: String) -> Result<String, String> {
-    save_selected_vault(Path::new(&directory_path), Path::new(&vault_path)).map_err(error_message)
+    if vault_path.starts_with("content://") {
+        save_selected_vault_saf(Path::new(&directory_path), &vault_path).map_err(error_message)
+    } else {
+        save_selected_vault(Path::new(&directory_path), Path::new(&vault_path))
+            .map_err(error_message)
+    }
 }
 
 pub fn scan(vault_path: String, index_path: String) -> Result<ScanReport, String> {
     open_gallery(&vault_path, &index_path)?
         .scan()
+        .map(scan_report)
+        .map_err(error_message)
+}
+
+pub fn scan_saf(
+    vault_path: String,
+    index_path: String,
+    notes: Vec<SafNote>,
+    file_paths: Vec<String>,
+) -> Result<ScanReport, String> {
+    let documents = notes
+        .into_iter()
+        .map(|note| SafNoteDocument {
+            path: note.path,
+            modified_nanos: note.modified_nanos,
+            size: note.size,
+            content: note.content,
+        })
+        .collect();
+    Gallery::open_saf(&vault_path, Path::new(&index_path))
+        .and_then(|mut gallery| gallery.scan_saf(documents, file_paths))
         .map(scan_report)
         .map_err(error_message)
 }
@@ -364,12 +408,40 @@ pub fn get_note_detail(
         .map_err(error_message)
 }
 
+pub fn get_note_detail_saf(
+    vault_path: String,
+    index_path: String,
+    note_id: u32,
+    content: Vec<u8>,
+) -> Result<Option<NoteDetail>, String> {
+    open_gallery(&vault_path, &index_path)?
+        .note_detail_saf(i64::from(note_id), &content)
+        .map(|note| note.map(note_detail))
+        .map_err(error_message)
+}
+
+pub fn get_note_path(
+    vault_path: String,
+    index_path: String,
+    note_id: u32,
+) -> Result<Option<String>, String> {
+    open_gallery(&vault_path, &index_path)?
+        .note_path(i64::from(note_id))
+        .map_err(error_message)
+}
+
 pub fn get_media_source_path(
     vault_path: String,
     index_path: String,
     media_id: u32,
 ) -> Result<Option<String>, String> {
-    let path = open_gallery(&vault_path, &index_path)?
+    let gallery = open_gallery(&vault_path, &index_path)?;
+    if vault_path.starts_with("content://") {
+        return gallery
+            .media_relative_path(i64::from(media_id))
+            .map_err(error_message);
+    }
+    let path = gallery
         .media_source_path(i64::from(media_id))
         .map_err(error_message)?;
     path.map(|path| {
@@ -378,6 +450,16 @@ pub fn get_media_source_path(
             .map_err(|_| error_message(CoreError::Io))
     })
     .transpose()
+}
+
+pub fn get_media_relative_path(
+    vault_path: String,
+    index_path: String,
+    media_id: u32,
+) -> Result<Option<String>, String> {
+    open_gallery(&vault_path, &index_path)?
+        .media_relative_path(i64::from(media_id))
+        .map_err(error_message)
 }
 
 pub fn warning_count(vault_path: String, index_path: String) -> Result<u32, String> {
@@ -404,7 +486,13 @@ pub fn get_video_source_path(
     index_path: String,
     media_id: u32,
 ) -> Result<Option<String>, String> {
-    let path = open_gallery(&vault_path, &index_path)?
+    let gallery = open_gallery(&vault_path, &index_path)?;
+    if vault_path.starts_with("content://") {
+        return gallery
+            .video_media_relative_path(i64::from(media_id))
+            .map_err(error_message);
+    }
+    let path = gallery
         .video_source_path(i64::from(media_id))
         .map_err(error_message)?;
     path.map(|path| {

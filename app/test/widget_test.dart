@@ -2,10 +2,13 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:dbus/dbus.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:video_player/video_player.dart';
 import 'package:vault_gallery/app_theme.dart';
 import 'package:vault_gallery/app.dart';
 import 'package:vault_gallery/core_api/gallery_appearance.dart';
@@ -14,6 +17,7 @@ import 'package:vault_gallery/core_api/gallery_providers.dart';
 import 'package:vault_gallery/core_api/gallery_repository.dart';
 import 'package:vault_gallery/core_api/gallery_tag_settings.dart';
 import 'package:vault_gallery/platform/vault_platform.dart';
+import 'package:vault_gallery/platform/android_video_source.dart';
 
 /// Finds the "content" scrollable to drag during [WidgetController.scrollUntilVisible]
 /// calls, explicitly excluding any [Scrollable] created internally by a
@@ -48,6 +52,246 @@ Future<void> _scrollNoteStructureUntilVisible(
 }
 
 void main() {
+  test('SAF Vault names use the selected document tree folder', () {
+    expect(
+      vaultDisplayName(
+        'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FObsidian%2FArts',
+      ),
+      'Arts',
+    );
+    expect(vaultDisplayName('/home/user/Vault'), 'Vault');
+  });
+
+  test('settings export asks for a user-selected JSON destination', () async {
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    MethodCall? exportCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          exportCall = call;
+          return true;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    final saved = await const AndroidSafAccess().saveJson(
+      'vault-gallery-settings.json',
+      '{"version":1}\n',
+    );
+
+    expect(saved, isTrue);
+    expect(exportCall?.method, 'saveJson');
+    expect(exportCall?.arguments, {
+      'fileName': 'vault-gallery-settings.json',
+      'content': Uint8List.fromList(utf8.encode('{"version":1}\n')),
+    });
+  });
+
+  test('Android viewer requests a display-sized native image decode', () async {
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    MethodCall? imageCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          imageCall = call;
+          return Uint8List.fromList([1, 2, 3]);
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    final image = await const AndroidSafAccess().readMedia(
+      'content://provider/tree/root',
+      'content://provider/tree/root/document/media',
+    );
+
+    expect(image, [1, 2, 3]);
+    expect(imageCall?.method, 'readMediaImage');
+    expect(imageCall?.arguments, {
+      'vaultUri': 'content://provider/tree/root',
+      'mediaUri': 'content://provider/tree/root/document/media',
+      'maxDimension': 2048,
+    });
+  });
+
+  test('folder action asks the system to open the containing folder', () async {
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    MethodCall? openCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          openCall = call;
+          return true;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    await const AndroidSafAccess().openMedia(
+      'content://provider/tree/root',
+      'content://provider/tree/root/document/root%2Fmedia%2Fimage.webp',
+      openFolder: true,
+    );
+
+    expect(openCall?.method, 'openMedia');
+    expect(openCall?.arguments, {
+      'vaultUri': 'content://provider/tree/root',
+      'mediaUri':
+          'content://provider/tree/root/document/root%2Fmedia%2Fimage.webp',
+      'openFolder': true,
+    });
+  });
+
+  test('video thumbnail requests use the video frame extractor', () async {
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    MethodCall? thumbnailCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          thumbnailCall = call;
+          return Uint8List.fromList([1, 2, 3]);
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    final bytes = await const AndroidSafAccess().thumbnail(
+      'content://provider/tree/root',
+      'folder/clip.mp4',
+      video: true,
+    );
+
+    expect(bytes, [1, 2, 3]);
+    expect(thumbnailCall?.method, 'thumbnail');
+    expect(thumbnailCall?.arguments, {
+      'vaultUri': 'content://provider/tree/root',
+      'path': 'folder/clip.mp4',
+      'video': true,
+      'size': 320,
+    });
+  });
+
+  test('Android SAF note reads batch URIs from the tree listing', () async {
+    const vaultUri = 'content://provider/tree/root';
+    const documentUri = 'content://provider/tree/root/document/root%2Fnote.md';
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    final calls = <MethodCall>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          calls.add(call);
+          return switch (call.method) {
+            'listFiles' => [
+              {
+                'path': 'note.md',
+                'modifiedNanos': 0,
+                'size': 1,
+                'documentUri': documentUri,
+              },
+            ],
+            'readListedFiles' => [
+              {
+                'path': 'note.md',
+                'content': Uint8List.fromList([1]),
+              },
+            ],
+            _ => null,
+          };
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    const access = AndroidSafAccess();
+    final files = await access.listFiles(vaultUri);
+    final contents = await access.readListedFiles(vaultUri, files);
+
+    expect(contents['note.md'], [1]);
+    expect(calls.map((call) => call.method), ['listFiles', 'readListedFiles']);
+    expect(calls.last.arguments, {
+      'vaultUri': vaultUri,
+      'documents': [
+        {'path': 'note.md', 'documentUri': documentUri, 'size': 1},
+      ],
+    });
+  });
+
+  test('Android SAF note batches stay within the file-count bound', () async {
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    var batchCount = 0;
+    final batchSizes = <int>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          expect(call.method, 'readListedFiles');
+          final arguments = call.arguments! as Map<Object?, Object?>;
+          final documents = arguments['documents']! as List<Object?>;
+          batchCount++;
+          batchSizes.add(documents.length);
+          return documents
+              .map((document) {
+                final path = (document! as Map<Object?, Object?>)['path'];
+                return {
+                  'path': path,
+                  'content': Uint8List.fromList([1]),
+                };
+              })
+              .toList(growable: false);
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    final files = List.generate(
+      130,
+      (index) => SafFileEntry(
+        path: 'note-$index.md',
+        modifiedNanos: 0,
+        size: 1,
+        documentUri: 'content://provider/tree/root/document/$index',
+      ),
+    );
+    final contents = await const AndroidSafAccess().readListedFiles(
+      'content://provider/tree/root',
+      files,
+    );
+
+    expect(batchCount, 2);
+    expect(batchSizes, [128, 2]);
+    expect(contents.length, 130);
+  });
+
+  test('Android video source preserves SAF content URIs', () async {
+    final previousPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previousPlatform;
+    });
+
+    final controller = androidVideoControllerForSource(
+      'content://com.android.externalstorage.documents/tree/primary%3ADocuments',
+    );
+    expect(controller.dataSourceType, DataSourceType.contentUri);
+    expect(controller.dataSource, startsWith('content://'));
+    await controller.dispose();
+  });
+
+  test('Android video source supports validated local paths', () async {
+    final previousPlatform = debugDefaultTargetPlatformOverride;
+    debugDefaultTargetPlatformOverride = TargetPlatform.android;
+    addTearDown(() {
+      debugDefaultTargetPlatformOverride = previousPlatform;
+    });
+
+    final controller = androidVideoControllerForSource(
+      '/storage/emulated/0/Documents/Syncthing/clip.mp4',
+    );
+    expect(controller.dataSourceType, DataSourceType.file);
+    expect(controller.dataSource, startsWith('file://'));
+    await controller.dispose();
+  });
+
   test('tag rules support prefixes, hiding, color overrides and JSON', () {
     const defaults = GalleryTagSettings();
     expect(defaults.includes('source/type/human'), isTrue);
@@ -203,7 +447,25 @@ void main() {
     );
   });
 
-  test('pure black preserves Material You accents and blacks all surfaces', () {
+  test(
+    'Material You palette derives distinct accents from the system seed',
+    () {
+      final systemScheme = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF607DAD),
+        brightness: Brightness.light,
+      );
+      final scheme = materialYouScheme(
+        systemScheme,
+        brightness: Brightness.light,
+      );
+
+      expect(scheme.primary, isNot(scheme.secondary));
+      expect(scheme.secondary, isNot(scheme.tertiary));
+      expect(scheme.surface, isNot(scheme.surfaceContainerHighest));
+    },
+  );
+
+  test('pure black preserves accents and distinguishes item surfaces', () {
     final systemScheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF4D69A8),
       brightness: Brightness.dark,
@@ -221,11 +483,12 @@ void main() {
     expect(scheme.surface, Colors.black);
     expect(scheme.surfaceDim, Colors.black);
     expect(scheme.surfaceBright, Colors.black);
-    expect(scheme.surfaceContainerLowest, Colors.black);
-    expect(scheme.surfaceContainerLow, Colors.black);
-    expect(scheme.surfaceContainer, Colors.black);
-    expect(scheme.surfaceContainerHigh, Colors.black);
-    expect(scheme.surfaceContainerHighest, Colors.black);
+    expect(scheme.surfaceContainerLowest, isNot(Colors.black));
+    expect(scheme.surfaceContainerLow, isNot(Colors.black));
+    expect(scheme.surfaceContainer, isNot(Colors.black));
+    expect(scheme.surfaceContainerHigh, isNot(Colors.black));
+    expect(scheme.surfaceContainerHighest, isNot(Colors.black));
+    expect(scheme.surfaceContainerLow, isNot(scheme.surfaceContainerHighest));
     expect(theme.scaffoldBackgroundColor, Colors.black);
 
     final lightSystemScheme = ColorScheme.fromSeed(
@@ -717,6 +980,14 @@ void main() {
     await tester.tap(find.text('インポート・エクスポート・リセット'));
     await tester.pumpAndSettle();
     expect(find.text('設定をJSONからインポート'), findsOneWidget);
+    for (final title in ['設定をJSONでエクスポート', '設定をJSONからインポート', '設定をリセット']) {
+      final tile = tester.widget<ListTile>(
+        find
+            .ancestor(of: find.text(title), matching: find.byType(ListTile))
+            .first,
+      );
+      expect(tile.trailing, isNull);
+    }
     await tester.tap(find.text('設定をリセット'));
     await tester.pumpAndSettle();
     expect(find.text('既定値に戻す'), findsOneWidget);
@@ -1376,6 +1647,35 @@ void main() {
     expect(find.text('2 / 2'), findsOneWidget);
   });
 
+  testWidgets('horizontal trackpad scrolling changes viewer media', (
+    tester,
+  ) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _tagSettingsOverride,
+          galleryRepositoryProvider.overrideWithValue(
+            _FakeRepository(savedPath: '/fictional-vault'),
+          ),
+          vaultPlatformProvider.overrideWithValue(_FakeVaultPlatform()),
+        ],
+        child: const VaultGalleryApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Card).first);
+    await tester.pumpAndSettle();
+
+    await tester.sendEventToBinding(
+      const PointerScrollEvent(
+        position: Offset(400, 200),
+        scrollDelta: Offset(30, 0),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+  });
+
   testWidgets('omits post text section when a note has no post text', (
     tester,
   ) async {
@@ -1429,7 +1729,9 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('画像・動画の既定アプリで開く'), findsOneWidget);
-    expect(find.text('ファイルマネージャで開く'), findsOneWidget);
+    expect(find.text('ファイルマネージャーでフォルダーを開く'), findsOneWidget);
+    expect(find.text('開くアプリを選択します'), findsOneWidget);
+    expect(find.textContaining('Android'), findsNothing);
   });
 
   testWidgets('resets image zoom when details are shown', (tester) async {
@@ -1455,7 +1757,9 @@ void main() {
     var viewerImage = tester.widget<InteractiveViewer>(
       find.byType(InteractiveViewer),
     );
-    expect(tester.widget<Image>(find.byType(Image).last).fit, BoxFit.cover);
+    final image = tester.widget<Image>(find.byType(Image).last);
+    expect(image.fit, BoxFit.contain);
+    expect(image.gaplessPlayback, isTrue);
     viewerImage.transformationController!.value = Matrix4.diagonal3Values(
       2,
       2,

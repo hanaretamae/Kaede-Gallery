@@ -14,6 +14,14 @@ abstract final class GalleryShape {
   static const extraLarge = 36.0;
 }
 
+ColorScheme materialYouScheme(
+  ColorScheme systemScheme, {
+  required Brightness brightness,
+}) => ColorScheme.fromSeed(
+  seedColor: systemScheme.primary,
+  brightness: brightness,
+);
+
 ThemeData galleryTheme(
   Color seed, {
   Brightness brightness = Brightness.light,
@@ -28,11 +36,11 @@ ThemeData galleryTheme(
           surface: Colors.black,
           surfaceDim: Colors.black,
           surfaceBright: Colors.black,
-          surfaceContainerLowest: Colors.black,
-          surfaceContainerLow: Colors.black,
-          surfaceContainer: Colors.black,
-          surfaceContainerHigh: Colors.black,
-          surfaceContainerHighest: Colors.black,
+          surfaceContainerLowest: const Color(0xFF101012),
+          surfaceContainerLow: const Color(0xFF191A1E),
+          surfaceContainer: const Color(0xFF202126),
+          surfaceContainerHigh: const Color(0xFF27282E),
+          surfaceContainerHighest: const Color(0xFF2E2F35),
         )
       : generatedScheme;
   final outline = colorScheme.outlineVariant;
