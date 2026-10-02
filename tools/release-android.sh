@@ -53,6 +53,15 @@ keepassxc_attachment=${KEEPASSXC_ATTACHMENT:-release.jks}
   fail "set KEEPASSXC_DATABASE to a readable KeePassXC database"
 [[ -n ${KEEPASSXC_KEY_FILE:-} && -f $KEEPASSXC_KEY_FILE && -r $KEEPASSXC_KEY_FILE ]] ||
   fail "set KEEPASSXC_KEY_FILE to a readable key file"
+is_kdbx() {
+  [[ $(head -c 4 -- "$1" | od -An -tx1 | tr -d ' \n') == 03d9a29a ]]
+}
+if ! is_kdbx "$keepassxc_database"; then
+  if is_kdbx "$KEEPASSXC_KEY_FILE"; then
+    fail "KEEPASSXC_DATABASE and KEEPASSXC_KEY_FILE look swapped"
+  fi
+  fail "KEEPASSXC_DATABASE is not a KeePass (.kdbx) database"
+fi
 keepassxc_auth=(--key-file "$KEEPASSXC_KEY_FILE")
 [[ -n ${XDG_RUNTIME_DIR:-} && -d $XDG_RUNTIME_DIR && -O $XDG_RUNTIME_DIR ]] ||
   fail "XDG_RUNTIME_DIR must be a private runtime directory"
