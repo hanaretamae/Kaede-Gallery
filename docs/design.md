@@ -291,9 +291,11 @@ The gallery opens a detail viewer from either grid mode. It displays images
 with zoom, plays local videos in-app, and shows extracted note metadata, tags,
 `覚書`, and `関連` text without rendering Markdown. Media source paths are
 returned only for indexed media that still resolves inside the canonical
-Vault. The Obsidian `obsidian://open` URI uses the absolute note path to avoid
-ambiguity when vaults have duplicate names; URI launching occurs only after an
-explicit user action. HTTP(S) source links are also explicit user actions;
+Vault. The Obsidian `obsidian://open` URI uses the absolute note path for
+filesystem Vaults and the selected Vault name plus relative note path for
+Android SAF Vaults, which do not expose a stable filesystem path. URI launching
+occurs only after an explicit user action. HTTP(S) source links are also
+explicit user actions;
 relative Markdown note links and Obsidian wikilinks in `関連` resolve to
 parseable paths inside the Vault and open in a new in-app viewer. X/Twitter post
 URLs produce an explicit profile link for the author. The viewer can open the

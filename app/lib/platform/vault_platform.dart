@@ -112,6 +112,17 @@ String vaultDisplayName(String vaultPath) {
   return name.isEmpty ? vaultPath : name;
 }
 
+Uri obsidianOpenUri(String vaultPath, String notePath) {
+  final queryParameters = vaultPath.startsWith('content://')
+      ? {'vault': vaultDisplayName(vaultPath), 'file': notePath}
+      : {'path': path.join(vaultPath, notePath)};
+  return Uri(
+    scheme: 'obsidian',
+    host: 'open',
+    queryParameters: queryParameters,
+  );
+}
+
 class AndroidSafAccess implements SafVaultAccess {
   const AndroidSafAccess();
 

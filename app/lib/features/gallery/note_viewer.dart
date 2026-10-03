@@ -473,19 +473,11 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
                       onOpenProfile: profileUrl == null
                           ? null
                           : () => _openExternalUri(context, profileUrl),
-                      onOpenObsidian:
-                          session == null ||
-                              session.vaultPath.startsWith('content://')
+                      onOpenObsidian: session == null
                           ? null
                           : () => _openExternalUri(
                               context,
-                              Uri(
-                                scheme: 'obsidian',
-                                host: 'open',
-                                queryParameters: {
-                                  'path': p.join(session.vaultPath, note.path),
-                                },
-                              ),
+                              obsidianOpenUri(session.vaultPath, note.path),
                             ),
                       onOpenPost: !_isWebUri(note.url)
                           ? null

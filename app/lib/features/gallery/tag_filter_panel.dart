@@ -184,56 +184,43 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                     margin: EdgeInsets.zero,
                     child: Padding(
                       padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      child: Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.only(bottom: 8),
-                            child: Text(
-                              '並び順',
-                              style: Theme.of(context).textTheme.titleSmall,
-                            ),
-                          ),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              SegmentedButton<GallerySortField>(
-                                segments: [
-                                  for (final field in GallerySortField.values)
-                                    ButtonSegment(
-                                      value: field,
-                                      label: Text(field.label),
-                                    ),
-                                ],
-                                selected: {sort.field},
-                                showSelectedIcon: false,
-                                onSelectionChanged: (selection) => ref
-                                    .read(gallerySortProvider.notifier)
-                                    .setField(selection.single),
-                              ),
-                              SegmentedButton<GallerySortDirection>(
-                                segments: [
-                                  for (final direction
-                                      in GallerySortDirection.values)
-                                    ButtonSegment(
-                                      value: direction,
-                                      icon: Icon(
-                                        direction ==
-                                                GallerySortDirection.ascending
-                                            ? Icons.arrow_upward
-                                            : Icons.arrow_downward,
-                                      ),
-                                      label: Text(direction.label),
-                                    ),
-                                ],
-                                selected: {sort.direction},
-                                showSelectedIcon: false,
-                                onSelectionChanged: (selection) => ref
-                                    .read(gallerySortProvider.notifier)
-                                    .setDirection(selection.single),
-                              ),
+                          SegmentedButton<GallerySortField>(
+                            segments: [
+                              for (final field in GallerySortField.values)
+                                ButtonSegment(
+                                  value: field,
+                                  label: Text(field.label),
+                                ),
                             ],
+                            selected: {sort.field},
+                            showSelectedIcon: false,
+                            onSelectionChanged: (selection) => ref
+                                .read(gallerySortProvider.notifier)
+                                .setField(selection.single),
+                          ),
+                          SegmentedButton<GallerySortDirection>(
+                            segments: [
+                              for (final direction
+                                  in GallerySortDirection.values)
+                                ButtonSegment(
+                                  value: direction,
+                                  icon: Icon(
+                                    direction == GallerySortDirection.ascending
+                                        ? Icons.arrow_upward
+                                        : Icons.arrow_downward,
+                                  ),
+                                  label: Text(direction.label),
+                                ),
+                            ],
+                            selected: {sort.direction},
+                            showSelectedIcon: false,
+                            onSelectionChanged: (selection) => ref
+                                .read(gallerySortProvider.notifier)
+                                .setDirection(selection.single),
                           ),
                         ],
                       ),

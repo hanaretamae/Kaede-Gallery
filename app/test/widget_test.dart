@@ -62,6 +62,23 @@ void main() {
     expect(vaultDisplayName('/home/user/Vault'), 'Vault');
   });
 
+  test('Obsidian links target a SAF vault and a relative note path', () {
+    final uri = obsidianOpenUri(
+      'content://com.android.externalstorage.documents/tree/primary%3ADocuments%2FObsidian%2FArts',
+      'Notes/example.md',
+    );
+
+    expect(uri.scheme, 'obsidian');
+    expect(uri.host, 'open');
+    expect(uri.queryParameters, {'vault': 'Arts', 'file': 'Notes/example.md'});
+  });
+
+  test('Obsidian links use absolute paths for filesystem vaults', () {
+    final uri = obsidianOpenUri('/home/user/Vault', 'Notes/example.md');
+
+    expect(uri.queryParameters, {'path': '/home/user/Vault/Notes/example.md'});
+  });
+
   test('settings export asks for a user-selected JSON destination', () async {
     const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
     MethodCall? exportCall;
@@ -885,7 +902,7 @@ void main() {
     await tester.tap(find.byTooltip('タグで絞り込む'));
     await tester.pumpAndSettle();
 
-    expect(find.text('並び順'), findsOneWidget);
+    expect(find.text('並び順'), findsNothing);
     expect(
       repository.lastNoteSort,
       const GallerySort(
@@ -906,7 +923,8 @@ void main() {
       ),
     );
     expect(repository.noteQueryOffsets.last, 0);
-    Navigator.of(tester.element(find.text('並び順'))).pop();
+    Navigator.of(tester.element(find.byType(SegmentedButton<GallerySortField>)))
+        .pop();
     await tester.pumpAndSettle();
     await tester.tap(find.byTooltip('表示方法'));
     await tester.pumpAndSettle();
