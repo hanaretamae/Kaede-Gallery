@@ -93,11 +93,12 @@ index and SQLite sidecars, scan summary, document-URI mapping, and thumbnail
 cache, then releases its persisted Android read grant. It does not modify the
 Vault or remove global appearance and note-structure settings. Report cleanup
 or grant-release failures; never report success when either operation fails.
-Opening a media item's containing folder offers the read-only folder document to
-the system `ACTION_VIEW` resolver so the user can select an installed file
-manager. Some file managers may not support directory documents; report that
-failure rather than opening a folder picker. Opening an individual media file
-may also use a read-only `ACTION_VIEW` grant.
+Opening a media item in another application shows the Android `ACTION_VIEW`
+chooser and grants read-only access to the selected media document. On Linux,
+the file-manager action uses `org.freedesktop.FileManager1.ShowItems` to open
+the containing location and select the media item. Android file-manager
+selection opens the selected media document with a read-only grant instead of
+opening a folder picker.
 
 Material 3 Expressive has official design guidance, including expanded tonal
 color, typographic hierarchy, flexible shape, and more natural motion:
@@ -298,9 +299,9 @@ occurs only after an explicit user action. HTTP(S) source links are also
 explicit user actions;
 relative Markdown note links and Obsidian wikilinks in `関連` resolve to
 parseable paths inside the Vault and open in a new in-app viewer. X/Twitter post
-URLs produce an explicit profile link for the author. The viewer can open the
-current media in its system-default application or open its containing
-directory in the file manager, also only after an explicit action.
+URLs produce an explicit profile link for the author. The viewer can choose an
+application to open the current media or reveal the selected item in the file
+manager, also only after an explicit action.
 When a note filename follows `<username>-on-X-<excerpt>`, the viewer title
 uses the excerpt. A leading standalone author link is extracted and excluded
 from the post text before the `文書`/`関連`/`覚書` section;

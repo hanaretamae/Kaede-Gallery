@@ -218,23 +218,27 @@ class MainActivity : FlutterActivity() {
             try {
                 val vault = requiredVault(call.argument("vaultUri"))
                 val mediaUri = call.argument<String>("mediaUri")?.let(Uri::parse)
-                val openFolder = call.argument<Boolean>("openFolder") ?: false
-                val intent = createMediaOpenIntent(vault, mediaUri, openFolder)
+                val revealInFileManager =
+                    call.argument<Boolean>("revealInFileManager") ?: false
+                val intent = createMediaOpenIntent(vault, mediaUri, revealInFileManager)
                 mainHandler.post {
                     try {
                         startActivity(
-                            if (openFolder) {
-                                Intent.createChooser(intent, "フォルダーを開く")
-                            } else {
-                                intent
-                            },
+                            Intent.createChooser(
+                                intent,
+                                if (revealInFileManager) {
+                                    "ファイルを表示するアプリを選択"
+                                } else {
+                                    "画像・動画を開くアプリを選択"
+                                },
+                            ),
                         )
                         result.success(true)
                     } catch (_: UnsupportedOperationException) {
                         result.error(
                             "SAF_UNSUPPORTED",
-                            if (openFolder) {
-                                "The selected app cannot open this folder."
+                            if (revealInFileManager) {
+                                "The selected app cannot show this media file."
                             } else {
                                 "The selected app cannot open this media file."
                             },
@@ -243,8 +247,8 @@ class MainActivity : FlutterActivity() {
                     } catch (_: Exception) {
                         result.error(
                             "SAF_OPEN_FAILED",
-                            if (openFolder) {
-                                "The selected folder could not be opened."
+                            if (revealInFileManager) {
+                                "The media file could not be shown."
                             } else {
                                 "The selected media file could not be opened."
                             },
@@ -873,27 +877,17 @@ class MainActivity : FlutterActivity() {
     private fun createMediaOpenIntent(
         tree: Uri,
         mediaUri: Uri?,
-        openFolder: Boolean,
+        revealInFileManager: Boolean,
     ): Intent {
-        val target: Uri
-        val mimeType: String
-        if (openFolder) {
-            val media = checkedMediaUri(tree, mediaUri ?: error("Invalid media URI"))
-            val documentId = DocumentsContract.getDocumentId(media)
-            val separator = documentId.lastIndexOf('/')
-            val folderId = if (separator < 0) documentId else documentId.substring(0, separator)
-            target = DocumentsContract.buildDocumentUriUsingTree(tree, folderId)
-            mimeType = DocumentsContract.Document.MIME_TYPE_DIR
+        val target = checkedMediaUri(tree, mediaUri ?: error("Invalid media URI"))
+        val mimeType = if (revealInFileManager) {
+            "*/*"
         } else {
-            target = checkedMediaUri(tree, mediaUri ?: error("Invalid media URI"))
-            mimeType = contentResolver.getType(target) ?: "*/*"
+            contentResolver.getType(target) ?: "*/*"
         }
         return Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(target, mimeType)
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            if (openFolder) {
-                addFlags(Intent.FLAG_GRANT_PREFIX_URI_PERMISSION)
-            }
         }
     }
 

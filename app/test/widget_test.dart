@@ -171,7 +171,7 @@ void main() {
     });
   });
 
-  test('folder action asks the system to open the containing folder', () async {
+  test('file manager action targets the selected file', () async {
     const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
     MethodCall? openCall;
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
@@ -187,7 +187,7 @@ void main() {
     await const AndroidSafAccess().openMedia(
       'content://provider/tree/root',
       'content://provider/tree/root/document/root%2Fmedia%2Fimage.webp',
-      openFolder: true,
+      revealInFileManager: true,
     );
 
     expect(openCall?.method, 'openMedia');
@@ -195,7 +195,7 @@ void main() {
       'vaultUri': 'content://provider/tree/root',
       'mediaUri':
           'content://provider/tree/root/document/root%2Fmedia%2Fimage.webp',
-      'openFolder': true,
+      'revealInFileManager': true,
     });
   });
 
@@ -1916,9 +1916,7 @@ void main() {
     expect(find.text('ONEちゃん'), findsNothing);
   });
 
-  testWidgets('offers external media and containing-folder actions', (
-    tester,
-  ) async {
+  testWidgets('offers app selection and file manager actions', (tester) async {
     final repository = _FakeRepository(
       savedPath: '/fictional-vault',
       mediaSourcePath: '/fictional-vault/media/image.webp',
@@ -1941,9 +1939,8 @@ void main() {
     await tester.tap(find.byTooltip('メディアを開く'));
     await tester.pumpAndSettle();
 
-    expect(find.text('画像・動画の既定アプリで開く'), findsOneWidget);
-    expect(find.text('ファイルマネージャーでフォルダーを開く'), findsOneWidget);
-    expect(find.text('開くアプリを選択します'), findsOneWidget);
+    expect(find.text('画像・動画を開くアプリを選択'), findsOneWidget);
+    expect(find.text('ファイルマネージャーでファイルを表示'), findsOneWidget);
     expect(find.textContaining('Android'), findsNothing);
   });
 

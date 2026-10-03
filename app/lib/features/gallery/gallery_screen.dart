@@ -3,12 +3,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math' as math;
 
+import 'package:dbus/dbus.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:file_selector/file_selector.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
@@ -23,6 +24,7 @@ import '../../core_api/gallery_providers.dart';
 import '../../core_api/gallery_repository.dart';
 import '../../core_api/gallery_tag_settings.dart';
 import '../../platform/android_video_source.dart';
+import '../../platform/linux_file_manager.dart';
 import '../../platform/vault_platform.dart';
 
 part 'gallery_jump_dialog.dart';

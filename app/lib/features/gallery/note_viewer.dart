@@ -679,7 +679,7 @@ Future<void> _showMediaOpenActions(
   required SafVaultAccess safAccess,
   String? vaultPath,
 }) async {
-  final openFolder = await showModalBottomSheet<bool>(
+  final action = await showModalBottomSheet<_MediaOpenAction>(
     context: context,
     showDragHandle: true,
     builder: (context) => SafeArea(
@@ -688,43 +688,69 @@ Future<void> _showMediaOpenActions(
         children: [
           ListTile(
             leading: const Icon(Icons.open_in_new),
-            title: const Text('画像・動画の既定アプリで開く'),
-            onTap: () => Navigator.of(context).pop(false),
+            title: const Text('画像・動画を開くアプリを選択'),
+            onTap: () => Navigator.of(context).pop(_MediaOpenAction.chooseApp),
           ),
           ListTile(
             leading: const Icon(Icons.folder_open),
-            title: const Text('ファイルマネージャーでフォルダーを開く'),
-            subtitle: const Text('開くアプリを選択します'),
-            onTap: () => Navigator.of(context).pop(true),
+            title: const Text('ファイルマネージャーでファイルを表示'),
+            onTap: () =>
+                Navigator.of(context).pop(_MediaOpenAction.revealInFileManager),
           ),
         ],
       ),
     ),
   );
-  if (openFolder == null || !context.mounted) return;
+  if (action == null || !context.mounted) return;
+  final revealInFileManager = action == _MediaOpenAction.revealInFileManager;
   if (mediaPath.startsWith('content://')) {
     if (vaultPath == null || !vaultPath.startsWith('content://')) return;
     try {
-      await safAccess.openMedia(vaultPath, mediaPath, openFolder: openFolder);
+      await safAccess.openMedia(
+        vaultPath,
+        mediaPath,
+        revealInFileManager: revealInFileManager,
+      );
     } on PlatformException catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
             error.code == 'SAF_UNSUPPORTED'
-                ? '選択したアプリで開けませんでした。'
-                : 'メディアまたはフォルダーを開けませんでした。',
+                ? '選択したアプリでファイルを表示できませんでした。'
+                : 'メディアを開けませんでした。',
           ),
         ),
       );
     }
     return;
   }
-  final uri = openFolder
-      ? Uri.directory(p.dirname(mediaPath))
-      : Uri.file(mediaPath);
+  if (revealInFileManager && Platform.isLinux) {
+    try {
+      await revealFileInLinuxFileManager(mediaPath);
+    } on DBusMethodResponseException {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ファイルマネージャーでファイルを表示できませんでした。')),
+      );
+    } on DBusReplySignatureException {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('ファイルマネージャーでファイルを表示できませんでした。')),
+      );
+    } on SocketException {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('ファイルマネージャーを起動できませんでした。')));
+    }
+    return;
+  }
+  final uri = Uri.file(mediaPath);
   await _openExternalUri(context, uri);
 }
+
+enum _MediaOpenAction { chooseApp, revealInFileManager }
 
 class _ViewerBottomOverlay extends StatelessWidget {
   const _ViewerBottomOverlay({
