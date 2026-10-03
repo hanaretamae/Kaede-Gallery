@@ -196,25 +196,28 @@ DB とキーファイルの場所は端末ごとに異なるため、リポジ�
 渡します。署名鍵はユーザー専用の `XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。
 署名情報を持つ Gradle プロセスは常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
 
-まず、リポジトリのルートで tag を作成して push します。
+main へのリリースコミットを push した後、`app/pubspec.yaml` の version と一致する
+タグ（`vMAJOR.MINOR.PATCH`）を作成して push します。`vX.Y.Z` は実際のタグに置き換えてください。
 
 ```sh
-git tag -a v1.0.1 -m v1.0.1
-git push origin v1.0.1
+git tag -a vX.Y.Z -m vX.Y.Z
+git push origin vX.Y.Z
 ```
 
-次に、署名ビルドと Release 作成を1コマンドで実行します。DB（`.kdbx`）とキーファイルの
-絶対パスを環境変数で渡します（`/path/to/...` は自分の環境のパスに読み替えてください。
-実在の場所をこのリポジトリに書かないでください）。キーファイルは必須です。
+タグを push した後、以下のコマンドで署名 APK をビルドし、検証して GitHub Release に添付します。
+`KEEPASSXC_DATABASE` には KeePassXC データベース（`.kdbx`）の絶対パス、
+`KEEPASSXC_KEY_FILE` にはキーファイルの絶対パスを指定してください。パスは実際の保存場所に置き換え、
+このリポジトリには書かないでください。タグもリリース対象のバージョンに置き換えます。
 
 ```sh
-KEEPASSXC_DATABASE=/path/to/vault.kdbx \
-KEEPASSXC_KEY_FILE=/path/to/key.keyx \
-nix develop --command ./tools/release-android.sh v1.0.1
+KEEPASSXC_DATABASE="/path/to/keepass.kdbx" \
+KEEPASSXC_KEY_FILE="/path/to/key-file.keyx" \
+nix develop --command ./tools/release-android.sh vX.Y.Z
 ```
 
-データベースが `.kdbx` でない場合や、DB とキーファイルを取り違えた場合は、
-スクリプトが検査して止まります。
+実行前に、コマンド内の `vX.Y.Z` を `app/pubspec.yaml` および `CHANGELOG.md` に記載した
+リリースバージョンに置き換えてください。データベースが `.kdbx` でない場合や、DB とキーファイルを
+取り違えた場合は、スクリプトが検査して止まります。
 
 実行の流れは次のとおりです。
 
