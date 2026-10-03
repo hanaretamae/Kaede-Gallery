@@ -244,8 +244,9 @@ nix develop --command ./tools/release-android.sh vX.Y.Z
 DB とキーファイルは Vault や Git 管理下に置かず、端末上の安全な場所に保管してください。
 実行環境には mode 700 の `XDG_RUNTIME_DIR` が必要です。
 
-スクリプトは tag/version、clean な作業ツリー、push 済み main/tag（タグは現在の HEAD を指す必要があります）、
-GitHub 認証を検査し、
+スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査します。
+タグが HEAD より前でも、タグ以降の変更が `CHANGELOG.md` を除く Markdown 文書と
+リリーススクリプトだけなら許可し、アプリやビルド設定の変更があれば停止します。
 Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Release を作成して APK を添付します。
 作成した Release から APK をダウンロードできます。private repository のため、Release も
 リポジトリへのアクセス権があるアカウントだけが取得できます。GitHub Actions は設定せず、

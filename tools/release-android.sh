@@ -29,7 +29,22 @@ app_version=$(sed -n 's/^version:[[:space:]]*//p' app/pubspec.yaml | head -n 1 |
 git show-ref --verify --quiet "refs/tags/$tag" || fail "create the local tag first: git tag -a $tag -m $tag"
 tag_commit=$(git rev-parse "$tag^{commit}")
 head_commit=$(git rev-parse HEAD)
-[[ $tag_commit == "$head_commit" ]] || fail "the tag must point to the current HEAD"
+if [[ $tag_commit != "$head_commit" ]]; then
+  git merge-base --is-ancestor "$tag_commit" "$head_commit" ||
+    fail "the release tag must point to HEAD or an earlier commit"
+  while IFS= read -r -d '' changed_path; do
+    case $changed_path in
+      CHANGELOG.md)
+        fail "CHANGELOG.md must match the release tag"
+        ;;
+      *.md|tools/release-android.sh)
+        ;;
+      *)
+        fail "only documentation changes may follow the release tag"
+        ;;
+    esac
+  done < <(git diff --name-only -z "$tag_commit" "$head_commit")
+fi
 
 origin_main=$(git ls-remote origin refs/heads/main | awk 'NR == 1 { print $1 }')
 [[ -n $origin_main && $origin_main == "$head_commit" ]] || fail "push this commit to origin/main before releasing"
