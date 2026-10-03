@@ -19,15 +19,18 @@
 ## 目次
 
 - [特徴](#特徴)
-- [クイックスタート](#クイックスタート)
-- [NixOS / Home Manager へのインストール](#nixos--home-manager-へのインストール)
-- [Flutter ギャラリーの起動](#flutter-ギャラリーの起動)
-- [Android APK のビルドと配布](#android-apk-のビルドと配布)
-- [設定の構成](#設定の構成)
-- [ノート構造とパーサー](#ノート構造とパーサー)
+- [インストールと起動](#インストールと起動)
+  - [Rust CLI クイックスタート](#rust-cli-クイックスタート)
+  - [NixOS / Home Manager へのインストール](#nixos--home-manager-へのインストール)
+  - [Flutter ギャラリーの起動](#flutter-ギャラリーの起動)
+  - [Android APK のビルドと配布](#android-apk-のビルドと配布)
+- [アプリを使う](#アプリを使う)
+  - [設定の構成](#設定の構成)
+  - [ノート構造とパーサー](#ノート構造とパーサー)
 - [プライバシーとセキュリティ](#プライバシーとセキュリティ)
-- [パフォーマンスとテストデータ](#パフォーマンスとテストデータ)
-- [リポジトリ構成](#リポジトリ構成)
+- [開発者向け情報](#開発者向け情報)
+  - [パフォーマンスとテストデータ](#パフォーマンスとテストデータ)
+  - [リポジトリ構成](#リポジトリ構成)
 
 ## 特徴
 
@@ -47,7 +50,9 @@
 > Flutter は Material 3 Expressive の全コンポーネントを提供していないため、標準の Material 3 部品の範囲で実装しています。
 > Android はサイドロード用 APK をビルドでき、SAF で選択した通常フォルダを読み取り専用で走査できます。実機でのDocumentsプロバイダ確認は別途必要です。
 
-## クイックスタート
+## インストールと起動
+
+### Rust CLI クイックスタート
 
 `nix develop` で開発シェルに入るか、Rust stable と C コンパイラを用意してください。
 
@@ -61,7 +66,7 @@ cargo test --workspace
 cargo deny check advisories bans licenses sources
 ```
 
-## NixOS / Home Manager へのインストール
+### NixOS / Home Manager へのインストール
 
 flake は x86_64 Linux 用の `packages.x86_64-linux.default` を提供します。
 NixOS では `nixosModules.default` を import するか、
@@ -113,7 +118,7 @@ CLI のエラーメッセージに、ノートの内容・パス・タグ・URL 
 走査では隠しパスと Syncthing の管理ファイルを無視します。索引は使い捨てで、更新日時やサイズが変わると再パースし、
 削除されたノートは次回の走査で消えます。メディアが見つからないノートは「存在フラグ」付きで残り、後の走査で再確認されます。
 
-## Flutter ギャラリーの起動
+### Flutter ギャラリーの起動
 
 ```sh
 nix develop
@@ -138,7 +143,9 @@ GDK_BACKEND=wayland flutter run -d linux
 
 動画・外部ページ・Obsidian URI は、ユーザーがビューア上のボタンを押したときだけ開きます。
 
-## Android APK のビルドと配布
+### Android APK のビルドと配布
+
+#### ビルド環境とローカルAPK
 
 Nix 開発シェルには Android SDK（API 35/36）、Build Tools 36、NDK 28.2、
 CMake 3.22.1、JDK 17 が含まれます。Linux x86_64 で arm64 APK を作る場合、
@@ -162,6 +169,8 @@ PATH="$(dirname "$(rustup which rustc)"):$PATH" \
 ローカルビルドは Android の debug keystore で署名されます。手元でのインストール確認には
 使えますが、一般配布や別の署名鍵で署名済みのアプリの更新には使えません。
 
+#### Android の Vault アクセス
+
 Documents 内の通常フォルダを SAF で選び、読み取り権限を保持します。
 ノート本文は上限付きで Rust に渡して索引化し、画像・動画は選択フォルダ内の
 URI から表示・再生します。Vault 本体はアプリ領域へコピーしません。
@@ -169,6 +178,8 @@ Syncthing 固有の連携は不要です。生成物はサイドロード可能�
 Android 16 の実機では架空の Documents フォルダを使い、SAF での選択・再起動後の
 権限保持・ノート索引・画像表示・短い MP4 の再生を確認しています。異なる端末や
 Documents プロバイダ、メディア形式での追加確認は必要です。
+
+#### GitHub Release に署名 APK を添付する
 
 Android APK はローカルで署名・ビルドし、GitHub CLI を使って Release に添付できます。
 GitHub Actions、クラウド runner、Actions artifact は使いません。まず一度だけ専用鍵を作り、
@@ -196,6 +207,8 @@ DB とキーファイルの場所は端末ごとに異なるため、リポジ�
 渡します。署名鍵はユーザー専用の `XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。
 署名情報を持つ Gradle プロセスは常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
 
+##### タグの作成と push
+
 main へのリリースコミットを push した後、`app/pubspec.yaml` の version と一致する
 タグ（`vMAJOR.MINOR.PATCH`）を作成して push します。`vX.Y.Z` は実際のタグに置き換えてください。
 
@@ -203,6 +216,8 @@ main へのリリースコミットを push した後、`app/pubspec.yaml` の v
 git tag -a vX.Y.Z -m vX.Y.Z
 git push origin vX.Y.Z
 ```
+
+##### Release 作成と APK 添付
 
 タグを push した後、以下のコマンドで署名 APK をビルドし、検証して GitHub Release に添付します。
 `KEEPASSXC_DATABASE` には KeePassXC データベース（`.kdbx`）の絶対パス、
@@ -236,7 +251,9 @@ Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Releas
 リポジトリへのアクセス権があるアカウントだけが取得できます。GitHub Actions は設定せず、
 ビルドとアップロードはすべて利用者の PC から行います。
 
-## 設定の構成
+## アプリを使う
+
+### 設定の構成
 
 1. **外観** — テーマ（システム／ライト／ダーク）、ピュアブラック、Material You
 2. **ページングと一覧表示** — 1ページの件数、件数表示、タイルの通し番号
@@ -247,7 +264,7 @@ Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Releas
 ノート構造の設定画面には、設定を反映した架空のノート例と Markdown が表示されます（Vault には書き込みません）。
 構造を変更すると再走査して反映します。タグ設定は表示のみを制御し、Vault と索引内容は変更しません。
 
-## ノート構造とパーサー
+### ノート構造とパーサー
 
 パーサーは次を受け付けます。
 
@@ -279,7 +296,9 @@ Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Releas
   システムの SQLite 差異を避けるためのものです。ネットワーククライアントではありません。
 - 索引はキャッシュなので、削除しても Vault から再構築できます。
 
-## パフォーマンスとテストデータ
+## 開発者向け情報
+
+### パフォーマンスとテストデータ
 
 実クリップを使わず、規模を模した架空データを生成できます。生成物はコミットしません。
 
@@ -292,7 +311,7 @@ tools/benchmark.sh 7806
 `tools/benchmark.sh` はリリースビルドと走査時間（初回・再走査）を計測します。
 リポジトリ内の `testdata/dummy-vault` は架空のデータです。
 
-## リポジトリ構成
+### リポジトリ構成
 
 ```text
 crates/
