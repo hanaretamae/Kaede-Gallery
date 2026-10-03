@@ -5,6 +5,25 @@
 
 ## [Unreleased]
 
+## [1.3.0] - 2026-10-03
+
+### Added
+
+- SAF の件数・パス・ノート・バッチ・走査上限を単一の設定から Rust / Dart / Kotlin に生成し、契約テストで検証するようにしました。
+- 選択した Vault の確認付き削除を追加し、Vault を変更せずにアプリ内インデックス、キャッシュ、SAF アクセス権を削除できるようにしました。
+- 架空のノートだけを使う Android 実機ベンチマークと、APK のネットワーク・広域ストレージ権限チェックを追加しました。
+
+### Changed
+
+- Repository、ビューアー、設定から Android SAF 操作を注入可能な platform capability 経由にし、OS 固有 I/O と共通データ処理の境界を明確にしました。
+- Dart 側で SAF の UTF-8 パス長、全走査ノート量、読み込みバッチを事前検証し、超過をネイティブ呼び出し前に拒否するようにしました。
+- Android のビルド番号を `8` に更新し、Flutter アプリのバージョンを `1.3.0` にしました。
+
+### Verified
+
+- Android 16 / API 36 の接続端末で架空の 1,000 ノートを Rust SAF indexer に通し、スキャン、サムネイルキャッシュ、画像デコード、Flutter グリッドのフレーム時間を計測しました。
+- Rust workspace のテスト、strict Clippy、cargo-deny、Flutter analyze / widget tests を実行しました。
+
 ## [1.2.1] - 2026-10-03
 
 ### Fixed

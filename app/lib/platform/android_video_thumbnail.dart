@@ -12,8 +12,28 @@ Future<Uint8List?> createAndroidSafVideoThumbnail(
   String vaultUri,
   String source,
   String cacheDirectory,
-  int mediaId,
-) async {
+  int mediaId, {
+  required SafVaultAccess safAccess,
+}) {
+  if (!vaultCacheOperationsAllowed(vaultUri)) return Future.value(null);
+  final loading = _createAndroidSafVideoThumbnail(
+    vaultUri,
+    source,
+    cacheDirectory,
+    mediaId,
+    safAccess: safAccess,
+  );
+  trackVaultCacheOperation(vaultUri, loading.then<void>((_) {}));
+  return loading;
+}
+
+Future<Uint8List?> _createAndroidSafVideoThumbnail(
+  String vaultUri,
+  String source,
+  String cacheDirectory,
+  int mediaId, {
+  required SafVaultAccess safAccess,
+}) async {
   final cacheFile = File('$cacheDirectory/saf-v6-$mediaId.png');
   if (await cacheFile.exists()) {
     final size = await cacheFile.length();
@@ -23,7 +43,6 @@ Future<Uint8List?> createAndroidSafVideoThumbnail(
     }
     await cacheFile.delete();
   }
-  const safAccess = AndroidSafAccess();
   final descriptor = await safAccess.openMediaFileDescriptor(vaultUri, source);
   if (descriptor == null) return null;
   final player = Player(

@@ -126,7 +126,9 @@ class _LoadingMoreController extends Notifier<bool> {
 }
 
 final galleryRepositoryProvider = Provider<GalleryRepository>(
-  (ref) => const RustGalleryRepository(),
+  (ref) => RustGalleryRepository(
+    safAccess: ref.watch(vaultPlatformProvider).safAccess,
+  ),
 );
 
 final vaultPlatformProvider = Provider<VaultPlatform>(
@@ -159,7 +161,8 @@ class VaultController extends AsyncNotifier<VaultSession?> {
       return null;
     }
     if (vaultPath.startsWith('content://') &&
-        await const AndroidSafAccess().loadVault() != vaultPath) {
+        await ref.read(vaultPlatformProvider).safAccess.loadVault() !=
+            vaultPath) {
       throw StateError('選択したフォルダへのアクセス権がありません。Vault を選び直してください。');
     }
     if (vaultPath.startsWith('content://')) {
@@ -214,6 +217,33 @@ class VaultController extends AsyncNotifier<VaultSession?> {
     } catch (error, stackTrace) {
       state = AsyncError(error, stackTrace);
     }
+  }
+
+  Future<void> forgetVault() async {
+    final session = state.value;
+    if (session == null) {
+      throw StateError('選択中の Vault がありません。');
+    }
+    state = const AsyncLoading();
+    final repository = ref.read(galleryRepositoryProvider);
+    var completed = false;
+    try {
+      await preventVaultCacheOperations(session.vaultPath);
+      await repository.forgetVaultData(
+        session.paths.dataDirectory,
+        session.vaultPath,
+      );
+      if (session.vaultPath.startsWith('content://')) {
+        await ref
+            .read(vaultPlatformProvider)
+            .safAccess
+            .forgetVault(session.vaultPath);
+      }
+      completed = true;
+    } finally {
+      if (!completed) state = AsyncData(session);
+    }
+    state = const AsyncData(null);
   }
 
   Future<VaultSession> _openVault(String vaultPath, GalleryPaths paths) async {
@@ -290,12 +320,23 @@ Future<void> _writeSafScanCache(
 
 Future<void> _invalidateSafThumbnailCache(String directoryPath) async {
   final directory = Directory(directoryPath);
-  if (!await directory.exists()) return;
+  final directoryType = await FileSystemEntity.type(
+    directory.path,
+    followLinks: false,
+  );
+  if (directoryType == FileSystemEntityType.notFound) return;
+  if (directoryType != FileSystemEntityType.directory) {
+    throw StateError('The thumbnail cache directory is invalid.');
+  }
   await for (final entity in directory.list(followLinks: false)) {
-    if (entity is File &&
-        RegExp(r'^saf-(?:v[2-7]-)?[1-9]\d*\.png$')
-            .hasMatch(entity.uri.pathSegments.last)) {
+    if (!RegExp(r'^saf-(?:v\d+-)?[1-9]\d*\.png(?:\.tmp)?$')
+        .hasMatch(entity.uri.pathSegments.last)) {
+      continue;
+    }
+    if (entity is File || entity is Link) {
       await entity.delete();
+    } else {
+      throw StateError('An invalid thumbnail cache entry was found.');
     }
   }
 }

@@ -197,6 +197,7 @@ abstract interface class GalleryRepository {
   Future<void> prepareAppDataDirectory(String directoryPath, String vaultPath);
   Future<String?> loadVaultPath(String directoryPath);
   Future<String> saveVaultPath(String directoryPath, String vaultPath);
+  Future<void> forgetVaultData(String directoryPath, String vaultPath);
   Future<GalleryScanReport> scan(String vaultPath, String indexPath);
   Future<List<GalleryCategory>> listCategories(
     String vaultPath,

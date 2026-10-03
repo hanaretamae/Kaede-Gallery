@@ -32,17 +32,17 @@ class MainActivity : FlutterActivity() {
     private val channelName = "com.hanaretamae.vault_gallery/saf"
     private val pickerRequestCode = 7142
     private val exportRequestCode = 7143
-    private val maxSafNoteBytes = 2 * 1024 * 1024
-    private val maxSafBatchBytes = 16 * 1024 * 1024
     private val listedDocuments = ConcurrentHashMap<String, ResolvedDocument>()
     private val listedDocumentsLock = Any()
+    private val safDatabaseLock = Any()
     private val openVideoDescriptors =
         ConcurrentHashMap<Int, android.os.ParcelFileDescriptor>()
     private var loadedDocumentTree: String? = null
     private val safExecutor = Executors.newSingleThreadExecutor { task ->
         Thread(task, "saf-io").apply { isDaemon = true }
     }
-    private val safReadExecutor = Executors.newFixedThreadPool(4) { task ->
+    private val safReadExecutor =
+        Executors.newFixedThreadPool(SafLimits.MAX_CONCURRENT_NOTE_READS) { task ->
         Thread(task, "saf-note-read").apply { isDaemon = true }
     }
     private val thumbnailExecutor = Executors.newFixedThreadPool(3) { task ->
@@ -61,7 +61,7 @@ class MainActivity : FlutterActivity() {
                     "saveJson" -> chooseJsonExport(call, result)
                     "loadVault", "listFiles", "readFile", "readListedFiles", "resolveFile",
                     "readMedia", "readMediaImage", "openMedia", "openMediaFd",
-                    "closeMediaFd", "thumbnail" ->
+                    "closeMediaFd", "thumbnail", "forgetVault" ->
                         runSafCall(call, result)
                     else -> result.notImplemented()
                 }
@@ -127,13 +127,19 @@ class MainActivity : FlutterActivity() {
             try {
                 val value = when (call.method) {
                     "loadVault" -> loadVault()
+                    "forgetVault" -> {
+                        forgetVault(
+                            call.argument<String>("vaultUri") ?: error("Invalid request"),
+                        )
+                        null
+                    }
                     "listFiles" -> listFiles(
                         requiredVault(call.argument("vaultUri"), loadDocumentCache = false),
                     )
                     "readFile" -> {
                         val vault = requiredVault(call.argument("vaultUri"))
                         val relative = call.argument<String>("path") ?: error("Invalid request")
-                        readDocument(vault, relative, maxSafNoteBytes)
+                        readDocument(vault, relative, SafLimits.MAX_NOTE_BYTES)
                     }
                     "readListedFiles" -> {
                         val vault = requiredVault(call.argument("vaultUri"))
@@ -380,6 +386,68 @@ class MainActivity : FlutterActivity() {
         return uri
     }
 
+    private fun forgetVault(vaultValue: String) {
+        val tree = Uri.parse(vaultValue)
+        require(tree.scheme == "content" && tree.toString() == vaultValue)
+        val preferences = getSharedPreferences("vault_gallery", MODE_PRIVATE)
+        val selectedVault = preferences.getString("vault_uri", null)
+        require(selectedVault == null || selectedVault == vaultValue)
+
+        synchronized(safDatabaseLock) {
+            val database = documentDatabase()
+            try {
+                database.execSQL("PRAGMA secure_delete=ON")
+                database.beginTransaction()
+                try {
+                    database.delete("documents", "tree_uri=?", arrayOf(vaultValue))
+                    database.setTransactionSuccessful()
+                } finally {
+                    database.endTransaction()
+                }
+                database.execSQL("VACUUM")
+            } finally {
+                database.close()
+            }
+        }
+
+        synchronized(listedDocumentsLock) {
+            listedDocuments.clear()
+            loadedDocumentTree = null
+        }
+        var descriptorFailure: java.io.IOException? = null
+        for ((fd, descriptor) in openVideoDescriptors.entries) {
+            if (openVideoDescriptors.remove(fd, descriptor)) {
+                try {
+                    descriptor.close()
+                } catch (error: java.io.IOException) {
+                    if (descriptorFailure == null) descriptorFailure = error
+                }
+            }
+        }
+        descriptorFailure?.let { throw it }
+
+        if (contentResolver.persistedUriPermissions.any {
+                it.uri == tree && it.isReadPermission
+            }) {
+            contentResolver.releasePersistableUriPermission(
+                tree,
+                Intent.FLAG_GRANT_READ_URI_PERMISSION,
+            )
+        }
+        if (contentResolver.persistedUriPermissions.any {
+                it.uri == tree && it.isReadPermission
+            }) {
+            error("Unable to release folder permission")
+        }
+        if (!preferences.edit().remove("vault_uri").commit()) {
+            error("Unable to clear selected folder")
+        }
+        synchronized(listedDocumentsLock) {
+            listedDocuments.clear()
+            loadedDocumentTree = null
+        }
+    }
+
     private fun requiredVault(
         value: String?,
         loadDocumentCache: Boolean = true,
@@ -408,6 +476,12 @@ class MainActivity : FlutterActivity() {
             }
 
     private fun loadListedDocuments(tree: Uri) {
+        synchronized(safDatabaseLock) {
+            loadListedDocumentsSerialized(tree)
+        }
+    }
+
+    private fun loadListedDocumentsSerialized(tree: Uri) {
         val treeValue = tree.toString()
         synchronized(listedDocumentsLock) {
             if (loadedDocumentTree == treeValue) return
@@ -422,7 +496,7 @@ class MainActivity : FlutterActivity() {
                     null,
                     null,
                     null,
-                    "100000",
+                    SafLimits.MAX_DOCUMENTS.toString(),
                 ).use { rows ->
                     while (rows.moveToNext()) {
                         val path = rows.getString(0)
@@ -481,7 +555,9 @@ class MainActivity : FlutterActivity() {
         return cursor.use { rows ->
             val result = ArrayList<Entry>()
             while (rows.moveToNext()) {
-                require(result.size < 100000) { "Folder contains too many entries" }
+                require(result.size < SafLimits.MAX_DOCUMENTS) {
+                    "Folder contains too many entries"
+                }
                 result.add(rows.toEntry())
             }
             result
@@ -506,7 +582,12 @@ class MainActivity : FlutterActivity() {
         )
     }
 
-    private fun listFiles(tree: Uri): List<Map<String, Any>> {
+    private fun listFiles(tree: Uri): List<Map<String, Any>> =
+        synchronized(safDatabaseLock) {
+            listFilesSerialized(tree)
+        }
+
+    private fun listFilesSerialized(tree: Uri): List<Map<String, Any>> {
         synchronized(listedDocumentsLock) {
             listedDocuments.clear()
             loadedDocumentTree = null
@@ -518,19 +599,26 @@ class MainActivity : FlutterActivity() {
         var pathBytes = 0
         var entryCount = 0
         fun walk(parentId: String, parentPath: String, depth: Int) {
-            require(depth <= 64) { "Folder nesting limit exceeded" }
+            require(depth <= SafLimits.MAX_DEPTH) { "Folder nesting limit exceeded" }
             if (!visitedFolders.add(parentId)) error("Folder cycle detected")
             for (entry in children(tree, parentId)) {
                 entryCount++
-                require(entryCount <= 100000) { "Folder entry limit exceeded" }
+                require(entryCount <= SafLimits.MAX_DOCUMENTS) {
+                    "Folder entry limit exceeded"
+                }
                 if (entry.name.isEmpty() || entry.name == "." || entry.name == ".." ||
                     entry.name.contains('/') || entry.name.contains('\\') ||
                     entry.name.contains('\u0000')
                 ) error("Invalid folder entry")
                 val relative = if (parentPath.isEmpty()) entry.name else "$parentPath/${entry.name}"
-                require(relative.length <= 4096) { "Path is too long" }
-                pathBytes += relative.toByteArray(Charsets.UTF_8).size
-                require(pathBytes <= 32 * 1024 * 1024) { "Folder listing is too large" }
+                val relativeBytes = relative.toByteArray(Charsets.UTF_8).size
+                require(relativeBytes <= SafLimits.MAX_RELATIVE_PATH_BYTES) {
+                    "Path is too long"
+                }
+                pathBytes += relativeBytes
+                require(pathBytes <= SafLimits.MAX_AGGREGATE_PATH_BYTES) {
+                    "Folder listing is too large"
+                }
                 if (!paths.add(relative)) error("Ambiguous folder path")
                 if (ignoredName(entry.name)) continue
                 if (entry.mimeType == DocumentsContract.Document.MIME_TYPE_DIR) {
@@ -589,9 +677,15 @@ class MainActivity : FlutterActivity() {
             name.startsWith("~syncthing~")
 
     private fun checkedSegments(path: String): List<String> {
-        require(path.isNotEmpty() && path.length <= 4096 && !path.startsWith('/') &&
-            !path.contains('\\') && !path.contains('\u0000'))
+        require(
+            path.isNotEmpty() &&
+                path.toByteArray(Charsets.UTF_8).size <= SafLimits.MAX_RELATIVE_PATH_BYTES &&
+                !path.startsWith('/') &&
+                !path.contains('\\') &&
+                !path.contains('\u0000'),
+        )
         val segments = path.split('/')
+        require(segments.size - 1 <= SafLimits.MAX_DEPTH)
         require(segments.all { it.isNotEmpty() && it != "." && it != ".." })
         return segments
     }
@@ -709,7 +803,9 @@ class MainActivity : FlutterActivity() {
         tree: Uri,
         documents: List<Map<String, Any?>>,
     ): List<Map<String, Any?>> {
-        require(documents.size <= 128) { "Too many notes in one read batch" }
+        require(documents.size <= SafLimits.MAX_READ_BATCH_NOTES) {
+            "Too many notes in one read batch"
+        }
         val requests = documents.map { document ->
             val path = document["path"] as? String ?: error("Invalid note path")
             checkedSegments(path)
@@ -721,12 +817,12 @@ class MainActivity : FlutterActivity() {
             require(declaredSize >= 0)
             Triple(path, safeUri, declaredSize)
         }
-        var remainingBytes = maxSafBatchBytes
+        var remainingBytes = SafLimits.MAX_READ_BATCH_BYTES
         val allowed = requests.map { request ->
             val requestedBytes = when {
-                request.third > maxSafNoteBytes -> 0
-                request.third == 0L -> maxSafNoteBytes
-                else -> minOf(maxSafNoteBytes.toLong(), request.third + 1).toInt()
+                request.third > SafLimits.MAX_NOTE_BYTES.toLong() -> 0
+                request.third == 0L -> SafLimits.MAX_NOTE_BYTES
+                else -> minOf(SafLimits.MAX_NOTE_BYTES.toLong(), request.third + 1).toInt()
             }
             val limit = requestedBytes.takeIf {
                 it <= remainingBytes

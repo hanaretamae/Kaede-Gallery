@@ -34,6 +34,14 @@ Future<String> saveVaultPath({
   vaultPath: vaultPath,
 );
 
+Future<void> forgetVaultData({
+  required String directoryPath,
+  required String expectedVault,
+}) => RustLib.instance.api.crateApiForgetVaultData(
+  directoryPath: directoryPath,
+  expectedVault: expectedVault,
+);
+
 Future<ScanReport> scan({
   required String vaultPath,
   required String indexPath,

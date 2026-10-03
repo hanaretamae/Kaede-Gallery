@@ -460,6 +460,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
                         ),
                       ),
                     _ViewerTopOverlay(
+                      safAccess: ref.read(vaultPlatformProvider).safAccess,
                       visible: controlsVisible,
                       visibilityAnimation: _detailsVisibilityAnimation,
                       title: viewerTitle,
@@ -547,6 +548,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
 
 class _ViewerTopOverlay extends StatelessWidget {
   const _ViewerTopOverlay({
+    required this.safAccess,
     required this.visible,
     required this.visibilityAnimation,
     required this.title,
@@ -564,6 +566,7 @@ class _ViewerTopOverlay extends StatelessWidget {
     required this.vaultPath,
   });
 
+  final SafVaultAccess safAccess;
   final bool visible;
   final Animation<double> visibilityAnimation;
   final String title;
@@ -657,6 +660,7 @@ class _ViewerTopOverlay extends StatelessWidget {
                       onPressed: () => _showMediaOpenActions(
                         context,
                         mediaPath!,
+                        safAccess: safAccess,
                         vaultPath: vaultPath,
                       ),
                       icon: const Icon(Icons.perm_media_outlined),
@@ -680,6 +684,7 @@ class _ViewerTopOverlay extends StatelessWidget {
 Future<void> _showMediaOpenActions(
   BuildContext context,
   String mediaPath, {
+  required SafVaultAccess safAccess,
   String? vaultPath,
 }) async {
   final openFolder = await showModalBottomSheet<bool>(
@@ -708,11 +713,7 @@ Future<void> _showMediaOpenActions(
   if (mediaPath.startsWith('content://')) {
     if (vaultPath == null || !vaultPath.startsWith('content://')) return;
     try {
-      await const AndroidSafAccess().openMedia(
-        vaultPath,
-        mediaPath,
-        openFolder: openFolder,
-      );
+      await safAccess.openMedia(vaultPath, mediaPath, openFolder: openFolder);
     } on PlatformException catch (error) {
       if (!context.mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(

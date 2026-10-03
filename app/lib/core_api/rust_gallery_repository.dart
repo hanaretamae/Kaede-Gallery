@@ -10,7 +10,9 @@ import 'gallery_repository.dart';
 final Map<String, Future<Uint8List?>> _safThumbnailLoads = {};
 
 class RustGalleryRepository implements GalleryRepository {
-  const RustGalleryRepository();
+  const RustGalleryRepository({required this.safAccess});
+
+  final SafVaultAccess safAccess;
 
   @override
   Future<void> prepareAppDataDirectory(
@@ -32,8 +34,18 @@ class RustGalleryRepository implements GalleryRepository {
       rust.loadVaultPath(directoryPath: directoryPath);
 
   @override
-  Future<String> saveVaultPath(String directoryPath, String vaultPath) =>
-      rust.saveVaultPath(directoryPath: directoryPath, vaultPath: vaultPath);
+  Future<String> saveVaultPath(String directoryPath, String vaultPath) async {
+    final saved = await rust.saveVaultPath(
+      directoryPath: directoryPath,
+      vaultPath: vaultPath,
+    );
+    resumeVaultCacheOperations(vaultPath);
+    return saved;
+  }
+
+  @override
+  Future<void> forgetVaultData(String directoryPath, String vaultPath) => rust
+      .forgetVaultData(directoryPath: directoryPath, expectedVault: vaultPath);
 
   @override
   Future<GalleryScanReport> scan(String vaultPath, String indexPath) async {
@@ -47,7 +59,7 @@ class RustGalleryRepository implements GalleryRepository {
   }
 
   Future<rust.ScanReport> _scanSaf(String vaultUri, String indexPath) async {
-    const access = AndroidSafAccess();
+    final access = safAccess;
     final files = await access.listFiles(vaultUri);
     final notes = <rust.SafNote>[];
     final noteFiles = files
@@ -234,6 +246,7 @@ class RustGalleryRepository implements GalleryRepository {
     String cachePath,
     int mediaId,
   ) async {
+    if (!vaultCacheOperationsAllowed(vaultPath)) return null;
     if (vaultPath.startsWith('content://')) {
       final cacheKey = '$vaultPath:$indexPath:$mediaId';
       final pending = _safThumbnailLoads[cacheKey];
@@ -246,16 +259,19 @@ class RustGalleryRepository implements GalleryRepository {
             }
           });
       _safThumbnailLoads[cacheKey] = loading;
+      trackVaultCacheOperation(vaultPath, loading.then<void>((_) {}));
       return loading;
     }
 
-    return rust.getThumbnail(
+    final loading = rust.getThumbnail(
       vaultPath: vaultPath,
       indexPath: indexPath,
       cachePath: cachePath,
       mediaId: mediaId,
       size: 320,
     );
+    trackVaultCacheOperation(vaultPath, loading.then<void>((_) {}));
+    return loading;
   }
 
   Future<Uint8List?> _loadSafThumbnail(
@@ -287,7 +303,7 @@ class RustGalleryRepository implements GalleryRepository {
           mediaId: mediaId,
         ) !=
         null;
-    final thumbnail = await const AndroidSafAccess().thumbnail(
+    final thumbnail = await safAccess.thumbnail(
       vaultPath,
       relativePath,
       video: isVideo,
@@ -313,7 +329,7 @@ class RustGalleryRepository implements GalleryRepository {
       mediaId: mediaId,
     );
     if (source == null || !vaultPath.startsWith('content://')) return source;
-    return const AndroidSafAccess().resolveFile(vaultPath, source, video: true);
+    return safAccess.resolveFile(vaultPath, source, video: true);
   }
 
   @override
@@ -328,7 +344,7 @@ class RustGalleryRepository implements GalleryRepository {
       mediaId: mediaId,
     );
     if (source == null || !vaultPath.startsWith('content://')) return source;
-    return const AndroidSafAccess().resolveFile(vaultPath, source);
+    return safAccess.resolveFile(vaultPath, source);
   }
 
   @override
@@ -345,7 +361,7 @@ class RustGalleryRepository implements GalleryRepository {
         noteId: noteId,
       );
       if (path == null) return null;
-      final content = await const AndroidSafAccess().readFile(vaultPath, path);
+      final content = await safAccess.readFile(vaultPath, path);
       if (content == null) {
         throw StateError('ノートを読み込めません。アクセス権を確認してください。');
       }

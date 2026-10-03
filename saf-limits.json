@@ -1,0 +1,11 @@
+{
+  "max_documents": 100000,
+  "max_depth": 64,
+  "max_relative_path_bytes": 4096,
+  "max_aggregate_path_bytes": 33554432,
+  "max_note_bytes": 2097152,
+  "max_read_batch_notes": 128,
+  "max_read_batch_bytes": 16777216,
+  "max_concurrent_note_reads": 4,
+  "max_scan_note_bytes": 134217728
+}

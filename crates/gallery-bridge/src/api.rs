@@ -3,9 +3,9 @@ use gallery_core::{
     Category as CoreCategory, CoreError, DetailLine as CoreDetailLine, Gallery,
     MediaSummary as CoreMediaSummary, NoteDetail as CoreNoteDetail, NoteSort, NoteSortField,
     NoteSummary as CoreNoteSummary, SafNoteDocument, ScanReport as CoreScanReport,
-    SortDirection as CoreSortDirection, VirtualFilter as CoreVirtualFilter, load_selected_vault,
-    prepare_private_app_directory, prepare_private_app_directory_for_saf, save_selected_vault,
-    save_selected_vault_saf,
+    SortDirection as CoreSortDirection, VirtualFilter as CoreVirtualFilter, forget_selected_vault,
+    load_selected_vault, prepare_private_app_directory, prepare_private_app_directory_for_saf,
+    save_selected_vault, save_selected_vault_saf,
 };
 use std::path::Path;
 
@@ -133,6 +133,10 @@ pub fn save_vault_path(directory_path: String, vault_path: String) -> Result<Str
         save_selected_vault(Path::new(&directory_path), Path::new(&vault_path))
             .map_err(error_message)
     }
+}
+
+pub fn forget_vault_data(directory_path: String, expected_vault: String) -> Result<(), String> {
+    forget_selected_vault(Path::new(&directory_path), &expected_vault).map_err(error_message)
 }
 
 pub fn scan(vault_path: String, index_path: String) -> Result<ScanReport, String> {

@@ -6,6 +6,52 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import 'saf_limits.g.dart';
+
+final _blockedVaultCacheOperations = <String>{};
+final _pendingVaultCacheOperations = <String, Set<Future<void>>>{};
+
+bool vaultCacheOperationsAllowed(String vaultPath) =>
+    !_blockedVaultCacheOperations.contains(vaultPath);
+
+void resumeVaultCacheOperations(String vaultPath) {
+  _blockedVaultCacheOperations.remove(vaultPath);
+}
+
+void trackVaultCacheOperation(String vaultPath, Future<void> operation) {
+  if (!vaultCacheOperationsAllowed(vaultPath)) return;
+  final pending = _pendingVaultCacheOperations.putIfAbsent(
+    vaultPath,
+    () => <Future<void>>{},
+  );
+  pending.add(operation);
+  operation.then<void>(
+    (_) => _finishVaultCacheOperation(vaultPath, pending, operation),
+    onError: (Object _, StackTrace _) =>
+        _finishVaultCacheOperation(vaultPath, pending, operation),
+  );
+}
+
+Future<void> preventVaultCacheOperations(String vaultPath) async {
+  _blockedVaultCacheOperations.add(vaultPath);
+  final pending = _pendingVaultCacheOperations[vaultPath]?.toList() ?? [];
+  await Future.wait<void>(
+    pending.map(
+      (operation) =>
+          operation.then<void>((_) {}, onError: (Object _, StackTrace _) {}),
+    ),
+  ).timeout(const Duration(seconds: 30));
+}
+
+void _finishVaultCacheOperation(
+  String vaultPath,
+  Set<Future<void>> pending,
+  Future<void> operation,
+) {
+  pending.remove(operation);
+  if (pending.isEmpty) _pendingVaultCacheOperations.remove(vaultPath);
+}
+
 class SafFileEntry {
   const SafFileEntry({
     required this.path,
@@ -18,6 +64,37 @@ class SafFileEntry {
   final int modifiedNanos;
   final int size;
   final String documentUri;
+}
+
+abstract interface class SafVaultAccess {
+  Future<String?> chooseVault();
+  Future<String?> loadVault();
+  Future<void> forgetVault(String vaultUri);
+  Future<List<SafFileEntry>> listFiles(String vaultUri);
+  Future<Map<String, Uint8List?>> readListedFiles(
+    String vaultUri,
+    List<SafFileEntry> files,
+  );
+  Future<Uint8List?> readFile(String vaultUri, String relativePath);
+  Future<String?> resolveFile(
+    String vaultUri,
+    String relativePath, {
+    bool video = false,
+  });
+  Future<Uint8List> readMedia(String vaultUri, String mediaUri);
+  Future<void> openMedia(
+    String vaultUri,
+    String? mediaUri, {
+    bool openFolder = false,
+  });
+  Future<bool> saveJson(String fileName, String contents);
+  Future<Uint8List?> thumbnail(
+    String vaultUri,
+    String relativePath, {
+    required bool video,
+  });
+  Future<int?> openMediaFileDescriptor(String vaultUri, String mediaUri);
+  Future<void> closeMediaFileDescriptor(int descriptor);
 }
 
 String vaultDisplayName(String vaultPath) {
@@ -35,15 +112,28 @@ String vaultDisplayName(String vaultPath) {
   return name.isEmpty ? vaultPath : name;
 }
 
-class AndroidSafAccess {
+class AndroidSafAccess implements SafVaultAccess {
   const AndroidSafAccess();
 
   static const _channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
 
-  Future<String?> chooseVault() => _channel.invokeMethod<String>('chooseVault');
+  @override
+  Future<String?> chooseVault() async {
+    final vaultUri = await _channel.invokeMethod<String>('chooseVault');
+    if (vaultUri != null) resumeVaultCacheOperations(vaultUri);
+    return vaultUri;
+  }
 
+  @override
   Future<String?> loadVault() => _channel.invokeMethod<String>('loadVault');
 
+  @override
+  Future<void> forgetVault(String vaultUri) async {
+    await preventVaultCacheOperations(vaultUri);
+    await _channel.invokeMethod<void>('forgetVault', {'vaultUri': vaultUri});
+  }
+
+  @override
   Future<List<SafFileEntry>> listFiles(String vaultUri) async {
     final entries = await _channel.invokeListMethod<Object?>('listFiles', {
       'vaultUri': vaultUri,
@@ -51,18 +141,36 @@ class AndroidSafAccess {
     if (entries == null) {
       throw StateError('No folder listing was returned.');
     }
+    if (entries.length > SafLimits.maxDocuments) {
+      throw StateError('The folder listing exceeds its size limit.');
+    }
+    var aggregatePathBytes = 0;
+    final seenPaths = <String>{};
     return entries
         .map((entry) {
           if (entry is! Map<Object?, Object?> ||
               entry['path'] is! String ||
               entry['modifiedNanos'] is! int ||
+              (entry['modifiedNanos']! as int) < 0 ||
               entry['size'] is! int ||
+              (entry['size']! as int) < 0 ||
               entry['documentUri'] is! String ||
               !(entry['documentUri']! as String).startsWith('content://')) {
             throw StateError('An invalid folder entry was returned.');
           }
+          final relativePath = entry['path']! as String;
+          if (!_isWithinSafPathLimits(relativePath)) {
+            throw StateError('An invalid folder path was returned.');
+          }
+          if (!seenPaths.add(relativePath)) {
+            throw StateError('A duplicate folder path was returned.');
+          }
+          aggregatePathBytes += utf8.encode(relativePath).length;
+          if (aggregatePathBytes > SafLimits.maxAggregatePathBytes) {
+            throw StateError('The folder listing exceeds its path-size limit.');
+          }
           return SafFileEntry(
-            path: entry['path']! as String,
+            path: relativePath,
             modifiedNanos: entry['modifiedNanos']! as int,
             size: entry['size']! as int,
             documentUri: entry['documentUri']! as String,
@@ -71,14 +179,45 @@ class AndroidSafAccess {
         .toList(growable: false);
   }
 
+  @override
   Future<Map<String, Uint8List?>> readListedFiles(
     String vaultUri,
     List<SafFileEntry> files,
   ) async {
-    const maxNoteBytes = 2 * 1024 * 1024;
-    const maxBatchBytes = 16 * 1024 * 1024;
-    const maxBatchFiles = 128;
+    if (files.length > SafLimits.maxDocuments) {
+      throw StateError('The folder contains too many notes.');
+    }
     final contents = <String, Uint8List?>{};
+    final boundedFiles = <({SafFileEntry file, int expectedBytes})>[];
+    var scanBytes = 0;
+    var aggregatePathBytes = 0;
+    for (final file in files) {
+      if (!_isWithinSafPathLimits(file.path) ||
+          !file.documentUri.startsWith('content://') ||
+          file.size < 0 ||
+          file.modifiedNanos < 0) {
+        throw StateError('An invalid folder entry was returned.');
+      }
+      aggregatePathBytes += utf8.encode(file.path).length;
+      if (aggregatePathBytes > SafLimits.maxAggregatePathBytes) {
+        throw StateError('The folder listing exceeds its path-size limit.');
+      }
+      if (file.size > SafLimits.maxNoteBytes) {
+        contents[file.path] = null;
+        continue;
+      }
+      final expectedBytes = file.size == 0
+          ? SafLimits.maxNoteBytes
+          : file.size < SafLimits.maxNoteBytes
+          ? file.size + 1
+          : SafLimits.maxNoteBytes;
+      if (scanBytes + expectedBytes > SafLimits.maxScanNoteBytes) {
+        throw StateError('The selected folder exceeds its note-size limit.');
+      }
+      scanBytes += expectedBytes;
+      boundedFiles.add((file: file, expectedBytes: expectedBytes));
+    }
+
     var batch = <SafFileEntry>[];
     var batchBytes = 0;
 
@@ -117,15 +256,12 @@ class AndroidSafAccess {
       batchBytes = 0;
     }
 
-    for (final file in files) {
-      if (file.size > maxNoteBytes) {
-        contents[file.path] = null;
-        continue;
-      }
-      final expectedBytes = file.size == 0 ? maxNoteBytes : file.size;
+    for (final item in boundedFiles) {
+      final file = item.file;
+      final expectedBytes = item.expectedBytes;
       if (batch.isNotEmpty &&
-          (batch.length == maxBatchFiles ||
-              batchBytes + expectedBytes > maxBatchBytes)) {
+          (batch.length == SafLimits.maxReadBatchNotes ||
+              batchBytes + expectedBytes > SafLimits.maxReadBatchBytes)) {
         await flushBatch();
       }
       batch.add(file);
@@ -135,6 +271,7 @@ class AndroidSafAccess {
     return contents;
   }
 
+  @override
   Future<Uint8List?> readFile(String vaultUri, String relativePath) async {
     try {
       return await _channel.invokeMethod<Uint8List>('readFile', {
@@ -147,6 +284,7 @@ class AndroidSafAccess {
     }
   }
 
+  @override
   Future<String?> resolveFile(
     String vaultUri,
     String relativePath, {
@@ -164,6 +302,7 @@ class AndroidSafAccess {
     return uri;
   }
 
+  @override
   Future<Uint8List> readMedia(String vaultUri, String mediaUri) async {
     final bytes = await _channel.invokeMethod<Uint8List>('readMediaImage', {
       'vaultUri': vaultUri,
@@ -176,6 +315,7 @@ class AndroidSafAccess {
     return bytes;
   }
 
+  @override
   Future<void> openMedia(
     String vaultUri,
     String? mediaUri, {
@@ -186,6 +326,7 @@ class AndroidSafAccess {
     'openFolder': openFolder,
   });
 
+  @override
   Future<bool> saveJson(String fileName, String contents) async {
     final saved = await _channel.invokeMethod<bool>('saveJson', {
       'fileName': fileName,
@@ -194,6 +335,7 @@ class AndroidSafAccess {
     return saved ?? false;
   }
 
+  @override
   Future<Uint8List?> thumbnail(
     String vaultUri,
     String relativePath, {
@@ -205,14 +347,29 @@ class AndroidSafAccess {
     'size': 320,
   });
 
+  @override
   Future<int?> openMediaFileDescriptor(String vaultUri, String mediaUri) =>
       _channel.invokeMethod<int>('openMediaFd', {
         'vaultUri': vaultUri,
         'mediaUri': mediaUri,
       });
 
+  @override
   Future<void> closeMediaFileDescriptor(int descriptor) =>
       _channel.invokeMethod<void>('closeMediaFd', {'descriptor': descriptor});
+}
+
+bool _isWithinSafPathLimits(String value) {
+  final segments = value.split('/');
+  return value.isNotEmpty &&
+      utf8.encode(value).length <= SafLimits.maxRelativePathBytes &&
+      !value.startsWith('/') &&
+      !value.contains('\\') &&
+      !value.contains('\u0000') &&
+      segments.length - 1 <= SafLimits.maxDepth &&
+      segments.every(
+        (segment) => segment.isNotEmpty && segment != '.' && segment != '..',
+      );
 }
 
 class GalleryPaths {
@@ -230,14 +387,18 @@ class GalleryPaths {
 abstract interface class VaultPlatform {
   Future<String?> chooseVault();
   Future<GalleryPaths> galleryPaths();
+  SafVaultAccess get safAccess;
 }
 
 class NativeVaultPlatform implements VaultPlatform {
   const NativeVaultPlatform();
 
   @override
+  SafVaultAccess get safAccess => const AndroidSafAccess();
+
+  @override
   Future<String?> chooseVault() => Platform.isAndroid
-      ? const AndroidSafAccess().chooseVault()
+      ? safAccess.chooseVault()
       : getDirectoryPath(confirmButtonText: 'この Vault を選択');
 
   @override

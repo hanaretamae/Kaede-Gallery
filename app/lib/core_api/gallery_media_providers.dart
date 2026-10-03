@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'gallery_providers.dart';
 import '../platform/android_video_thumbnail.dart';
-import '../platform/vault_platform.dart';
 
 final galleryThumbnailProvider = FutureProvider.autoDispose
     .family<Uint8List?, int>((ref, mediaId) async {
@@ -26,6 +25,7 @@ final galleryThumbnailProvider = FutureProvider.autoDispose
             videoPath,
             session.paths.thumbnailDirectory,
             mediaId,
+            safAccess: ref.read(vaultPlatformProvider).safAccess,
           );
           if (thumbnail != null) return thumbnail;
         }
@@ -69,7 +69,10 @@ final gallerySafImageBytesProvider = FutureProvider.family<Uint8List, String>((
   if (session == null || !session.vaultPath.startsWith('content://')) {
     throw StateError('Folder access is not active.');
   }
-  return const AndroidSafAccess().readMedia(session.vaultPath, mediaUri);
+  return ref
+      .read(vaultPlatformProvider)
+      .safAccess
+      .readMedia(session.vaultPath, mediaUri);
 });
 
 final galleryMediaSourcePathProvider = FutureProvider.family<String?, int>((

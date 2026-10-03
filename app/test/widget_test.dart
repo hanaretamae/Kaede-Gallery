@@ -88,6 +88,45 @@ void main() {
     });
   });
 
+  test('forgetting an Android Vault asks native code to release its grant', () async {
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    MethodCall? forgetCall;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          forgetCall = call;
+          return null;
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    const vaultUri =
+        'content://com.android.externalstorage.documents/tree/primary%3AFictional';
+    await const AndroidSafAccess().forgetVault(vaultUri);
+
+    expect(forgetCall?.method, 'forgetVault');
+    expect(forgetCall?.arguments, {'vaultUri': vaultUri});
+  });
+
+  test('Vault forget waits for pending thumbnail cache work', () async {
+    const vaultPath = 'fictional-vault-id';
+    final pending = Completer<void>();
+    var drained = false;
+    trackVaultCacheOperation(vaultPath, pending.future);
+
+    final drain = preventVaultCacheOperations(vaultPath).then((_) {
+      drained = true;
+    });
+    expect(vaultCacheOperationsAllowed(vaultPath), isFalse);
+    expect(drained, isFalse);
+
+    pending.complete();
+    await drain;
+    expect(drained, isTrue);
+    resumeVaultCacheOperations(vaultPath);
+  });
+
   test('Android viewer requests a display-sized native image decode', () async {
     const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
     MethodCall? imageCall;
@@ -216,6 +255,65 @@ void main() {
       ],
     });
   });
+
+  test('Android SAF listing measures path limits in UTF-8 bytes', () async {
+    const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          return [
+            {
+              'path': '${List.filled(1366, 'あ').join()}.md',
+              'modifiedNanos': 0,
+              'size': 0,
+              'documentUri': 'content://provider/tree/root/document/note',
+            },
+          ];
+        });
+    addTearDown(
+      () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null),
+    );
+
+    await expectLater(
+      const AndroidSafAccess().listFiles('content://provider/tree/root'),
+      throwsA(isA<StateError>()),
+    );
+  });
+
+  test(
+    'Android SAF scan refuses note content above the total byte limit',
+    () async {
+      const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
+      var nativeReadAttempted = false;
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, (call) async {
+            nativeReadAttempted = true;
+            return [];
+          });
+      addTearDown(
+        () => TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+            .setMockMethodCallHandler(channel, null),
+      );
+
+      final files = List.generate(
+        65,
+        (index) => SafFileEntry(
+          path: 'note-$index.md',
+          modifiedNanos: 0,
+          size: 2 * 1024 * 1024,
+          documentUri: 'content://provider/tree/root/document/$index',
+        ),
+      );
+      await expectLater(
+        const AndroidSafAccess().readListedFiles(
+          'content://provider/tree/root',
+          files,
+        ),
+        throwsA(isA<StateError>()),
+      );
+      expect(nativeReadAttempted, isFalse);
+    },
+  );
 
   test('Android SAF note batches stay within the file-count bound', () async {
     const channel = MethodChannel('com.hanaretamae.vault_gallery/saf');
@@ -2002,6 +2100,9 @@ class _ReorderedGalleryTagSettingsController
 
 class _FakeVaultPlatform implements VaultPlatform {
   @override
+  SafVaultAccess get safAccess => const AndroidSafAccess();
+
+  @override
   Future<String?> chooseVault() async => null;
 
   @override
@@ -2054,6 +2155,9 @@ class _FakeRepository implements GalleryRepository {
   @override
   Future<String> saveVaultPath(String directoryPath, String vaultPath) async =>
       vaultPath;
+
+  @override
+  Future<void> forgetVaultData(String directoryPath, String vaultPath) async {}
 
   @override
   Future<GalleryScanReport> scan(String vaultPath, String indexPath) async {

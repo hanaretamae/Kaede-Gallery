@@ -28,6 +28,10 @@ Dependencies point downwards only. `gallery-parse` is pure parsing without
 filesystem I/O. `gallery-core` does not know Flutter or the bridge. Flutter
 features do not import each other; the UI calls Rust through a repository
 interface and keeps OS-specific behavior in `platform/`.
+Repositories, settings, and viewer actions depend on injectable platform
+capabilities rather than constructing Android method-channel adapters directly.
+The Linux filesystem chooser and Android `ContentResolver` remain distinct I/O
+implementations; only their lifecycle and data contracts are shared.
 
 1. **Complete:** Rust parser, core, CLI, fictional fixture generator, and initial benchmark.
 2. **Complete:** Flutter/Linux gallery list with native video-frame thumbnails.
@@ -69,6 +73,26 @@ data.
 Nearby thumbnails are prefetched while scrolling. Rescanning remains explicit,
 so users can refresh after changing Vault contents. Keep this behavior
 read-only and do not request broad all-files access.
+The SAF resource contract is: at most 100,000 entries, depth 64, 32 MiB of
+aggregate relative-path bytes, 2 MiB per note, 128 notes and 16 MiB per read
+batch, at most four concurrent note reads, and 128 MiB of total note content
+per scan. Kotlin, Dart, and Rust must enforce compatible bounds; contract tests
+must prevent these limits from drifting.
+Android performance checks use generated fictional notes/media in a dedicated
+test location, never a user's Vault. The repeatable synthetic SAF benchmark
+drives the Rust scan and private thumbnail cache on an Android device, with a
+mock document-provider channel and a real Flutter image decoder and grid.
+Treat it as a Rust/Flutter/device baseline rather than a `ContentResolver`
+throughput measurement. Record only aggregate duration, peak memory, cache-hit
+rate, and frame timings; do not log paths or note content.
+The Linux CLI baseline is not a substitute for Android SAF or Flutter frame
+measurements.
+An explicit “forget selected Vault” action is separate from settings reset. It
+requires confirmation and removes the selected Vault URI/path, its private
+index and SQLite sidecars, scan summary, document-URI mapping, and thumbnail
+cache, then releases its persisted Android read grant. It does not modify the
+Vault or remove global appearance and note-structure settings. Report cleanup
+or grant-release failures; never report success when either operation fails.
 Opening a media item's containing folder offers the read-only folder document to
 the system `ACTION_VIEW` resolver so the user can select an installed file
 manager. Some file managers may not support directory documents; report that

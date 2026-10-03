@@ -17,15 +17,17 @@ use std::thread;
 use std::time::UNIX_EPOCH;
 use thiserror::Error;
 
+#[allow(dead_code)]
+mod saf_limits;
+
+use saf_limits::*;
+
 const INDEX_SCHEMA_VERSION: &str = "5";
 const MAX_THUMBNAIL_SOURCE_BYTES: u64 = 64 * 1024 * 1024;
 const MAX_THUMBNAIL_PIXELS: u64 = 32 * 1024 * 1024;
 const MAX_THUMBNAIL_DIMENSION: u32 = 16_384;
 const MAX_THUMBNAIL_ALLOCATION: u64 = 192 * 1024 * 1024;
 const MAX_THUMBNAIL_SIZE: u32 = 1_024;
-const MAX_SAF_DOCUMENTS: usize = 100_000;
-const MAX_SAF_NOTE_BYTES_TOTAL: usize = 128 * 1024 * 1024;
-const MAX_SAF_PATH_BYTES_TOTAL: usize = 32 * 1024 * 1024;
 static THUMBNAIL_LOCK: Mutex<()> = Mutex::new(());
 const VIRTUAL_FILTERS: [(VirtualFilter, &str); 4] = [
     (VirtualFilter::MultipleMedia, "複数画像"),
@@ -259,6 +261,97 @@ pub fn save_selected_vault_saf(directory: &Path, vault_uri: &str) -> Result<Stri
     }
     prepare_private_app_directory_for_saf(directory)?;
     save_selected_vault_value(directory, vault_uri)
+}
+
+pub fn forget_selected_vault(directory: &Path, expected_vault: &str) -> Result<(), CoreError> {
+    if expected_vault.is_empty() || expected_vault.len() > 4_096 || expected_vault.contains('\0') {
+        return Err(CoreError::InvalidVault);
+    }
+    let saf = expected_vault.starts_with("content://");
+    let selected = load_selected_vault(directory)?;
+    if selected
+        .as_deref()
+        .is_some_and(|selected| selected != expected_vault)
+    {
+        return Err(CoreError::VaultUnavailable);
+    }
+
+    let metadata = fs::symlink_metadata(directory).map_err(|_| CoreError::Io)?;
+    if !metadata.file_type().is_dir() {
+        return Err(CoreError::Io);
+    }
+    let directory = fs::canonicalize(directory).map_err(|_| CoreError::Io)?;
+    if !saf {
+        let vault = Path::new(expected_vault);
+        if !vault.is_absolute()
+            || vault
+                .components()
+                .any(|component| matches!(component, Component::CurDir | Component::ParentDir))
+        {
+            return Err(CoreError::InvalidVault);
+        }
+        if directory.starts_with(vault) {
+            return Err(CoreError::Io);
+        }
+        if let Ok(canonical_vault) = fs::canonicalize(vault)
+            && canonical_vault.is_dir()
+            && directory.starts_with(canonical_vault)
+        {
+            return Err(CoreError::Io);
+        }
+    }
+    set_private_directory(&directory)?;
+
+    let _guard = THUMBNAIL_LOCK.lock().map_err(|_| CoreError::Worker)?;
+    for name in [
+        "index.sqlite-journal",
+        "index.sqlite-wal",
+        "index.sqlite-shm",
+        "index.sqlite",
+        "saf-scan-cache.json.tmp",
+        "saf-scan-cache.json",
+        "vault-path.tmp",
+    ] {
+        remove_private_file(&directory.join(name))?;
+    }
+    remove_private_directory(&directory.join("thumbnails"), &directory)?;
+    remove_private_file(&directory.join("vault-path"))?;
+    Ok(())
+}
+
+fn remove_private_directory(path: &Path, parent: &Path) -> Result<(), CoreError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(CoreError::Io),
+    };
+    if !metadata.file_type().is_dir() {
+        return Err(CoreError::Io);
+    }
+    let canonical = fs::canonicalize(path).map_err(|_| CoreError::Io)?;
+    if canonical.parent() != Some(parent) {
+        return Err(CoreError::Io);
+    }
+    fs::remove_dir_all(canonical).map_err(|_| CoreError::Io)
+}
+
+fn remove_private_file(path: &Path) -> Result<(), CoreError> {
+    let metadata = match fs::symlink_metadata(path) {
+        Ok(metadata) => metadata,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(_) => return Err(CoreError::Io),
+    };
+    if !metadata.file_type().is_file() {
+        return Err(CoreError::Io);
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if metadata.nlink() != 1 {
+            return Err(CoreError::Io);
+        }
+    }
+    fs::remove_file(path).map_err(|_| CoreError::Io)
 }
 
 impl Gallery {
@@ -668,10 +761,13 @@ impl Gallery {
         let mut available_files = BTreeSet::new();
         let mut path_bytes = 0_usize;
         for path in file_paths {
+            if !saf_path_within_limits(&path) {
+                return Err(CoreError::InvalidVault);
+            }
             path_bytes = path_bytes
                 .checked_add(path.len())
                 .ok_or(CoreError::InvalidVault)?;
-            if path_bytes > MAX_SAF_PATH_BYTES_TOTAL {
+            if path_bytes > MAX_SAF_AGGREGATE_PATH_BYTES {
                 return Err(CoreError::InvalidVault);
             }
             if let Some(path) = normalize_note_path(&path)
@@ -700,10 +796,13 @@ impl Gallery {
             .map_err(|_| CoreError::Database)?;
 
         for document in documents {
+            if !saf_path_within_limits(&document.path) {
+                return Err(CoreError::InvalidVault);
+            }
             path_bytes = path_bytes
                 .checked_add(document.path.len())
                 .ok_or(CoreError::InvalidVault)?;
-            if path_bytes > MAX_SAF_PATH_BYTES_TOTAL {
+            if path_bytes > MAX_SAF_AGGREGATE_PATH_BYTES {
                 return Err(CoreError::InvalidVault);
             }
             let Some(relative) = normalize_note_path(&document.path) else {
@@ -733,10 +832,13 @@ impl Gallery {
                     .map_err(|_| CoreError::Database)?;
                 continue;
             }
+            if content.len() > MAX_SAF_NOTE_BYTES {
+                return Err(CoreError::InvalidVault);
+            }
             note_bytes = note_bytes
                 .checked_add(content.len())
                 .ok_or(CoreError::InvalidVault)?;
-            if note_bytes > MAX_SAF_NOTE_BYTES_TOTAL {
+            if note_bytes > MAX_SAF_SCAN_NOTE_BYTES {
                 return Err(CoreError::InvalidVault);
             }
             let size = i64::try_from(content.len()).map_err(|_| CoreError::InvalidVault)?;
@@ -2049,6 +2151,18 @@ fn normalize_note_path(value: &str) -> Option<String> {
         }
     }
     (!parts.is_empty()).then(|| parts.join("/"))
+}
+
+fn saf_path_within_limits(value: &str) -> bool {
+    !value.is_empty()
+        && value.len() <= MAX_SAF_RELATIVE_PATH_BYTES
+        && !value.starts_with('/')
+        && !value.contains('\\')
+        && !value.contains('\0')
+        && value.bytes().filter(|byte| *byte == b'/').count() <= MAX_SAF_DEPTH
+        && !value
+            .split('/')
+            .any(|component| component.is_empty() || component == "." || component == "..")
 }
 
 fn note_path_variants(path: String) -> Vec<String> {
@@ -4220,6 +4334,89 @@ mod tests {
         assert!(!by_path.contains_key("ok.md"));
 
         fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn saf_limits_match_note_parser_and_accept_only_bounded_paths() {
+        assert_eq!(MAX_SAF_NOTE_BYTES, gallery_parse::MAX_NOTE_BYTES);
+        assert!(saf_path_within_limits(
+            &"a".repeat(MAX_SAF_RELATIVE_PATH_BYTES)
+        ));
+        assert!(!saf_path_within_limits(
+            &"a".repeat(MAX_SAF_RELATIVE_PATH_BYTES + 1)
+        ));
+        let max_depth_path = format!(
+            "{}/note.md",
+            (0..MAX_SAF_DEPTH)
+                .map(|_| "folder")
+                .collect::<Vec<_>>()
+                .join("/")
+        );
+        let over_depth_path = format!("folder/{max_depth_path}");
+        assert!(saf_path_within_limits(&max_depth_path));
+        assert!(!saf_path_within_limits(&over_depth_path));
+        assert!(!saf_path_within_limits("folder/../note.md"));
+    }
+
+    #[test]
+    fn forgetting_a_vault_removes_only_private_selection_and_index_data() {
+        let vault = temp_dir();
+        fs::create_dir_all(&vault).expect("create vault");
+        let note = vault.join("note.md");
+        fs::write(&note, "fictional note").expect("write fictional note");
+        let app_data = temp_dir();
+        fs::create_dir_all(&app_data).expect("create app data");
+        let selected = save_selected_vault(&app_data, &vault).expect("save selection");
+
+        for name in [
+            "index.sqlite",
+            "index.sqlite-journal",
+            "index.sqlite-wal",
+            "index.sqlite-shm",
+        ] {
+            fs::write(app_data.join(name), "private index data").expect("create index file");
+        }
+        fs::create_dir_all(app_data.join("thumbnails/00")).expect("create thumbnail cache");
+        fs::write(
+            app_data.join("thumbnails/00/fictional-thumbnail.png"),
+            "fictional thumbnail",
+        )
+        .expect("write thumbnail cache");
+        fs::write(app_data.join("saf-scan-cache.json"), "{}").expect("write scan summary");
+        fs::write(app_data.join("global-settings.json"), "{}").expect("write global settings");
+
+        assert!(forget_selected_vault(&app_data, "/tmp/another-vault").is_err());
+        assert_eq!(
+            load_selected_vault(&app_data).expect("selection remains"),
+            Some(selected.clone())
+        );
+        assert!(app_data.join("index.sqlite").exists());
+
+        forget_selected_vault(&app_data, &selected).expect("forget selected vault");
+        assert_eq!(
+            load_selected_vault(&app_data).expect("selection cleared"),
+            None
+        );
+        for name in [
+            "index.sqlite",
+            "index.sqlite-journal",
+            "index.sqlite-wal",
+            "index.sqlite-shm",
+            "vault-path",
+            "saf-scan-cache.json",
+        ] {
+            assert!(!app_data.join(name).exists(), "{name} should be removed");
+        }
+        assert!(!app_data.join("thumbnails").exists());
+        assert!(app_data.join("global-settings.json").exists());
+        assert_eq!(
+            fs::read_to_string(note).expect("vault note remains"),
+            "fictional note"
+        );
+        forget_selected_vault(&app_data, &selected).expect("forget is retryable");
+
+        fs::remove_dir_all(app_data).expect("remove app data");
+        fs::remove_dir_all(vault).expect("remove fictional vault");
     }
 
     #[test]

@@ -434,10 +434,10 @@ class _DataSettingsScreen extends ConsumerWidget {
         'tags': tagSettings.toJson(),
       });
       if (Platform.isAndroid) {
-        final saved = await const AndroidSafAccess().saveJson(
-          'vault-gallery-settings.json',
-          '$json\n',
-        );
+        final saved = await ref
+            .read(vaultPlatformProvider)
+            .safAccess
+            .saveJson('vault-gallery-settings.json', '$json\n');
         if (saved && context.mounted) {
           ScaffoldMessenger.of(context)
               .showSnackBar(const SnackBar(content: Text('設定をJSONで保存しました。')));
@@ -609,9 +609,64 @@ class _DataSettingsScreen extends ConsumerWidget {
     }
   }
 
+  Future<void> _forgetVault(
+    BuildContext context,
+    WidgetRef ref,
+    VaultSession session,
+  ) async {
+    final isSafVault = session.vaultPath.startsWith('content://');
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('この Vault を忘れる'),
+        content: Text(
+          '${vaultDisplayName(session.vaultPath)} のアプリ内インデックス、キャッシュ、選択情報'
+          '${isSafVault ? 'と読み取りアクセス権' : ''}を削除します。'
+          'Vault 内のファイルと外観・タグなどのアプリ設定は変更しません。',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('忘れる'),
+          ),
+        ],
+      ),
+    );
+    if (!context.mounted || confirmed != true) return;
+    try {
+      await ref.read(vaultSessionProvider.notifier).forgetVault();
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Vault のアプリ内データを削除しました。')));
+      }
+    } on Exception {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vault のアプリ内データを削除できませんでした。もう一度お試しください。'),
+          ),
+        );
+      }
+    } on StateError {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Vault のアプリ内データを削除できませんでした。もう一度お試しください。'),
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final colorScheme = Theme.of(context).colorScheme;
+    final session = ref.watch(vaultSessionProvider).asData?.value;
     return Scaffold(
       appBar: AppBar(title: const Text('アプリ')),
       body: ListView(
@@ -644,6 +699,16 @@ class _DataSettingsScreen extends ConsumerWidget {
               onTap: () => _resetSettings(context, ref),
             ),
           ),
+          if (session != null)
+            Card(
+              color: colorScheme.surfaceContainerLow,
+              child: ListTile(
+                leading: const Icon(Icons.delete_outline),
+                title: const Text('この Vault を忘れる'),
+                subtitle: const Text('Vault の選択情報、インデックスとキャッシュを削除します'),
+                onTap: () => _forgetVault(context, ref, session),
+              ),
+            ),
         ],
       ),
     );

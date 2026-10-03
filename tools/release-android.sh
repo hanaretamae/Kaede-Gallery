@@ -101,6 +101,7 @@ awk -v version="${tag#v}" '
 ' CHANGELOG.md > "$notes_file"
 [[ -s $notes_file ]] || fail "CHANGELOG.md has no release notes for $tag"
 
+dart tools/generate_saf_limits.dart --check
 rustup target add aarch64-linux-android
 cargo test --locked --workspace
 (
@@ -154,6 +155,13 @@ apk="$repo_root/app/build/app/outputs/flutter-apk/app-release.apk"
 apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
 [[ -f $apk && -x $apksigner ]] || fail "APK or apksigner was not produced"
 "$apksigner" verify "$apk" || fail "APK signature verification failed"
+command -v apkanalyzer >/dev/null || fail "Android SDK apkanalyzer was not found"
+permissions=$(apkanalyzer manifest permissions "$apk") ||
+  fail "could not inspect the release APK permissions"
+if grep -Eq 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED)' \
+  <<< "$permissions"; then
+  fail "the release APK requests a network or broad-storage permission"
+fi
 
 gh release create "$tag" "$apk" \
   --verify-tag \
