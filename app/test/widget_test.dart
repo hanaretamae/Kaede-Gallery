@@ -1321,20 +1321,19 @@ void main() {
       Colors.black,
     );
     final viewerPage = find.byType(PageView).last;
-    final authorFade = find
-        .ancestor(
-          of: find.text('@noone_oO'),
-          matching: find.byType(AnimatedOpacity),
-        )
-        .first;
-    expect(tester.widget<AnimatedOpacity>(authorFade).opacity, 0);
-    final hiddenPost = find
-        .ancestor(
-          of: find.text('ONEちゃん'),
-          matching: find.byType(AnimatedOpacity),
-        )
-        .last;
-    expect(tester.widget<AnimatedOpacity>(hiddenPost).opacity, 0);
+    final topOpacityKey = const ValueKey('viewer-top-overlay-opacity');
+    final detailsOpacityKey = const ValueKey('viewer-details-opacity');
+    expect(
+      tester.widget<FadeTransition>(find.byKey(topOpacityKey)).opacity.value,
+      0,
+    );
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(detailsOpacityKey))
+          .opacity
+          .value,
+      0,
+    );
     expect(tester.getTopLeft(viewerPage).dy, 0);
     expect(
       tester.getBottomRight(viewerPage).dy,
@@ -1342,8 +1341,36 @@ void main() {
     );
     await tester.tapAt(const Offset(400, 200));
     await tester.pumpAndSettle();
-    expect(tester.widget<AnimatedOpacity>(authorFade).opacity, 1);
-    expect(tester.widget<AnimatedOpacity>(hiddenPost).opacity, 1);
+    expect(
+      tester.widget<FadeTransition>(find.byKey(topOpacityKey)).opacity.value,
+      1,
+    );
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(detailsOpacityKey))
+          .opacity
+          .value,
+      1,
+    );
+    await tester.tapAt(const Offset(400, 200));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FadeTransition>(find.byKey(topOpacityKey)).opacity.value,
+      0,
+    );
+    await tester.tapAt(const Offset(400, 200));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<FadeTransition>(find.byKey(topOpacityKey)).opacity.value,
+      1,
+    );
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(detailsOpacityKey))
+          .opacity
+          .value,
+      1,
+    );
     expect(
       tester.getTopLeft(find.text('@noone_oO')).dy,
       greaterThanOrEqualTo(tester.getTopLeft(viewerPage).dy),
@@ -1420,13 +1447,10 @@ void main() {
       find.descendant(of: relatedCard, matching: find.byIcon(Icons.circle)),
       findsNothing,
     );
-    final headerOpacity = find
-        .ancestor(
-          of: find.text('経験的証拠。').first,
-          matching: find.byType(AnimatedOpacity),
-        )
-        .first;
-    expect(tester.widget<AnimatedOpacity>(headerOpacity).opacity, 1);
+    expect(
+      tester.widget<FadeTransition>(find.byKey(topOpacityKey)).opacity.value,
+      1,
+    );
     final firstColor =
         tester
                 .widget<DecoratedBox>(
@@ -1515,27 +1539,52 @@ void main() {
     await tester.tap(relatedLink);
     await tester.pumpAndSettle();
     expect(repository.lastDetailNoteId, 2);
-    final linkedHeaderOpacity = find
-        .ancestor(
-          of: find.text('Linked Target Note'),
-          matching: find.byType(AnimatedOpacity),
-        )
-        .last;
-    expect(tester.widget<AnimatedOpacity>(linkedHeaderOpacity).opacity, 1);
+    const linkedHeaderOpacityKey = ValueKey('viewer-top-overlay-opacity');
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(linkedHeaderOpacityKey))
+          .opacity
+          .value,
+      1,
+    );
     expect(find.text('linked-target.md'), findsOneWidget);
     await tester.dragFrom(const Offset(400, 520), const Offset(-240, 0));
     await tester.pumpAndSettle();
     expect(find.text('2 / 2'), findsOneWidget);
-    expect(tester.widget<AnimatedOpacity>(linkedHeaderOpacity).opacity, 1);
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(linkedHeaderOpacityKey))
+          .opacity
+          .value,
+      1,
+    );
     await tester.tapAt(const Offset(400, 200));
     await tester.pumpAndSettle();
-    expect(tester.widget<AnimatedOpacity>(linkedHeaderOpacity).opacity, 0);
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(linkedHeaderOpacityKey))
+          .opacity
+          .value,
+      0,
+    );
     await tester.drag(find.byType(PageView).last, const Offset(240, 0));
     await tester.pumpAndSettle();
-    expect(tester.widget<AnimatedOpacity>(linkedHeaderOpacity).opacity, 0);
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(linkedHeaderOpacityKey))
+          .opacity
+          .value,
+      0,
+    );
     await tester.tapAt(const Offset(400, 200));
     await tester.pumpAndSettle();
-    expect(tester.widget<AnimatedOpacity>(linkedHeaderOpacity).opacity, 1);
+    expect(
+      tester
+          .widget<FadeTransition>(find.byKey(linkedHeaderOpacityKey))
+          .opacity
+          .value,
+      1,
+    );
     expect(find.text('1 / 2'), findsOneWidget);
   });
 

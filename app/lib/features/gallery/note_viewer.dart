@@ -79,6 +79,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
   late final PageController pageController;
   late final ScrollController detailsScrollController;
   late final AnimationController _detailsVisibilityController;
+  late final CurvedAnimation _detailsVisibilityAnimation;
   late final Listenable _detailsLayout = Listenable.merge([
     _detailsVisibilityController,
     _detailsScrollOffset,
@@ -101,6 +102,10 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
       vsync: this,
       duration: GalleryMotion.emphasized,
     )..value = controlsVisible ? 1 : 0;
+    _detailsVisibilityAnimation = CurvedAnimation(
+      parent: _detailsVisibilityController,
+      curve: GalleryMotion.emphasizedCurve,
+    );
     if (fullscreen) unawaited(_setFullscreen(true));
     final initialIndex = widget.note.media.indexWhere(
       (media) => media.id == widget.initialMediaId,
@@ -124,6 +129,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
   void dispose() {
     pageController.dispose();
     detailsScrollController.dispose();
+    _detailsVisibilityAnimation.dispose();
     _detailsVisibilityController.dispose();
     _detailsScrollOffset.dispose();
     horizontalPageChangeCooldown?.cancel();
@@ -251,9 +257,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
     return baseHeight + (maxHeightWithMedia - baseHeight) * expansion;
   }
 
-  double get _detailsVisibility => GalleryMotion.emphasizedCurve.transform(
-    _detailsVisibilityController.value,
-  );
+  double get _detailsVisibility => _detailsVisibilityAnimation.value;
 
   @override
   Widget build(BuildContext context) {
@@ -457,6 +461,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
                       ),
                     _ViewerTopOverlay(
                       visible: controlsVisible,
+                      visibilityAnimation: _detailsVisibilityAnimation,
                       title: viewerTitle,
                       author: authorBeforeMedia ? author : null,
                       profileUrl: profileUrl,
@@ -507,9 +512,9 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
                       child: ClipRect(
                         child: IgnorePointer(
                           ignoring: !controlsVisible,
-                          child: AnimatedOpacity(
-                            duration: GalleryMotion.medium,
-                            opacity: controlsVisible ? 1 : 0,
+                          child: FadeTransition(
+                            key: const ValueKey('viewer-details-opacity'),
+                            opacity: _detailsVisibilityAnimation,
                             child: _ViewerBottomOverlay(
                               note: note,
                               author: author,
@@ -543,6 +548,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
 class _ViewerTopOverlay extends StatelessWidget {
   const _ViewerTopOverlay({
     required this.visible,
+    required this.visibilityAnimation,
     required this.title,
     required this.author,
     required this.profileUrl,
@@ -559,6 +565,7 @@ class _ViewerTopOverlay extends StatelessWidget {
   });
 
   final bool visible;
+  final Animation<double> visibilityAnimation;
   final String title;
   final String? author;
   final Uri? profileUrl;
@@ -580,9 +587,9 @@ class _ViewerTopOverlay extends StatelessWidget {
     right: 0,
     child: IgnorePointer(
       ignoring: !visible,
-      child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
-        duration: GalleryMotion.medium,
+      child: FadeTransition(
+        key: const ValueKey('viewer-top-overlay-opacity'),
+        opacity: visibilityAnimation,
         child: Material(
           color: Theme.of(context).colorScheme.surface,
           elevation: 2,
