@@ -639,15 +639,11 @@ class _GalleryTile extends ConsumerWidget {
             if (thumbnail == null)
               _MediaPlaceholder(hasVideo: note.videoCount > 0)
             else
-              ClipRRect(
-                borderRadius: BorderRadius.circular(GalleryShape.medium),
-                clipBehavior: Clip.antiAlias,
-                child: _GalleryTileThumbnail(
-                  mediaId: mediaId,
-                  isVideo:
-                      note.mediaCount > 0 && note.videoCount == note.mediaCount,
-                  thumbnail: thumbnail,
-                ),
+              _GalleryTileThumbnail(
+                mediaId: mediaId,
+                isVideo:
+                    note.mediaCount > 0 && note.videoCount == note.mediaCount,
+                thumbnail: thumbnail,
               ),
             if (note.videoCount > 0)
               const Positioned(
@@ -778,14 +774,10 @@ class _MediaTile extends ConsumerWidget {
         child: Stack(
           fit: StackFit.expand,
           children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(GalleryShape.medium),
-              clipBehavior: Clip.antiAlias,
-              child: _GalleryTileThumbnail(
-                mediaId: item.id,
-                isVideo: item.isVideo,
-                thumbnail: thumbnail,
-              ),
+            _GalleryTileThumbnail(
+              mediaId: item.id,
+              isVideo: item.isVideo,
+              thumbnail: thumbnail,
             ),
             if (item.isVideo)
               const Positioned(

@@ -18,6 +18,7 @@ import 'package:window_manager/window_manager.dart';
 
 import '../../app_theme.dart';
 import '../../core_api/gallery_appearance.dart';
+import '../../core_api/gallery_media_providers.dart';
 import '../../core_api/gallery_providers.dart';
 import '../../core_api/gallery_repository.dart';
 import '../../core_api/gallery_tag_settings.dart';

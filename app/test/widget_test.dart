@@ -854,7 +854,7 @@ void main() {
     final tileSize = tester.getSize(tile.first);
     expect(tileSize.width / tileSize.height, closeTo(4 / 5, 0.02));
     expect(tester.widget<Card>(tile.first).clipBehavior, Clip.antiAlias);
-    expect(find.byType(ClipRRect), findsWidgets);
+    expect(find.byType(ClipRRect), findsNothing);
     await tester.tap(find.byTooltip('タグで絞り込む'));
     await tester.pumpAndSettle();
     expect(find.text('コンテンツ'), findsOneWidget);

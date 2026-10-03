@@ -38,6 +38,6 @@ uses a lazy grid and fetches 24 items per page by default. No Flutter code
 refactor was indicated by these checks. Smooth scrolling with a large real
 Vault, real-media I/O, peak memory, and frame-time profiling were not measured;
 those require an interactive target and representative media and remain useful
-checks during the Android phase. Re-run the expanded benchmark with
+follow-up checks for Linux and Android. Re-run the expanded benchmark with
 `bash tools/benchmark.sh <note-count> <work-directory>`; it measures full and
 unchanged scans, category lookup, and broad/narrow tag-filtered list queries.

@@ -29,18 +29,18 @@ filesystem I/O. `gallery-core` does not know Flutter or the bridge. Flutter
 features do not import each other; the UI calls Rust through a repository
 interface and keeps OS-specific behavior in `platform/`.
 
-1. Rust parser, core, CLI, fictional fixture generator, and initial benchmark.
-2. Flutter/Linux gallery list with native video-frame thumbnails.
-3. Viewer, details, Obsidian links, and video.
-4. Android.
-5. Windows/macOS.
-6. iOS after agreeing on external Vault access.
+1. **Complete:** Rust parser, core, CLI, fictional fixture generator, and initial benchmark.
+2. **Complete:** Flutter/Linux gallery list with native video-frame thumbnails.
+3. **Complete:** Viewer, details, Obsidian links, and video.
+4. **Complete:** Android, including Storage Access Framework support.
+5. **Planned:** Windows/macOS.
+6. **Blocked on a design decision:** iOS external Vault access.
 
 Complete and verify one phase before starting another.
 
-Phase 4 initially targets a privately sideloaded APK; this does not imply
-store-distribution readiness. Android Vault access is an open implementation
-boundary: the target is an ordinary user-selected folder, such as one under
+Phase 4 delivered a privately sideloaded APK; this does not imply
+store-distribution readiness. Android Vault access targets an ordinary
+user-selected folder, such as one under
 Documents; no Syncthing-specific integration is needed. The current core scans
 ordinary filesystem paths, while Android's Storage Access Framework grants
 access to document URIs that are not necessarily usable as filesystem paths,
@@ -312,9 +312,10 @@ rate, single-item looping, and mute with fully transparent controls. The
 existing display-mode `PopupMenuButton`
 uses Flutter's Material 3 menu styling with a selected-item checkmark.
 Video playback uses `media_kit`/mpv on Linux; the development environment
-provides mpv and libass for its native plugin build. Android ExoPlayer belongs
-to the later Android phase; ExoPlayer is an Android Media3 backend and cannot
-replace the Linux mpv backend.
+provides mpv and libass for its native plugin build. Android playback uses
+Flutter's `video_player` plugin and its native Android backend. Keep the
+platform-specific playback implementations separate rather than treating the
+Linux mpv backend as the Android implementation.
 
 The tag-filter panel has separate tag-option and note-name/path search fields.
 A tag chip cycles through OR include, AND include, exclude, and inactive.
@@ -327,7 +328,7 @@ filter matching semantics. Choices with no matches under active filters remain
 visible but disabled. Expanded filter sections retain their state while the
 category data refreshes. Gallery and category results remain visible while
 filter-triggered reloads are pending, avoiding a loading-indicator flash.
-The folder chooser remains a native GTK dialog
+On Linux, the folder chooser remains a native GTK dialog
 and therefore follows the desktop's GTK/system theme, independently of Flutter
 widget themes.
 

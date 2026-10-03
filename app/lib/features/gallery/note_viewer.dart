@@ -60,7 +60,8 @@ class _NoteViewerContent extends ConsumerStatefulWidget {
   ConsumerState<_NoteViewerContent> createState() => _NoteViewerContentState();
 }
 
-class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
+class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
+    with SingleTickerProviderStateMixin {
   /// Minimum fraction of the viewer height reserved for media once the
   /// detail panel has expanded as far as scrolling allows. Keeps a "reasonable
   /// minimum" media area visible instead of letting it collapse entirely.
@@ -77,11 +78,16 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
 
   late final PageController pageController;
   late final ScrollController detailsScrollController;
+  late final AnimationController _detailsVisibilityController;
+  late final Listenable _detailsLayout = Listenable.merge([
+    _detailsVisibilityController,
+    _detailsScrollOffset,
+  ]);
+  final ValueNotifier<double> _detailsScrollOffset = ValueNotifier(0);
   late int currentPage;
   bool imageZoomed = false;
   bool controlsVisible = false;
   bool fullscreen = false;
-  double detailsScrollOffset = 0;
   Timer? horizontalPageChangeCooldown;
   double trackpadPanDistance = 0;
   double horizontalDragDistance = 0;
@@ -91,6 +97,10 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
     super.initState();
     controlsVisible = widget.initiallyShowDetails;
     fullscreen = Platform.isAndroid && !controlsVisible;
+    _detailsVisibilityController = AnimationController(
+      vsync: this,
+      duration: GalleryMotion.emphasized,
+    )..value = controlsVisible ? 1 : 0;
     if (fullscreen) unawaited(_setFullscreen(true));
     final initialIndex = widget.note.media.indexWhere(
       (media) => media.id == widget.initialMediaId,
@@ -104,8 +114,8 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
           0.0,
           _detailsExpandDistance,
         );
-        if (offset != detailsScrollOffset) {
-          setState(() => detailsScrollOffset = offset);
+        if (offset != _detailsScrollOffset.value) {
+          _detailsScrollOffset.value = offset;
         }
       });
   }
@@ -114,6 +124,8 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
   void dispose() {
     pageController.dispose();
     detailsScrollController.dispose();
+    _detailsVisibilityController.dispose();
+    _detailsScrollOffset.dispose();
     horizontalPageChangeCooldown?.cancel();
     if (fullscreen) unawaited(_setFullscreen(false));
     super.dispose();
@@ -145,6 +157,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
       imageZoomed = false;
       if (Platform.isAndroid) fullscreen = true;
     });
+    _detailsVisibilityController.reverse();
     if (Platform.isAndroid) unawaited(_setFullscreen(true));
   }
 
@@ -168,6 +181,11 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
           controlsVisible = !next;
           imageZoomed = false;
         });
+        if (next) {
+          _detailsVisibilityController.reverse();
+        } else {
+          _detailsVisibilityController.forward();
+        }
       }
     } on PlatformException {
       if (mounted) {
@@ -186,6 +204,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
           controlsVisible = true;
           imageZoomed = false;
         });
+        _detailsVisibilityController.forward();
       }
     } on PlatformException {
       if (mounted) {
@@ -220,6 +239,21 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
       () => horizontalPageChangeCooldown = null,
     );
   }
+
+  double _detailsHeight(double maxHeight) {
+    final baseHeight = maxHeight * _baseDetailsHeightFraction;
+    final maxHeightWithMedia = math.max(
+      baseHeight,
+      maxHeight - maxHeight * _minMediaHeightFraction,
+    );
+    final expansion = (_detailsScrollOffset.value / _detailsExpandDistance)
+        .clamp(0.0, 1.0);
+    return baseHeight + (maxHeightWithMedia - baseHeight) * expansion;
+  }
+
+  double get _detailsVisibility => GalleryMotion.emphasizedCurve.transform(
+    _detailsVisibilityController.value,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -303,21 +337,6 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
           },
           child: LayoutBuilder(
             builder: (context, constraints) {
-              final mediaTop = 0.0;
-              final baseDetailsHeight =
-                  constraints.maxHeight * _baseDetailsHeightFraction;
-              final minMediaHeight =
-                  constraints.maxHeight * _minMediaHeightFraction;
-              final maxDetailsHeight = math.max(
-                baseDetailsHeight,
-                constraints.maxHeight - mediaTop - minMediaHeight,
-              );
-              final expansion = (detailsScrollOffset / _detailsExpandDistance)
-                  .clamp(0.0, 1.0);
-              final detailsHeight =
-                  baseDetailsHeight +
-                  (maxDetailsHeight - baseDetailsHeight) * expansion;
-              final mediaBottom = controlsVisible ? detailsHeight : 0.0;
               return GestureDetector(
                 onHorizontalDragStart: (_) => horizontalDragDistance = 0,
                 onHorizontalDragUpdate: (details) {
@@ -338,13 +357,8 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                 child: Stack(
                   fit: StackFit.expand,
                   children: [
-                    AnimatedPositioned(
-                      duration: GalleryMotion.emphasized,
-                      curve: GalleryMotion.emphasizedCurve,
-                      left: 0,
-                      right: 0,
-                      top: mediaTop,
-                      bottom: mediaBottom,
+                    AnimatedBuilder(
+                      animation: _detailsLayout,
                       child: Listener(
                         // Scrolling (mouse wheel / trackpad) while the pointer
                         // is over the media forwards to the detail panel's
@@ -397,15 +411,19 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                           ),
                         ),
                       ),
+                      builder: (context, child) => Positioned(
+                        left: 0,
+                        right: 0,
+                        top: 0,
+                        bottom:
+                            _detailsHeight(constraints.maxHeight) *
+                            _detailsVisibility,
+                        child: child!,
+                      ),
                     ),
                     if (!fullscreen && note.media.length > 1)
-                      AnimatedPositioned(
-                        duration: GalleryMotion.emphasized,
-                        curve: GalleryMotion.emphasizedCurve,
-                        top: null,
-                        left: null,
-                        right: 20,
-                        bottom: mediaBottom + (isVideo ? 130 : 24),
+                      AnimatedBuilder(
+                        animation: _detailsLayout,
                         child: IgnorePointer(
                           child: DecoratedBox(
                             decoration: BoxDecoration(
@@ -425,6 +443,16 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                               ),
                             ),
                           ),
+                        ),
+                        builder: (context, child) => Positioned(
+                          top: null,
+                          left: null,
+                          right: 20,
+                          bottom:
+                              _detailsHeight(constraints.maxHeight) *
+                                  _detailsVisibility +
+                              (isVideo ? 130 : 24),
+                          child: child!,
                         ),
                       ),
                     _ViewerTopOverlay(
@@ -474,13 +502,8 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                       mediaPath: mediaSource?.asData?.value,
                       vaultPath: session?.vaultPath,
                     ),
-                    AnimatedPositioned(
-                      duration: GalleryMotion.emphasized,
-                      curve: GalleryMotion.emphasizedCurve,
-                      left: 0,
-                      right: 0,
-                      bottom: 0,
-                      height: controlsVisible ? detailsHeight : 0,
+                    AnimatedBuilder(
+                      animation: _detailsLayout,
                       child: ClipRect(
                         child: IgnorePointer(
                           ignoring: !controlsVisible,
@@ -491,11 +514,19 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent> {
                               note: note,
                               author: author,
                               showAuthor: !authorBeforeMedia,
-                              availableHeight: detailsHeight,
                               scrollController: detailsScrollController,
                             ),
                           ),
                         ),
+                      ),
+                      builder: (context, child) => Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        height:
+                            _detailsHeight(constraints.maxHeight) *
+                            _detailsVisibility,
+                        child: child!,
                       ),
                     ),
                   ],
@@ -700,30 +731,25 @@ class _ViewerBottomOverlay extends StatelessWidget {
     required this.note,
     required this.author,
     required this.showAuthor,
-    required this.availableHeight,
     required this.scrollController,
   });
 
   final GalleryNoteDetail note;
   final String? author;
   final bool showAuthor;
-  final double availableHeight;
   final ScrollController scrollController;
 
   @override
-  Widget build(BuildContext context) => SizedBox(
-    height: availableHeight,
-    child: Material(
-      color: Theme.of(context).colorScheme.surfaceContainerLow,
-      elevation: 3,
-      child: SingleChildScrollView(
-        controller: scrollController,
-        padding: const EdgeInsets.only(top: 16, bottom: 16),
-        child: _NoteDetailsPanel(
-          note: note,
-          author: author,
-          showAuthor: showAuthor,
-        ),
+  Widget build(BuildContext context) => Material(
+    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    elevation: 3,
+    child: SingleChildScrollView(
+      controller: scrollController,
+      padding: const EdgeInsets.only(top: 16, bottom: 16),
+      child: _NoteDetailsPanel(
+        note: note,
+        author: author,
+        showAuthor: showAuthor,
       ),
     ),
   );
