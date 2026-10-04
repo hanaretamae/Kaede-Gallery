@@ -270,6 +270,7 @@ class _PaginationSettingsScreen extends ConsumerWidget {
             ),
           ],
         ),
+        skipLoadingOnReload: true,
       ),
     );
   }
@@ -327,7 +328,6 @@ class _AboutScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: M3EAppBar.top(
         title: galleryAppBarTitle(context, 'このアプリについて'),
@@ -342,10 +342,14 @@ class _AboutScreen extends StatelessWidget {
               padding: const EdgeInsets.all(20),
               child: Column(
                 children: [
-                  Icon(
-                    Icons.photo_library_outlined,
-                    size: 48,
-                    color: colorScheme.primary,
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'assets/branding/kaede-gallery-icon.png',
+                      width: 64,
+                      height: 64,
+                      semanticLabel: 'Kaede Gallery のアイコン',
+                    ),
                   ),
                   const SizedBox(height: 12),
                   Text(

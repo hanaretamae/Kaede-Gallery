@@ -142,6 +142,7 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
             ],
           );
         },
+        skipLoadingOnReload: true,
       ),
     );
   }
@@ -273,6 +274,7 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
             ],
           );
         },
+        skipLoadingOnReload: true,
       ),
     );
   }
@@ -375,6 +377,7 @@ class _FrontmatterSettingsScreen extends ConsumerWidget {
             ],
           );
         },
+        skipLoadingOnReload: true,
       ),
     );
   }
@@ -593,14 +596,13 @@ class _PaginationSettingsCardState extends State<_PaginationSettingsCard> {
 
   @override
   Widget build(BuildContext context) {
-    return _settingsPanel(
-      context: context,
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            M3ETextField(
+    return Column(
+      children: [
+        _settingsPanel(
+          context: context,
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: M3ETextField(
               controller: _pageSizeController,
               keyboardType: TextInputType.number,
               label: 'ページサイズ',
@@ -613,32 +615,34 @@ class _PaginationSettingsCardState extends State<_PaginationSettingsCard> {
               onEditingComplete: () =>
                   _submitPageSize(_pageSizeController.text),
             ),
-            _expressiveSwitchTile(
-              title: '読み込み済み件数を表示',
-              subtitle: '上部バーに現在表示中の件数を表示します。',
-              value: widget.pagination.showItemCount,
-              onChanged: (value) => widget.onChanged(
-                widget.pagination.copyWith(showItemCount: value),
-              ),
-            ),
-            _expressiveSwitchTile(
-              title: 'タイルに一覧内の位置（何件目）を表示',
-              value: widget.pagination.showItemNumberOnTiles,
-              onChanged: (value) => widget.onChanged(
-                widget.pagination.copyWith(showItemNumberOnTiles: value),
-              ),
-            ),
-            _expressiveSwitchTile(
-              title: '未表示メディアのアイコンを表示',
-              subtitle: '既定ではアイコンを表示しません。',
-              value: widget.pagination.showMissingMediaIcon,
-              onChanged: (value) => widget.onChanged(
-                widget.pagination.copyWith(showMissingMediaIcon: value),
-              ),
-            ),
-          ],
+          ),
         ),
-      ),
+        _settingsGroup(context, [
+          _expressiveSwitchTile(
+            title: '読み込み済み件数を表示',
+            subtitle: '上部バーに現在表示中の件数を表示します。',
+            value: widget.pagination.showItemCount,
+            onChanged: (value) => widget.onChanged(
+              widget.pagination.copyWith(showItemCount: value),
+            ),
+          ),
+          _expressiveSwitchTile(
+            title: 'タイルに一覧内の位置（何件目）を表示',
+            value: widget.pagination.showItemNumberOnTiles,
+            onChanged: (value) => widget.onChanged(
+              widget.pagination.copyWith(showItemNumberOnTiles: value),
+            ),
+          ),
+          _expressiveSwitchTile(
+            title: '未表示メディアのアイコンを表示',
+            subtitle: '既定ではアイコンを表示しません。',
+            value: widget.pagination.showMissingMediaIcon,
+            onChanged: (value) => widget.onChanged(
+              widget.pagination.copyWith(showMissingMediaIcon: value),
+            ),
+          ),
+        ]),
+      ],
     );
   }
 }

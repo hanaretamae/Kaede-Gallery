@@ -222,6 +222,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
             ]),
           ],
         ),
+        skipLoadingOnReload: true,
       ),
     );
   }
