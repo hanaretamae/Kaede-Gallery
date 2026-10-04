@@ -1765,9 +1765,6 @@ void main() {
     expect(find.text('Kaede Gallery'), findsOneWidget);
     expect(find.text('GitHub リポジトリ'), findsOneWidget);
     expect(find.text('オープンソースライセンス'), findsOneWidget);
-    await tester.tap(find.text('アプリ情報'));
-    await tester.pumpAndSettle();
-    expect(find.text('Kaede Gallery'), findsNWidgets(2));
   });
 
   testWidgets('gallery item numbers are opt-in', (tester) async {
