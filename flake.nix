@@ -47,7 +47,7 @@
             desktopName = "Kaede Gallery";
             comment = "Offline, read-only gallery for Obsidian Vaults";
             exec = "vault_gallery";
-            icon = "applications-graphics";
+            icon = "kaede-gallery";
             categories = [
               "Graphics"
               "Viewer"
@@ -84,6 +84,9 @@
           FLUTTER_SUPPRESS_ANALYTICS = "true";
           DART_SUPPRESS_ANALYTICS = "true";
           postInstall = ''
+            install -Dm644 \
+              linux/kaede-gallery-512.png \
+              $out/share/icons/hicolor/512x512/apps/kaede-gallery.png
             install -Dm644 \
               ${desktopItem}/share/applications/kaede-gallery.desktop \
               $out/share/applications/kaede-gallery.desktop
