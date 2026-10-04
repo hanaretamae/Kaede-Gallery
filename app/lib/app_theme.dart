@@ -18,6 +18,10 @@ abstract final class GalleryMotion {
       : token;
 }
 
+/// Resolves to the font the OS has configured as its default sans-serif.
+const gallerySystemFontFamily = 'sans-serif';
+const gallerySystemFontFallback = ['Noto Sans CJK JP', 'Noto Sans JP'];
+
 abstract final class GalleryShape {
   static const small = 16.0;
   static const medium = 22.0;
@@ -96,6 +100,8 @@ ThemeData galleryTheme(
 
   return ThemeData(
     colorScheme: colorScheme,
+    fontFamily: gallerySystemFontFamily,
+    fontFamilyFallback: gallerySystemFontFallback,
     useMaterial3: true,
     visualDensity: VisualDensity.standard,
     scaffoldBackgroundColor: colorScheme.surface,
@@ -285,7 +291,17 @@ m3e.M3EThemeData _buildExpressiveTheme(ThemeData theme) {
         scrim: flutterScheme.scrim,
         surfaceTint: flutterScheme.surfaceTint,
       );
-  return m3e.M3EThemeData.fromMaterial(mui.ThemeData.from(colorScheme: scheme));
+  final base = m3e.M3EThemeData.fromMaterial(
+    mui.ThemeData.from(colorScheme: scheme),
+  ).copyWith(
+    fontFamily: gallerySystemFontFamily,
+    fontFamilyFallback: gallerySystemFontFallback,
+  );
+  return base.copyWith(
+    listTheme: base.listTheme.copyWith(
+      item: base.listTheme.item.copyWith(minHeight: 72),
+    ),
+  );
 }
 
 class ExpressiveMaterialScope extends StatelessWidget {

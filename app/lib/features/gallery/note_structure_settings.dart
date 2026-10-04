@@ -36,13 +36,9 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
           final structure = settings.noteStructure;
           return ListView(
             key: const ValueKey('note-structure-settings-list'),
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
-              Text(
-                'ノート詳細のブロック順序',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 12),
+              _settingsSectionHeading(context, 'ノート詳細のブロック順序', first: true),
               _BlockOrderCard(
                 blockOrder: structure.blockOrder,
                 hiddenBlocks: structure.hiddenBlocks,
@@ -240,7 +236,7 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
           }
 
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
               if (block == GalleryNoteBlock.author)
                 _settingsGroup(context, [
@@ -361,7 +357,7 @@ class _FrontmatterSettingsScreen extends ConsumerWidget {
         data: (settings) {
           final structure = settings.noteStructure;
           return ListView(
-            padding: const EdgeInsets.all(20),
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
             children: [
               for (final (title, keys, update, defaults) in [
                 (
@@ -965,7 +961,7 @@ class _FictionalNoteExampleScreen extends ConsumerWidget {
         leading: _expressiveBackButton(context),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           _settingsPanel(
             context: context,
@@ -1047,7 +1043,10 @@ class _FictionalNoteLayoutPreview extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            _settingsGroup(context, [
+            _settingsGroup(
+              context,
+              color: Theme.of(context).colorScheme.surfaceContainerHighest,
+              [
               M3EListItem(
                 headline: 'Frontmatter',
                 supportingText: 'タグ・タイトルなど（固定）',

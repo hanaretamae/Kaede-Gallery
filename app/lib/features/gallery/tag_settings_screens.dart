@@ -46,10 +46,9 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
         loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const Center(child: Text('タグ設定を読み込めませんでした。')),
         data: (settings) => ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            Text('ギャラリー対象タグ', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 8),
+            _settingsSectionHeading(context, 'ギャラリー対象タグ', first: true),
             _GalleryTagPrefixCard(
               prefixes: settings.noteStructure.galleryTagPrefixes,
               onChanged: (prefixes) => _save(
@@ -63,14 +62,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 rescan: true,
               ),
             ),
-            Text('フィルターに含めるタグ', style: Theme.of(context).textTheme.titleLarge),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'タグ絞り込みに含めるパスです。* はすべてを表します。ノートの索引は維持し、フィルター項目の表示だけを制御します。',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
+            _settingsSectionHeading(context, 'フィルターに含めるタグ'),
             _TagPrefixList(
               prefixes: settings.includedPrefixes,
               emptyText: 'フィルター対象のタグはありません',
@@ -104,16 +96,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text('フィルターのカテゴリー', style: Theme.of(context).textTheme.titleLarge),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'タグ絞り込みの分類です。パスは source/art のように完全一致、source/count/* のように配下すべてを指定します。'
-                '複数に一致する場合は具体的なパスが優先され、同じ名前の項目は 1 つのカテゴリーにまとめます。',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
+            _settingsSectionHeading(context, 'フィルターのカテゴリー'),
             _TagCategoryRuleList(
               settings: settings.categories,
               onChanged: (categories) => _save(
@@ -122,15 +105,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 settings.copyWith(categories: categories),
               ),
             ),
-            const SizedBox(height: 20),
-            Text('非表示にするタグ', style: Theme.of(context).textTheme.titleLarge),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                '一致したタグは絞り込み一覧とノート詳細のタグ表示から隠します。',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
+            _settingsSectionHeading(context, '非表示にするタグ'),
             _TagPrefixList(
               prefixes: settings.hiddenPrefixes,
               emptyText: '非表示タグはありません',
@@ -164,15 +139,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 20),
-            Text('タグの色', style: Theme.of(context).textTheme.titleLarge),
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              child: Text(
-                'パスの一致範囲に色を適用します。より長いパスの設定が優先されます。',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-            ),
+            _settingsSectionHeading(context, 'タグの色'),
             _settingsGroup(context, [
               for (final rule in settings.colors)
                 M3EListItem(
@@ -376,14 +343,7 @@ class _TagCategoryRuleList extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 12),
-        Text('その他カテゴリー', style: Theme.of(context).textTheme.titleMedium),
-        Padding(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          child: Text(
-            'どのカテゴリーにも一致しないタグをまとめます。該当するタグがない場合は表示しません。',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
+        _settingsSectionHeading(context, 'その他カテゴリー'),
         _settingsGroup(context, [
           _expressiveSwitchTile(
             title: 'その他カテゴリーを表示',

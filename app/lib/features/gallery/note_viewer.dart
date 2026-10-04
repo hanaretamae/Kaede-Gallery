@@ -735,7 +735,7 @@ class _ViewerBottomOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) => M3ECard(
     variant: M3ECardVariant.filled,
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
+    color: _viewerDetailsColor(context),
     elevation: 3,
     expanded: true,
     focusable: false,
@@ -1938,4 +1938,12 @@ Future<void> _openExternalUri(BuildContext context, Uri uri) async {
   if (!launched && context.mounted) {
     M3ESnackbar.show(context, message: '外部アプリで開けませんでした。対応アプリを確認してください。');
   }
+}
+
+/// Pure-black mode paints the details panel black; otherwise a tonal surface.
+Color _viewerDetailsColor(BuildContext context) {
+  final scheme = Theme.of(context).colorScheme;
+  return scheme.surface == Colors.black
+      ? Colors.black
+      : scheme.surfaceContainerLow;
 }

@@ -200,13 +200,17 @@ class _GallerySettingsScreen extends ConsumerWidget {
   }
 }
 
-Widget _settingsGroup(BuildContext context, List<M3EListItem> items) => Padding(
+Widget _settingsGroup(
+  BuildContext context,
+  List<M3EListItem> items, {
+  Color? color,
+}) => Padding(
   padding: const EdgeInsets.only(bottom: 12),
   child: M3EList(
     itemCount: items.length,
     itemBuilder: (context, index) => items[index],
     onTap: (index) => items[index].onTap?.call(),
-    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+    color: color ?? Theme.of(context).colorScheme.surfaceContainerHigh,
   ),
 );
 
@@ -218,8 +222,10 @@ Widget _settingsSectionHeading(
   padding: EdgeInsets.fromLTRB(16, first ? 8 : 24, 16, 8),
   child: Text(
     title,
-    style: Theme.of(context).textTheme.labelLarge
-        ?.copyWith(color: Theme.of(context).colorScheme.primary),
+    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+      color: Theme.of(context).colorScheme.primary,
+      fontWeight: FontWeight.w600,
+    ),
   ),
 );
 
@@ -255,10 +261,9 @@ class _PaginationSettingsScreen extends ConsumerWidget {
         loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const Center(child: Text('一覧設定を読み込めませんでした。')),
         data: (settings) => ListView(
-          padding: const EdgeInsets.all(20),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
-            Text('一覧表示', style: Theme.of(context).textTheme.titleLarge),
-            const SizedBox(height: 12),
+            _settingsSectionHeading(context, '一覧表示', first: true),
             _PaginationSettingsCard(
               pagination: settings.pagination,
               onChanged: (pagination) => _save(
@@ -338,41 +343,10 @@ class _AboutScreen extends StatelessWidget {
         leading: _expressiveBackButton(context),
       ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _settingsPanel(
-            context: context,
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Column(
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'assets/branding/kaede-gallery-icon.png',
-                      width: 64,
-                      height: 64,
-                      semanticLabel: 'Kaede Gallery のアイコン',
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    'Kaede Gallery',
-                    style: Theme.of(context).textTheme.headlineSmall,
-                  ),
-                  const SizedBox(height: 4),
-                  Text('バージョン $_version'),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Obsidian Vault 内のノートとメディアを閲覧するオフラインギャラリーです。',
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text('情報', style: Theme.of(context).textTheme.titleLarge),
+          _AboutHero(version: _version),
+          _settingsSectionHeading(context, '情報'),
           _settingsGroup(context, [
             M3EListItem(
               headline: 'アプリ情報',
@@ -386,7 +360,7 @@ class _AboutScreen extends StatelessWidget {
             ),
             M3EListItem(
               headline: 'オープンソースライセンス',
-              leading: _settingsIcon(context, Icons.article_outlined, tone: 1),
+              leading: const Icon(Icons.article_outlined),
               onTap: () => showLicensePage(
                 context: context,
                 applicationName: 'Kaede Gallery',
@@ -671,6 +645,90 @@ class _DataSettingsScreen extends ConsumerWidget {
               ),
           ]),
         ],
+      ),
+    );
+  }
+}
+
+/// Expressive hero card: large rounded tonal container, oversized icon and a
+/// pill-shaped version badge.
+class _AboutHero extends StatelessWidget {
+  const _AboutHero({required this.version});
+
+  final String version;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final text = Theme.of(context).textTheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 8),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.primaryContainer,
+          borderRadius: BorderRadius.circular(GalleryShape.extraLarge),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(24, 32, 24, 28),
+          child: SizedBox(
+            width: double.infinity,
+            child: Column(
+              children: [
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.surface,
+                    borderRadius: BorderRadius.circular(GalleryShape.large),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(GalleryShape.small),
+                      child: Image.asset(
+                        'assets/branding/kaede-gallery-icon.png',
+                        width: 88,
+                        height: 88,
+                        semanticLabel: 'Kaede Gallery のアイコン',
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Kaede Gallery',
+                  style: text.headlineMedium?.copyWith(
+                    color: scheme.onPrimaryContainer,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: scheme.primary,
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 6,
+                    ),
+                    child: Text(
+                      'バージョン $version',
+                      style: text.labelLarge?.copyWith(color: scheme.onPrimary),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Text(
+                  'Obsidian Vault 内のノートとメディアを閲覧するオフラインギャラリーです。',
+                  textAlign: TextAlign.center,
+                  style: text.bodyLarge?.copyWith(
+                    color: scheme.onPrimaryContainer,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
