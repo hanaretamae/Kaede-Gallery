@@ -475,25 +475,25 @@ class _BlockOrderCard extends StatelessWidget {
         ]),
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: ColoredBox(
-              color: scheme.surfaceContainerHigh,
-              child: ReorderableListView.builder(
-                shrinkWrap: true,
-                physics: const NeverScrollableScrollPhysics(),
-                buildDefaultDragHandles: false,
-                itemCount: blockOrder.length,
-                onReorderItem: (oldIndex, newIndex) {
-                  final updated = [...blockOrder];
-                  final moved = updated.removeAt(oldIndex);
-                  updated.insert(newIndex, moved);
-                  onReorder(updated);
-                },
-                itemBuilder: (context, index) {
-                  final block = blockOrder[index];
-                  return M3EListItem(
-                    key: ValueKey(block),
+          child: M3ETheme(
+            data: _listContainerTheme(context, scheme.surfaceContainerHigh),
+            child: ReorderableListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              buildDefaultDragHandles: false,
+              itemCount: blockOrder.length,
+              onReorderItem: (oldIndex, newIndex) {
+                final updated = [...blockOrder];
+                final moved = updated.removeAt(oldIndex);
+                updated.insert(newIndex, moved);
+                onReorder(updated);
+              },
+              itemBuilder: (context, index) {
+                final block = blockOrder[index];
+                return Padding(
+                  key: ValueKey(block),
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: M3EListItem(
                     headline: block.label,
                     leading: Icon(block.icon),
                     trailing: Row(
@@ -533,9 +533,9 @@ class _BlockOrderCard extends StatelessWidget {
                         ),
                       ],
                     ),
-                  );
-                },
-              ),
+                  ),
+                );
+              },
             ),
           ),
         ),
@@ -984,4 +984,13 @@ class _FictionalNoteLayoutPreview extends ConsumerWidget {
       ),
     );
   }
+}
+
+M3EThemeData _listContainerTheme(BuildContext context, Color color) {
+  final theme = M3ETheme.of(context);
+  return theme.copyWith(
+    listTheme: theme.listTheme.copyWith(
+      item: theme.listTheme.item.copyWith(containerColor: color),
+    ),
+  );
 }
