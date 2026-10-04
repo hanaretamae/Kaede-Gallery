@@ -1,8 +1,9 @@
 #![forbid(unsafe_code)]
 
 use gallery_parse::{
-    InlineToken, LinkResolutionMode, MediaKind, NoteStructureSettings, ParsedNote, expanded_tags,
-    parse_note, parse_note_for_link_target, parse_note_structure_settings,
+    InlineToken, LinkResolutionMode, MediaKind, NoteStructureSettings, ParsedNote,
+    TagCategorySettings, expanded_tags, parse_note, parse_note_for_link_target,
+    parse_note_structure_settings, parse_tag_category_settings,
 };
 use image::{ImageDecoder, ImageFormat, ImageReader, Limits};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -186,7 +187,7 @@ pub struct Gallery {
     root: PathBuf,
     saf: bool,
     connection: Connection,
-    labels: BTreeMap<String, String>,
+    tag_categories: TagCategorySettings,
     note_structure: NoteStructureSettings,
 }
 
@@ -509,7 +510,7 @@ impl Gallery {
             )
             .map_err(|_| CoreError::Database)?;
         transaction.commit().map_err(|_| CoreError::Database)?;
-        let note_structure = load_note_structure_settings(&database_path)?;
+        let (note_structure, tag_categories) = load_tag_settings(&database_path)?;
         let structure_fingerprint = format!("{note_structure:?}");
         let previous_structure = connection
             .query_row(
@@ -535,7 +536,7 @@ impl Gallery {
             root,
             saf,
             connection,
-            labels: default_labels(),
+            tag_categories,
             note_structure,
         })
     }
@@ -911,7 +912,8 @@ impl Gallery {
         excluded_filters: &[String],
         virtual_filters: &[VirtualFilter],
     ) -> Result<Vec<Category>, CoreError> {
-        let mut category_tags: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        let plan = CategoryPlan::new(&self.tag_categories);
+        let mut buckets: BTreeMap<(usize, String), CategoryBucket> = BTreeMap::new();
         let mut statement = self
             .connection
             .prepare("SELECT name FROM tags ORDER BY name")
@@ -925,20 +927,38 @@ impl Gallery {
             if has_descendant {
                 continue;
             }
-            let category = filter_category(&self.connection, &tag)?;
-            category_tags.entry(category).or_default().insert(tag);
+            if let Some((order, bucket)) = plan.bucket_for(&tag) {
+                let sort_key = (order, bucket.path.clone());
+                let name = bucket.option_name(&tag);
+                buckets
+                    .entry(sort_key)
+                    .or_insert(bucket)
+                    .options
+                    .insert(tag, name);
+            }
+        }
+        let mut filter_buckets: BTreeMap<&str, String> = BTreeMap::new();
+        for filter in filters.iter().chain(all_filters).chain(excluded_filters) {
+            if let Some(path) = plan.path_for_filter(&self.connection, filter)? {
+                filter_buckets.insert(filter.as_str(), path);
+            }
         }
         let mut categories = Vec::new();
-        for (path, options) in category_tags {
-            let display_name = self
-                .labels
-                .get(&path)
-                .cloned()
-                .unwrap_or_else(|| path.clone());
+        for bucket in buckets.into_values() {
+            let CategoryBucket {
+                path,
+                display_name,
+                whole_tag,
+                options,
+                ..
+            } = bucket;
             let mut category_filters = Vec::new();
             let mut base_filters = Vec::new();
             for filter in filters {
-                if filter_category(&self.connection, filter)? == path {
+                if filter_buckets
+                    .get(filter.as_str())
+                    .is_some_and(|bucket| *bucket == path)
+                {
                     category_filters.push(filter.clone());
                 } else {
                     base_filters.push(filter.clone());
@@ -947,7 +967,10 @@ impl Gallery {
             let mut category_excluded = Vec::new();
             let mut base_excluded = Vec::new();
             for filter in excluded_filters {
-                if filter_category(&self.connection, filter)? == path {
+                if filter_buckets
+                    .get(filter.as_str())
+                    .is_some_and(|bucket| *bucket == path)
+                {
                     category_excluded.push(filter.clone());
                 } else {
                     base_excluded.push(filter.clone());
@@ -956,7 +979,10 @@ impl Gallery {
             let mut category_all_filters = Vec::new();
             let mut base_all_filters = Vec::new();
             for filter in all_filters {
-                if filter_category(&self.connection, filter)? == path {
+                if filter_buckets
+                    .get(filter.as_str())
+                    .is_some_and(|bucket| *bucket == path)
+                {
                     category_all_filters.push(filter.clone());
                 } else {
                     base_all_filters.push(filter.clone());
@@ -979,12 +1005,8 @@ impl Gallery {
             }
             let mut category_ids = BTreeSet::new();
             let mut category_options = Vec::new();
-            for full_tag in &options {
-                let name = full_tag
-                    .strip_prefix("source/")
-                    .filter(|_| path == "source")
-                    .unwrap_or_else(|| full_tag.rsplit('/').next().unwrap_or(full_tag.as_str()))
-                    .to_owned();
+            for (full_tag, name) in &options {
+                let name = name.clone();
                 let option_ids = note_ids_for_tag(&self.connection, full_tag)?;
                 category_ids.extend(option_ids.iter().copied());
                 let mut matching_option_ids = selected_ids
@@ -1021,16 +1043,12 @@ impl Gallery {
                     .collect()
             };
             let count = base_matches.intersection(&current_category_ids).count();
-            if path != "その他" {
+            if let Some(whole_tag) = whole_tag {
                 category_options.insert(
                     0,
                     CategoryOption {
-                        name: if path == "source" {
-                            "すべてのソース".to_owned()
-                        } else {
-                            path.rsplit('/').next().unwrap_or(path.as_str()).to_owned()
-                        },
-                        full_tag: path.clone(),
+                        name: "すべて".to_owned(),
+                        full_tag: whole_tag,
                         count,
                         disabled: count == 0
                             && selected_ids.is_empty()
@@ -1079,16 +1097,6 @@ impl Gallery {
                 count: matched_count,
             },
         );
-        categories.push(Category {
-            path: "source".to_owned(),
-            display_name: self
-                .labels
-                .get("source")
-                .cloned()
-                .unwrap_or_else(|| "ソース".to_owned()),
-            options: Vec::new(),
-            count: matched_count,
-        });
         Ok(categories)
     }
 
@@ -1529,9 +1537,12 @@ impl Gallery {
         excluded_filters: &[String],
         virtual_filters: &[VirtualFilter],
     ) -> Result<BTreeSet<i64>, CoreError> {
+        let plan = CategoryPlan::new(&self.tag_categories);
         let mut grouped_filters: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for filter in filters {
-            let category = filter_category(&self.connection, filter)?;
+            let category = plan
+                .path_for_filter(&self.connection, filter)?
+                .unwrap_or_else(|| filter.clone());
             grouped_filters
                 .entry(category)
                 .or_default()
@@ -2241,23 +2252,6 @@ fn all_note_ids(connection: &Connection) -> Result<BTreeSet<i64>, CoreError> {
         .map_err(|_| CoreError::Database)
 }
 
-fn default_labels() -> BTreeMap<String, String> {
-    [
-        ("source", "ソース"),
-        ("source/service", "ソース"),
-        ("source/rating", "レーティング"),
-        ("source/gender", "性別"),
-        ("source/count", "人数"),
-        ("copyright", "著作権"),
-        ("source/meta", "メタ"),
-        ("source/format", "アートスタイル"),
-        ("source/type", "タイプ"),
-    ]
-    .into_iter()
-    .map(|(key, value)| (key.to_owned(), value.to_owned()))
-    .collect()
-}
-
 fn statement_has_descendant(connection: &Connection, tag: &str) -> Result<bool, CoreError> {
     connection
         .query_row(
@@ -2281,17 +2275,225 @@ fn note_ids_for_tag(connection: &Connection, tag: &str) -> Result<BTreeSet<i64>,
         .map_err(|_| CoreError::Database)
 }
 
-fn filter_category(connection: &Connection, tag: &str) -> Result<String, CoreError> {
-    if !tag.contains('/') {
-        return Ok("その他".to_owned());
+struct CompiledRule {
+    group: usize,
+    prefix: String,
+    wildcard: bool,
+    split_deep: bool,
+}
+
+struct CategoryGroup {
+    name: String,
+    path: String,
+    whole_tag: Option<String>,
+}
+
+struct CategoryBucket {
+    path: String,
+    display_name: String,
+    whole_tag: Option<String>,
+    options: BTreeMap<String, String>,
+    strip_prefix: String,
+}
+
+impl CategoryBucket {
+    fn option_name(&self, tag: &str) -> String {
+        tag.strip_prefix(self.strip_prefix.as_str())
+            .unwrap_or(tag)
+            .to_owned()
     }
-    if statement_has_descendant(connection, tag)? {
-        return Ok(tag.to_owned());
+}
+
+struct CategoryPlan {
+    rules: Vec<CompiledRule>,
+    groups: Vec<CategoryGroup>,
+    other: Option<(String, bool)>,
+}
+
+impl CategoryPlan {
+    fn new(settings: &TagCategorySettings) -> Self {
+        let mut groups: Vec<CategoryGroup> = Vec::new();
+        let mut rule_counts: Vec<usize> = Vec::new();
+        let mut rules = Vec::with_capacity(settings.categories.len());
+        for rule in &settings.categories {
+            let wildcard = rule.path.ends_with("/*") || rule.path == "*";
+            let prefix = rule
+                .path
+                .strip_suffix("/*")
+                .or_else(|| rule.path.strip_suffix('*'))
+                .unwrap_or(&rule.path)
+                .to_owned();
+            let group = match groups.iter().position(|group| group.name == rule.name) {
+                Some(index) => index,
+                None => {
+                    groups.push(CategoryGroup {
+                        name: rule.name.clone(),
+                        path: if prefix.is_empty() {
+                            "*".to_owned()
+                        } else {
+                            prefix.clone()
+                        },
+                        whole_tag: None,
+                    });
+                    rule_counts.push(0);
+                    groups.len() - 1
+                }
+            };
+            rule_counts[group] += 1;
+            if wildcard && !prefix.is_empty() && !rule.split_deep {
+                groups[group].whole_tag = Some(prefix.clone());
+            }
+            rules.push(CompiledRule {
+                group,
+                prefix,
+                wildcard,
+                split_deep: rule.split_deep,
+            });
+        }
+        for (group, count) in groups.iter_mut().zip(rule_counts) {
+            if count != 1 {
+                group.whole_tag = None;
+            }
+        }
+        Self {
+            rules,
+            groups,
+            other: settings
+                .other
+                .enabled
+                .then(|| (settings.other.name.clone(), settings.other.split_deep)),
+        }
     }
-    Ok(tag
-        .rsplit_once('/')
-        .map(|(category, _)| category.to_owned())
-        .unwrap_or_else(|| "その他".to_owned()))
+
+    fn best_rule(&self, tag: &str, filter_mode: bool) -> Option<usize> {
+        self.rules
+            .iter()
+            .enumerate()
+            .filter_map(|(index, rule)| {
+                let matches = if rule.wildcard {
+                    rule.prefix.is_empty()
+                        || (filter_mode && tag == rule.prefix)
+                        || tag
+                            .strip_prefix(rule.prefix.as_str())
+                            .is_some_and(|rest| rest.starts_with('/'))
+                } else {
+                    tag == rule.prefix
+                };
+                let specificity = rule
+                    .prefix
+                    .split('/')
+                    .filter(|part| !part.is_empty())
+                    .count()
+                    * 2
+                    + usize::from(!rule.wildcard);
+                matches.then_some((specificity, usize::MAX - index, index))
+            })
+            .max()
+            .map(|(_, _, index)| index)
+    }
+
+    /// The category path a filter belongs to. A filter is either a leaf tag or
+    /// a tag prefix selecting a whole subtree.
+    fn path_for_filter(
+        &self,
+        connection: &Connection,
+        filter: &str,
+    ) -> Result<Option<String>, CoreError> {
+        let parent_path = |connection: &Connection| -> Result<Option<String>, CoreError> {
+            if statement_has_descendant(connection, filter)? {
+                Ok(Some(filter.to_owned()))
+            } else {
+                Ok(filter.rsplit_once('/').map(|(parent, _)| parent.to_owned()))
+            }
+        };
+        let Some(index) = self.best_rule(filter, true) else {
+            let Some((_, split_deep)) = &self.other else {
+                return Ok(None);
+            };
+            if *split_deep && let Some(parent) = parent_path(connection)? {
+                return Ok(Some(parent));
+            }
+            return Ok(Some("@other".to_owned()));
+        };
+        let rule = &self.rules[index];
+        if rule.wildcard
+            && rule.split_deep
+            && let Some(parent) = parent_path(connection)?
+            && parent != rule.prefix
+            && parent.starts_with(&format!("{}/", rule.prefix))
+        {
+            return Ok(Some(parent));
+        }
+        Ok(Some(self.groups[rule.group].path.clone()))
+    }
+
+    fn bucket_for(&self, tag: &str) -> Option<(usize, CategoryBucket)> {
+        let Some(index) = self.best_rule(tag, false) else {
+            let (name, split_deep) = self.other.as_ref()?;
+            return Some((usize::MAX, other_bucket(name, *split_deep, tag)));
+        };
+        let rule = &self.rules[index];
+        let group = &self.groups[rule.group];
+        let relative = if rule.wildcard && !rule.prefix.is_empty() {
+            tag.strip_prefix(rule.prefix.as_str())
+                .and_then(|rest| rest.strip_prefix('/'))
+                .unwrap_or(tag)
+        } else {
+            tag
+        };
+        if rule.wildcard && rule.split_deep && relative.contains('/') {
+            let (parent, _) = tag.rsplit_once('/')?;
+            let shown = parent
+                .strip_prefix(rule.prefix.as_str())
+                .and_then(|rest| rest.strip_prefix('/'))
+                .unwrap_or(parent);
+            return Some((
+                rule.group,
+                CategoryBucket {
+                    path: parent.to_owned(),
+                    display_name: format!("{} / {shown}", group.name),
+                    whole_tag: Some(parent.to_owned()),
+                    options: BTreeMap::new(),
+                    strip_prefix: format!("{parent}/"),
+                },
+            ));
+        }
+        Some((
+            rule.group,
+            CategoryBucket {
+                path: group.path.clone(),
+                display_name: group.name.clone(),
+                whole_tag: group.whole_tag.clone(),
+                options: BTreeMap::new(),
+                strip_prefix: if rule.wildcard && !rule.prefix.is_empty() {
+                    format!("{}/", rule.prefix)
+                } else {
+                    tag.rsplit_once('/')
+                        .map(|(parent, _)| format!("{parent}/"))
+                        .unwrap_or_default()
+                },
+            },
+        ))
+    }
+}
+
+fn other_bucket(name: &str, split_deep: bool, tag: &str) -> CategoryBucket {
+    if split_deep && let Some((parent, _)) = tag.rsplit_once('/') {
+        return CategoryBucket {
+            path: parent.to_owned(),
+            display_name: parent.to_owned(),
+            whole_tag: Some(parent.to_owned()),
+            options: BTreeMap::new(),
+            strip_prefix: format!("{parent}/"),
+        };
+    }
+    CategoryBucket {
+        path: "@other".to_owned(),
+        display_name: name.to_owned(),
+        whole_tag: None,
+        options: BTreeMap::new(),
+        strip_prefix: String::new(),
+    }
 }
 
 fn parse_note_search_query(query: &str) -> (String, Vec<String>, Vec<String>, Vec<String>) {
@@ -2606,7 +2808,22 @@ fn ignored_name(name: &str) -> bool {
         || name.starts_with("~syncthing~")
 }
 
-fn load_note_structure_settings(database_path: &Path) -> Result<NoteStructureSettings, CoreError> {
+fn load_tag_settings(
+    database_path: &Path,
+) -> Result<(NoteStructureSettings, TagCategorySettings), CoreError> {
+    let Some(contents) = read_tag_settings_file(database_path)? else {
+        return Ok((
+            NoteStructureSettings::default(),
+            TagCategorySettings::default(),
+        ));
+    };
+    Ok((
+        parse_note_structure_settings(&contents).map_err(|_| CoreError::Database)?,
+        parse_tag_category_settings(&contents).map_err(|_| CoreError::Database)?,
+    ))
+}
+
+fn read_tag_settings_file(database_path: &Path) -> Result<Option<String>, CoreError> {
     let settings_path = database_path
         .parent()
         .ok_or(CoreError::Database)?
@@ -2614,7 +2831,7 @@ fn load_note_structure_settings(database_path: &Path) -> Result<NoteStructureSet
     let metadata = match fs::symlink_metadata(&settings_path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-            return Ok(NoteStructureSettings::default());
+            return Ok(None);
         }
         Err(_) => return Err(CoreError::Database),
     };
@@ -2635,8 +2852,9 @@ fn load_note_structure_settings(database_path: &Path) -> Result<NoteStructureSet
     if canonical_settings.parent() != Some(canonical_parent.as_path()) {
         return Err(CoreError::Database);
     }
-    let contents = fs::read_to_string(canonical_settings).map_err(|_| CoreError::Database)?;
-    parse_note_structure_settings(&contents).map_err(|_| CoreError::Database)
+    fs::read_to_string(canonical_settings)
+        .map(Some)
+        .map_err(|_| CoreError::Database)
 }
 
 fn read_parse_note(
@@ -2911,6 +3129,24 @@ mod tests {
         std::env::temp_dir().join(format!("gallery-core-{id}"))
     }
 
+    /// Opens a gallery that treats every `source/` note as eligible unless the
+    /// test wrote its own settings file.
+    fn open_gallery(root: &Path, database: &Path) -> Result<Gallery, CoreError> {
+        let settings = database
+            .parent()
+            .expect("database parent")
+            .join("tag-settings.json");
+        if !settings.exists() {
+            fs::create_dir_all(settings.parent().expect("parent")).expect("create settings dir");
+            fs::write(
+                &settings,
+                r#"{"noteStructure":{"galleryTagPrefixes":["source/"]}}"#,
+            )
+            .expect("write test settings");
+        }
+        Gallery::open(root, database)
+    }
+
     #[test]
     fn fuzzy_note_search_handles_cjk_titles() {
         assert!(fuzzy_note_match(
@@ -2958,14 +3194,14 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         let report = gallery.scan().expect("scan");
         assert_eq!(report.notes_indexed, 4);
         let categories = gallery.categories().expect("categories");
         assert!(
             categories
                 .iter()
-                .find(|category| category.path == "source")
+                .find(|category| category.display_name == "ソース")
                 .is_some_and(|category| category.options.iter().any(|o| o.name == "art"))
         );
         assert!(
@@ -3055,7 +3291,7 @@ mod tests {
         )
         .expect("write custom note structure settings");
         let database = app_data.join("index.sqlite");
-        let mut gallery = Gallery::open(&root, &database).expect("open with settings");
+        let mut gallery = open_gallery(&root, &database).expect("open with settings");
         gallery.scan().expect("scan with custom structure");
         let note = gallery.query(&[], 10).expect("query").remove(0);
         let detail = gallery
@@ -3077,7 +3313,7 @@ mod tests {
         )
         .expect("change note headings");
         drop(gallery);
-        let mut gallery = Gallery::open(&root, &database).expect("reopen with settings");
+        let mut gallery = open_gallery(&root, &database).expect("reopen with settings");
         gallery.scan().expect("rescan after config change");
         let note = gallery.query(&[], 10).expect("query").remove(0);
         let detail = gallery
@@ -3121,10 +3357,10 @@ mod tests {
         let database = app_data.join("index.sqlite");
         fs::write(
             app_data.join("tag-settings.json"),
-            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"shortestPath"}}"#,
+            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"shortestPath","galleryTagPrefixes":["source/"]}}"#,
         )
         .expect("write shortest path setting");
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         let source = gallery
             .query(&[], 10)
@@ -3148,10 +3384,10 @@ mod tests {
 
         fs::write(
             app_data.join("tag-settings.json"),
-            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"relativePath"}}"#,
+            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"relativePath","galleryTagPrefixes":["source/"]}}"#,
         )
         .expect("write relative setting");
-        let gallery = Gallery::open(&root, &database).expect("reopen relative");
+        let gallery = open_gallery(&root, &database).expect("reopen relative");
         let detail = gallery
             .note_detail(source.id)
             .expect("relative detail")
@@ -3172,10 +3408,10 @@ mod tests {
         .expect("write root target");
         fs::write(
             app_data.join("tag-settings.json"),
-            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"absolutePath"}}"#,
+            r#"{"noteStructure":{"memoHeadings":["Memo"],"relatedHeadings":["Related"],"postTextEndHeadings":["Details"],"linkResolution":"absolutePath","galleryTagPrefixes":["source/"]}}"#,
         )
         .expect("write absolute setting");
-        let mut gallery = Gallery::open(&root, &database).expect("reopen absolute");
+        let mut gallery = open_gallery(&root, &database).expect("reopen absolute");
         gallery.scan().expect("rescan absolute");
         let source = gallery
             .query(&[], 10)
@@ -3216,7 +3452,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
 
         let report = gallery.scan().expect("scan");
         let notes = gallery.query(&[], 10).expect("query");
@@ -3253,7 +3489,7 @@ mod tests {
     fn refuses_to_store_the_index_inside_the_vault() {
         let root = temp_dir();
         fs::create_dir_all(&root).expect("create vault");
-        let result = Gallery::open(&root, &root.join("index.sqlite"));
+        let result = open_gallery(&root, &root.join("index.sqlite"));
         assert!(matches!(result, Err(CoreError::Database)));
         assert!(!root.join("index.sqlite").exists());
         fs::remove_dir_all(root).expect("remove vault");
@@ -3274,7 +3510,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         let report = gallery.scan().expect("scan");
         assert_eq!(report.notes_indexed, 1);
         assert_eq!(report.warnings, 1);
@@ -3297,7 +3533,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("first scan");
         let missing = gallery
             .connection
@@ -3360,7 +3596,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         assert_eq!(
             gallery
@@ -3381,6 +3617,56 @@ mod tests {
     }
 
     #[test]
+    fn configured_categories_split_deep_tags_and_show_other_only_when_present() {
+        let base = temp_dir();
+        let root = base.join("vault");
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(
+            root.join("one.md"),
+            "---\ntags: [source/art, source/service/pixiv, source/count/pair, loose/topic/deep]\n---\n# Fictional\n",
+        )
+        .expect("write note");
+        let database = base.join("index.sqlite");
+        fs::write(
+            base.join("tag-settings.json"),
+            r#"{"noteStructure":{"galleryTagPrefixes":["source/"]},"tagCategories":{"categories":[{"name":"ソース","path":"source/art"},{"name":"ソース","path":"source/*","splitDeep":true},{"name":"人数","path":"source/count/*"}],"other":{"enabled":true,"name":"雑多","splitDeep":false}}}"#,
+        )
+        .expect("write settings");
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+        let categories = gallery.categories().expect("categories");
+        let titles = categories
+            .iter()
+            .map(|category| category.display_name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            titles,
+            ["コンテンツ", "ソース", "ソース / service", "人数", "雑多"]
+        );
+        let other = categories.last().expect("other category");
+        assert_eq!(other.options[0].full_tag, "loose/topic/deep");
+        drop(gallery);
+
+        fs::write(
+            base.join("tag-settings.json"),
+            r#"{"noteStructure":{"galleryTagPrefixes":["source/"]},"tagCategories":{"categories":[{"name":"ソース","path":"source/*"}],"other":{"enabled":false,"name":"その他"}}}"#,
+        )
+        .expect("write settings");
+        let gallery = Gallery::open(&root, &database).expect("reopen");
+        let categories = gallery.categories().expect("categories");
+        assert_eq!(categories.len(), 2);
+        assert_eq!(categories[1].display_name, "ソース");
+        assert!(
+            categories[1]
+                .options
+                .iter()
+                .all(|option| option.full_tag.starts_with("source"))
+        );
+        drop(gallery);
+        fs::remove_dir_all(base).expect("remove fixtures");
+    }
+
+    #[test]
     fn source_categories_share_one_display_root_without_changing_filter_groups() {
         let root = temp_dir();
         fs::create_dir_all(&root).expect("create vault");
@@ -3398,24 +3684,30 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         let categories = gallery.categories().expect("categories");
         let source = categories
             .iter()
-            .find(|category| category.path == "source")
+            .find(|category| category.display_name == "ソース")
             .expect("source grouping");
-        assert_eq!(source.display_name, "ソース");
-        assert!(source.options.is_empty());
-        assert!(
+        assert_eq!(
             categories
                 .iter()
-                .any(|category| category.path == "source/service")
+                .filter(|category| category.display_name == "ソース")
+                .count(),
+            1
         );
+        let names = source
+            .options
+            .iter()
+            .map(|option| option.name.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(names, ["service/mastodon", "service/pixiv"]);
         assert!(
             categories
                 .iter()
-                .any(|category| category.path == "source/type")
+                .any(|category| category.path == "source/type" && category.display_name == "タイプ")
         );
         assert_eq!(
             gallery
@@ -3465,7 +3757,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         let report = gallery.scan().expect("scan");
         assert_eq!(report.notes_indexed, 2);
 
@@ -3631,7 +3923,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         assert_eq!(gallery.scan().expect("initial scan").notes_indexed, 1);
         assert_eq!(gallery.scan().expect("unchanged scan").notes_indexed, 1);
         std::thread::sleep(std::time::Duration::from_millis(5));
@@ -3689,11 +3981,11 @@ mod tests {
             first_vault.file_name().expect("name").to_string_lossy()
         ));
 
-        let mut first = Gallery::open(&first_vault, &database).expect("open first vault");
+        let mut first = open_gallery(&first_vault, &database).expect("open first vault");
         first.scan().expect("scan first vault");
         drop(first);
 
-        let mut second = Gallery::open(&second_vault, &database).expect("open second vault");
+        let mut second = open_gallery(&second_vault, &database).expect("open second vault");
         assert!(
             second
                 .query(&[], 10)
@@ -3722,7 +4014,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         assert_eq!(gallery.scan().expect("bad scan").warnings, 1);
         fs::write(&path, "---\ntags: [source/rating/safe]\n---\n# Valid\n").expect("repair note");
         assert_eq!(gallery.scan().expect("retry scan").notes_indexed, 1);
@@ -3744,7 +4036,7 @@ mod tests {
             root.file_name().expect("name").to_string_lossy()
         ));
         fs::hard_link(&vault_file, &external_index).expect("make hard link");
-        let result = Gallery::open(&root, &external_index);
+        let result = open_gallery(&root, &external_index);
         assert!(matches!(result, Err(CoreError::Database)));
         fs::remove_file(external_index).expect("remove external link");
         fs::remove_dir_all(root).expect("remove vault");
@@ -3772,7 +4064,7 @@ mod tests {
             "gallery-cache-{}",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         let note = gallery.query(&[], 1).expect("query").remove(0);
         let media_id = note.representative_media_id.expect("media id");
@@ -3878,7 +4170,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         let categories = gallery
             .categories_for(&["source/gender/female".to_owned()])
@@ -3888,7 +4180,7 @@ mod tests {
             .find(|category| category.path == "source/gender")
             .expect("gender category");
         assert_eq!(gender.count, 3);
-        assert_eq!(gender.options[0].name, "gender");
+        assert_eq!(gender.options[0].name, "すべて");
         assert_eq!(gender.options[0].full_tag, "source/gender");
         assert_eq!(gender.options[0].count, 3);
         assert_eq!(
@@ -3925,7 +4217,7 @@ mod tests {
         assert_eq!(
             single_level
                 .iter()
-                .find(|category| category.path == "その他")
+                .find(|category| category.path == "@other")
                 .expect("other category")
                 .count,
             3
@@ -3956,7 +4248,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         let categories = gallery.categories().expect("categories");
         assert_eq!(categories[0].path, "@content");
@@ -4002,7 +4294,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
 
         // Grouped by note: two notes, one each.
@@ -4186,7 +4478,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         for direction in [SortDirection::Ascending, SortDirection::Descending] {
             let paths = gallery
@@ -4228,7 +4520,7 @@ mod tests {
             "gallery-{}.sqlite",
             root.file_name().expect("name").to_string_lossy()
         ));
-        let mut gallery = Gallery::open(&root, &database).expect("open");
+        let mut gallery = open_gallery(&root, &database).expect("open");
         gallery.scan().expect("scan");
         let media = gallery
             .query_media_filtered_page(&[], &[], 0, 10)
@@ -4435,6 +4727,11 @@ mod tests {
             Some(vault_uri.to_owned())
         );
         let note = b"---\ntags: [source/rating/safe]\ncover: media/cover.png\n---\n# Sample\n![](media/cover.png)\n![](../../outside.png)\n## \xe9\x96\xa2\xe9\x80\xa3\n- [[Other]]\n";
+        fs::write(
+            app_data.join("tag-settings.json"),
+            r#"{"noteStructure":{"galleryTagPrefixes":["source/"]}}"#,
+        )
+        .expect("write test settings");
         let mut gallery = Gallery::open_saf(vault_uri, &database).expect("open SAF index");
         let report = gallery
             .scan_saf(

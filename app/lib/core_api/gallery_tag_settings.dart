@@ -14,6 +14,7 @@ class GalleryTagSettings {
     this.colors = defaultTagColors,
     this.noteStructure = const GalleryNoteStructureSettings(),
     this.pagination = const GalleryPaginationSettings(),
+    this.categories = const GalleryTagCategorySettings(),
   });
 
   static const defaultIncludedPrefixes = ['*'];
@@ -42,6 +43,7 @@ class GalleryTagSettings {
   final List<TagColorRule> colors;
   final GalleryNoteStructureSettings noteStructure;
   final GalleryPaginationSettings pagination;
+  final GalleryTagCategorySettings categories;
 
   GalleryTagSettings copyWith({
     List<String>? includedPrefixes,
@@ -49,12 +51,14 @@ class GalleryTagSettings {
     List<TagColorRule>? colors,
     GalleryNoteStructureSettings? noteStructure,
     GalleryPaginationSettings? pagination,
+    GalleryTagCategorySettings? categories,
   }) => GalleryTagSettings(
     includedPrefixes: includedPrefixes ?? this.includedPrefixes,
     hiddenPrefixes: hiddenPrefixes ?? this.hiddenPrefixes,
     colors: colors ?? this.colors,
     noteStructure: noteStructure ?? this.noteStructure,
     pagination: pagination ?? this.pagination,
+    categories: categories ?? this.categories,
   );
 
   bool includes(String tag) =>
@@ -92,6 +96,7 @@ class GalleryTagSettings {
     'colors': colors.map((rule) => rule.toJson()).toList(growable: false),
     'noteStructure': noteStructure.toJson(),
     'pagination': pagination.toJson(),
+    'tagCategories': categories.toJson(),
   };
 
   static GalleryTagSettings fromJson(Map<String, dynamic> json) {
@@ -100,6 +105,7 @@ class GalleryTagSettings {
     final colors = json['colors'];
     final noteStructure = json['noteStructure'];
     final pagination = json['pagination'];
+    final tagCategories = json['tagCategories'];
     if (included is! List ||
         !included.every((value) => value is String) ||
         hidden is! List ||
@@ -114,7 +120,15 @@ class GalleryTagSettings {
     if (pagination != null && pagination is! Map<String, dynamic>) {
       throw const FormatException('Invalid gallery pagination settings.');
     }
+    if (tagCategories != null && tagCategories is! Map<String, dynamic>) {
+      throw const FormatException('Invalid gallery tag category settings.');
+    }
     return GalleryTagSettings(
+      categories: tagCategories == null
+          ? const GalleryTagCategorySettings()
+          : GalleryTagCategorySettings.fromJson(
+              tagCategories as Map<String, dynamic>,
+            ),
       includedPrefixes: List.unmodifiable(included.cast<String>()),
       hiddenPrefixes: List.unmodifiable(hidden.cast<String>()),
       colors: List.unmodifiable(
@@ -139,12 +153,178 @@ class GalleryTagSettings {
       prefix == '*' || tag == prefix || tag.startsWith('$prefix/');
 }
 
+/// One filter category. [path] is an exact tag (`source/art`) or a subtree
+/// (`source/count/*`). Rules sharing a [name] are shown as one category.
+class GalleryTagCategoryRule {
+  const GalleryTagCategoryRule(this.name, this.path, {this.splitDeep = false});
+
+  final String name;
+  final String path;
+
+  /// Split nested tags under a `/*` path into one category per parent tag.
+  final bool splitDeep;
+
+  GalleryTagCategoryRule copyWith({
+    String? name,
+    String? path,
+    bool? splitDeep,
+  }) => GalleryTagCategoryRule(
+    name ?? this.name,
+    path ?? this.path,
+    splitDeep: splitDeep ?? this.splitDeep,
+  );
+
+  Map<String, Object> toJson() => {
+    'name': name,
+    'path': path,
+    'splitDeep': splitDeep,
+  };
+
+  static GalleryTagCategoryRule fromJson(Map<String, dynamic> json) {
+    final name = json['name'];
+    final path = json['path'];
+    if (name is! String ||
+        name.trim().isEmpty ||
+        utf8.encode(name).length > 128 ||
+        path is! String ||
+        !isValidCategoryPath(path)) {
+      throw const FormatException('Invalid tag category rule.');
+    }
+    return GalleryTagCategoryRule(
+      name,
+      path,
+      splitDeep: _readBool(json, 'splitDeep'),
+    );
+  }
+
+  static bool isValidCategoryPath(String path) {
+    if (path == '*') return true;
+    final base = path.endsWith('/*')
+        ? path.substring(0, path.length - 2)
+        : path;
+    return base.isNotEmpty &&
+        utf8.encode(base).length <= 256 &&
+        !base.contains('*') &&
+        base.split('/').every((segment) => segment.trim().isNotEmpty);
+  }
+}
+
+class GalleryOtherCategorySettings {
+  const GalleryOtherCategorySettings({
+    this.enabled = true,
+    this.name = 'その他',
+    this.splitDeep = false,
+  });
+
+  final bool enabled;
+  final String name;
+  final bool splitDeep;
+
+  GalleryOtherCategorySettings copyWith({
+    bool? enabled,
+    String? name,
+    bool? splitDeep,
+  }) => GalleryOtherCategorySettings(
+    enabled: enabled ?? this.enabled,
+    name: name ?? this.name,
+    splitDeep: splitDeep ?? this.splitDeep,
+  );
+
+  Map<String, Object> toJson() => {
+    'enabled': enabled,
+    'name': name,
+    'splitDeep': splitDeep,
+  };
+
+  static GalleryOtherCategorySettings fromJson(Map<String, dynamic> json) {
+    final name = json['name'] ?? 'その他';
+    if (name is! String ||
+        name.trim().isEmpty ||
+        utf8.encode(name).length > 128) {
+      throw const FormatException('Invalid other category name.');
+    }
+    return GalleryOtherCategorySettings(
+      enabled: _readBool(json, 'enabled', defaultValue: true),
+      name: name,
+      splitDeep: _readBool(json, 'splitDeep'),
+    );
+  }
+}
+
+class GalleryTagCategorySettings {
+  const GalleryTagCategorySettings({
+    this.categories = defaultCategories,
+    this.other = const GalleryOtherCategorySettings(),
+  });
+
+  static const maxCategories = 64;
+  static const defaultCategories = <GalleryTagCategoryRule>[
+    GalleryTagCategoryRule('ソース', 'source/art'),
+    GalleryTagCategoryRule('人数', 'source/count/*'),
+    GalleryTagCategoryRule('アートスタイル', 'source/format/*'),
+    GalleryTagCategoryRule('性別', 'source/gender/*'),
+    GalleryTagCategoryRule('メタ', 'source/meta/*'),
+    GalleryTagCategoryRule('レーティング', 'source/rating/*'),
+    GalleryTagCategoryRule('ソース', 'source/*'),
+    GalleryTagCategoryRule('タイプ', 'source/type/*'),
+    GalleryTagCategoryRule('作品', 'copyright/*'),
+  ];
+
+  final List<GalleryTagCategoryRule> categories;
+  final GalleryOtherCategorySettings other;
+
+  GalleryTagCategorySettings copyWith({
+    List<GalleryTagCategoryRule>? categories,
+    GalleryOtherCategorySettings? other,
+  }) => GalleryTagCategorySettings(
+    categories: categories ?? this.categories,
+    other: other ?? this.other,
+  );
+
+  Map<String, Object> toJson() => {
+    'categories': categories
+        .map((rule) => rule.toJson())
+        .toList(growable: false),
+    'other': other.toJson(),
+  };
+
+  static GalleryTagCategorySettings fromJson(Map<String, dynamic> json) {
+    final categories = json['categories'];
+    final other = json['other'];
+    if (categories != null &&
+        (categories is! List ||
+            categories.length > maxCategories ||
+            !categories.every((value) => value is Map<String, dynamic>))) {
+      throw const FormatException('Invalid tag category list.');
+    }
+    if (other != null && other is! Map<String, dynamic>) {
+      throw const FormatException('Invalid other category settings.');
+    }
+    return GalleryTagCategorySettings(
+      categories: categories == null
+          ? defaultCategories
+          : List.unmodifiable(
+              (categories as List).map(
+                (value) => GalleryTagCategoryRule.fromJson(
+                  value as Map<String, dynamic>,
+                ),
+              ),
+            ),
+      other: other == null
+          ? const GalleryOtherCategorySettings()
+          : GalleryOtherCategorySettings.fromJson(
+              other as Map<String, dynamic>,
+            ),
+    );
+  }
+}
+
 class GalleryNoteStructureSettings {
   const GalleryNoteStructureSettings({
     this.memoHeadings = const ['覚書', 'メモ'],
     this.relatedHeadings = const ['関連'],
     this.postTextEndHeadings = const ['文書'],
-    this.galleryTagPrefixes = const ['source/'],
+    this.galleryTagPrefixes = const ['source/art'],
     this.frontmatter = const GalleryFrontmatterSettings(),
     this.linkResolution = GalleryLinkResolution.relativePath,
     this.postTextIncludeQuote = true,
@@ -255,7 +435,7 @@ class GalleryNoteStructureSettings {
       relatedHeadings: readHeadings('relatedHeadings', const ['関連']),
       postTextEndHeadings: readHeadings('postTextEndHeadings', const ['文書']),
       galleryTagPrefixes: readHeadings('galleryTagPrefixes', const [
-        'source/',
+        'source/art',
       ], maxBytes: 128),
       frontmatter: frontmatter == null
           ? const GalleryFrontmatterSettings()

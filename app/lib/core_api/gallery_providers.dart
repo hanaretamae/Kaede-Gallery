@@ -538,85 +538,13 @@ final galleryCategoriesProvider = FutureProvider<List<GalleryCategory>>((
         excludedFilters,
         virtualFilters,
       );
-  final sourceCategories = categories
-      .where(
-        (category) =>
-            category.path == 'source' || category.path.startsWith('source/'),
-      )
-      .toList(growable: false);
-  final otherCategories = categories
-      .where(
-        (category) =>
-            category.path != 'source' && !category.path.startsWith('source/'),
-      )
-      .toList(growable: false);
-  if (sourceCategories.isEmpty) return categories;
-  final sourceSections = sourceCategories
-      .map(
-        (category) => GalleryCategorySection(
-          path: category.path,
-          displayName: category.displayName,
-          count: category.count,
-          options:
-              category.options
-                  .map(
-                    (option) => GalleryCategoryOption(
-                      name: _sourceOptionName(
-                        category.path,
-                        option.fullTag,
-                        option.name,
-                      ),
-                      fullTag: option.fullTag,
-                      count: option.count,
-                      disabled: option.disabled,
-                      sectionPath: category.path,
-                      virtualFilter: option.virtualFilter,
-                    ),
-                  )
-                  .toList()
-                ..sort(
-                  (left, right) => left.fullTag.toLowerCase().compareTo(
-                    right.fullTag.toLowerCase(),
-                  ),
-                ),
-        ),
-      )
-      .toList(growable: false);
-  final sourceCategory = GalleryCategory(
-    path: 'source',
-    displayName: 'ソース',
-    count: null,
-    sections: sourceSections,
-    options: [for (final section in sourceSections) ...section.options]
-      ..sort(
-        (left, right) =>
-            left.fullTag.toLowerCase().compareTo(right.fullTag.toLowerCase()),
-      ),
-  );
-  return [...otherCategories, sourceCategory]
-    ..sort((left, right) => left.path.compareTo(right.path));
+  return categories;
 });
 
 List<String> _filtersForQuery(Ref ref) => [
   ...ref.watch(selectedTagsProvider),
   ...ref.watch(allTagsProvider).map((tag) => '$galleryAllFilterPrefix$tag'),
 ];
-
-String _sourceSectionPath(String categoryPath) {
-  final segments = categoryPath.split('/');
-  return segments.length > 1 ? segments.take(2).join('/') : categoryPath;
-}
-
-String _sourceOptionName(String categoryPath, String fullTag, String name) {
-  if (fullTag == 'source') return name;
-  final sectionPath = _sourceSectionPath(categoryPath);
-  if (fullTag == sectionPath) return 'すべて';
-  final descendantPrefix = '$sectionPath/';
-  if (fullTag.startsWith(descendantPrefix)) {
-    return fullTag.substring(descendantPrefix.length);
-  }
-  return name;
-}
 
 final galleryItemsProvider =
     AsyncNotifierProvider<GalleryItemsController, List<GalleryNote>>(

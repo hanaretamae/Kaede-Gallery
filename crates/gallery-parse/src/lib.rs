@@ -77,7 +77,7 @@ impl Default for NoteStructureSettings {
                 .iter()
                 .map(|value| (*value).into())
                 .collect(),
-            gallery_tag_prefixes: vec!["source/".into()],
+            gallery_tag_prefixes: vec!["source/art".into()],
             frontmatter: FrontmatterSettings::default(),
             link_resolution: LinkResolutionMode::default(),
             post_text_include_quote: true,
@@ -377,6 +377,104 @@ pub fn parse_note_structure_settings(input: &str) -> Result<NoteStructureSetting
             .any(|prefix| prefix.trim().is_empty() || prefix.len() > 128)
     {
         return Err(ParseError::InvalidFrontmatter);
+    }
+    Ok(settings)
+}
+
+pub const MAX_TAG_CATEGORIES: usize = 64;
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TagCategorySettings {
+    pub categories: Vec<TagCategoryRule>,
+    pub other: OtherCategorySettings,
+}
+
+/// One filter category. `path` is either an exact tag (`source/art`) or a
+/// subtree (`source/count/*`). Rules sharing a `name` are shown as a single
+/// category.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TagCategoryRule {
+    pub name: String,
+    pub path: String,
+    #[serde(default)]
+    pub split_deep: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(default, rename_all = "camelCase")]
+pub struct OtherCategorySettings {
+    pub enabled: bool,
+    pub name: String,
+    pub split_deep: bool,
+}
+
+impl Default for OtherCategorySettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            name: "その他".into(),
+            split_deep: false,
+        }
+    }
+}
+
+impl Default for TagCategorySettings {
+    fn default() -> Self {
+        let rule = |name: &str, path: &str| TagCategoryRule {
+            name: name.into(),
+            path: path.into(),
+            split_deep: false,
+        };
+        Self {
+            categories: vec![
+                rule("ソース", "source/art"),
+                rule("人数", "source/count/*"),
+                rule("アートスタイル", "source/format/*"),
+                rule("性別", "source/gender/*"),
+                rule("メタ", "source/meta/*"),
+                rule("レーティング", "source/rating/*"),
+                rule("ソース", "source/*"),
+                rule("タイプ", "source/type/*"),
+                rule("作品", "copyright/*"),
+            ],
+            other: OtherCategorySettings::default(),
+        }
+    }
+}
+
+pub fn parse_tag_category_settings(input: &str) -> Result<TagCategorySettings, ParseError> {
+    if input.len() > MAX_SETTINGS_BYTES {
+        return Err(ParseError::SettingsTooLarge);
+    }
+    if exceeds_yaml_depth(input) {
+        return Err(ParseError::YamlTooDeep);
+    }
+    #[derive(Deserialize, Default)]
+    #[serde(default, rename_all = "camelCase")]
+    struct SettingsFile {
+        tag_categories: TagCategorySettings,
+    }
+    let settings = serde_yaml::from_str::<SettingsFile>(input)
+        .map_err(|_| ParseError::InvalidFrontmatter)?
+        .tag_categories;
+    if settings.categories.len() > MAX_TAG_CATEGORIES
+        || settings.other.name.trim().is_empty()
+        || settings.other.name.len() > 128
+    {
+        return Err(ParseError::InvalidFrontmatter);
+    }
+    for rule in &settings.categories {
+        let path = rule.path.strip_suffix("/*").unwrap_or(&rule.path);
+        let valid_path = rule.path == "*"
+            || (!path.is_empty()
+                && path.len() <= 256
+                && !path.contains('*')
+                && path.split('/').all(|segment| !segment.trim().is_empty()));
+        if rule.name.trim().is_empty() || rule.name.len() > 128 || !valid_path {
+            return Err(ParseError::InvalidFrontmatter);
+        }
     }
     Ok(settings)
 }
@@ -1027,7 +1125,7 @@ mod tests {
         assert_eq!(settings.memo_headings, ["Notes"]);
         assert_eq!(settings.related_headings, ["Links"]);
         assert_eq!(settings.post_text_end_headings, ["Details"]);
-        assert_eq!(settings.gallery_tag_prefixes, ["source/"]);
+        assert_eq!(settings.gallery_tag_prefixes, ["source/art"]);
         let custom_prefixes = parse_note_structure_settings(
             r#"{"noteStructure":{"galleryTagPrefixes":["portfolio","set/"]}}"#,
         )
@@ -1289,5 +1387,31 @@ mod tests {
             " ".repeat(MAX_YAML_DEPTH + 1)
         );
         assert_eq!(parse_note(&nested), Err(ParseError::YamlTooDeep));
+    }
+
+    #[test]
+    fn parses_and_validates_tag_category_settings() {
+        let defaults = parse_tag_category_settings("{}").expect("defaults");
+        assert_eq!(defaults, TagCategorySettings::default());
+        assert!(defaults.categories.iter().all(|rule| !rule.split_deep));
+        let custom = parse_tag_category_settings(
+            r#"{"tagCategories":{"categories":[{"name":"A","path":"x/*","splitDeep":true}],"other":{"enabled":false}}}"#,
+        )
+        .expect("custom");
+        assert_eq!(custom.categories.len(), 1);
+        assert!(custom.categories[0].split_deep);
+        assert!(!custom.other.enabled);
+        assert!(
+            parse_tag_category_settings(
+                r#"{"tagCategories":{"categories":[{"name":"A","path":"x//y"}]}}"#
+            )
+            .is_err()
+        );
+        assert!(
+            parse_tag_category_settings(
+                r#"{"tagCategories":{"categories":[{"name":" ","path":"x"}]}}"#
+            )
+            .is_err()
+        );
     }
 }

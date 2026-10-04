@@ -99,6 +99,24 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
               ),
             ),
             const SizedBox(height: 20),
+            Text('フィルターのカテゴリー', style: Theme.of(context).textTheme.titleLarge),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Text(
+                'タグ絞り込みの分類です。パスは source/art のように完全一致、source/count/* のように配下すべてを指定します。'
+                '複数に一致する場合は具体的なパスが優先され、同じ名前の項目は 1 つのカテゴリーにまとめます。',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ),
+            _TagCategoryRuleList(
+              settings: settings.categories,
+              onChanged: (categories) => _save(
+                context,
+                ref,
+                settings.copyWith(categories: categories),
+              ),
+            ),
+            const SizedBox(height: 20),
             Text('非表示にするタグ', style: Theme.of(context).textTheme.titleLarge),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 8),
@@ -228,6 +246,266 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
   }
 }
 
+class _TagCategoryRuleList extends StatelessWidget {
+  const _TagCategoryRuleList({required this.settings, required this.onChanged});
+
+  final GalleryTagCategorySettings settings;
+  final ValueChanged<GalleryTagCategorySettings> onChanged;
+
+  Future<GalleryTagCategoryRule?> _ask(
+    BuildContext context, {
+    GalleryTagCategoryRule? initial,
+  }) => M3EDialog.show<GalleryTagCategoryRule>(
+    context,
+    dialog: _TagCategoryRuleDialog(initial: initial),
+  );
+
+  bool _pathTaken(String path, {int? except}) => settings.categories.indexed
+      .any((entry) => entry.$1 != except && entry.$2.path == path);
+
+  void _notifyDuplicate(BuildContext context) =>
+      M3ESnackbar.show(context, message: '同じパスのカテゴリーがすでにあります。');
+
+  void _replaceRules(List<GalleryTagCategoryRule> rules) =>
+      onChanged(settings.copyWith(categories: List.unmodifiable(rules)));
+
+  void _move(int index, int delta) {
+    final target = index + delta;
+    if (target < 0 || target >= settings.categories.length) return;
+    final rules = [...settings.categories];
+    rules.insert(target, rules.removeAt(index));
+    _replaceRules(rules);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final rules = settings.categories;
+    final other = settings.other;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _settingsGroup(context, [
+          if (rules.isEmpty) const M3EListItem(headline: 'カテゴリーはありません'),
+          for (final (index, rule) in rules.indexed)
+            M3EListItem(
+              headline: rule.name,
+              supportingText: rule.splitDeep
+                  ? '${rule.path} ・ 3層目以降を分割'
+                  : rule.path,
+              onTap: () async {
+                final updated = await _ask(context, initial: rule);
+                if (!context.mounted || updated == null) return;
+                if (_pathTaken(updated.path, except: index)) {
+                  _notifyDuplicate(context);
+                  return;
+                }
+                _replaceRules([...rules]..[index] = updated);
+              },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
+                    tooltip: '上へ',
+                    icon: const Icon(Icons.arrow_upward),
+                    onPressed: index == 0 ? null : () => _move(index, -1),
+                  ),
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
+                    tooltip: '下へ',
+                    icon: const Icon(Icons.arrow_downward),
+                    onPressed: index == rules.length - 1
+                        ? null
+                        : () => _move(index, 1),
+                  ),
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
+                    tooltip: '削除',
+                    icon: const Icon(Icons.delete_outline),
+                    onPressed: () => _replaceRules([...rules]..removeAt(index)),
+                  ),
+                ],
+              ),
+            ),
+          if (rules.length < GalleryTagCategorySettings.maxCategories)
+            M3EListItem(
+              headline: 'カテゴリーを追加',
+              leading: Icon(Icons.add, color: scheme.primary),
+              onTap: () async {
+                final added = await _ask(context);
+                if (!context.mounted || added == null) return;
+                if (_pathTaken(added.path)) {
+                  _notifyDuplicate(context);
+                  return;
+                }
+                _replaceRules([...rules, added]);
+              },
+            ),
+          M3EListItem(
+            headline: '初期設定に戻す',
+            leading: Icon(Icons.restore, color: scheme.primary),
+            onTap: () => onChanged(
+              settings.copyWith(
+                categories: GalleryTagCategorySettings.defaultCategories,
+              ),
+            ),
+          ),
+        ]),
+        const SizedBox(height: 12),
+        Text('その他カテゴリー', style: Theme.of(context).textTheme.titleMedium),
+        Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Text(
+            'どのカテゴリーにも一致しないタグをまとめます。該当するタグがない場合は表示しません。',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+        ),
+        _settingsGroup(context, [
+          _expressiveSwitchTile(
+            title: 'その他カテゴリーを表示',
+            value: other.enabled,
+            onChanged: (value) => onChanged(
+              settings.copyWith(other: other.copyWith(enabled: value)),
+            ),
+          ),
+          M3EListItem(
+            headline: 'カテゴリー名',
+            supportingText: other.name,
+            leading: Icon(Icons.edit_outlined, color: scheme.primary),
+            onTap: () async {
+              final name = await M3EDialog.show<String>(
+                context,
+                dialog: const _TagPrefixDialog(
+                  title: 'その他カテゴリーの名前',
+                  label: 'カテゴリー名',
+                  hint: 'その他',
+                  normalizeTagPrefix: false,
+                  confirmLabel: '保存',
+                ),
+              );
+              if (!context.mounted || name == null) return;
+              onChanged(settings.copyWith(other: other.copyWith(name: name)));
+            },
+          ),
+          _expressiveSwitchTile(
+            title: '3層目以降のタグを自動で分ける',
+            subtitle: '親タグごとに別のカテゴリーとして表示します。',
+            value: other.splitDeep,
+            onChanged: (value) => onChanged(
+              settings.copyWith(other: other.copyWith(splitDeep: value)),
+            ),
+          ),
+        ]),
+      ],
+    );
+  }
+}
+
+class _TagCategoryRuleDialog extends StatefulWidget {
+  const _TagCategoryRuleDialog({this.initial});
+
+  final GalleryTagCategoryRule? initial;
+
+  @override
+  State<_TagCategoryRuleDialog> createState() => _TagCategoryRuleDialogState();
+}
+
+class _TagCategoryRuleDialogState extends State<_TagCategoryRuleDialog> {
+  late final TextEditingController nameController;
+  late final TextEditingController pathController;
+  late bool splitDeep;
+  String? validationError;
+
+  @override
+  void initState() {
+    super.initState();
+    nameController = TextEditingController(text: widget.initial?.name);
+    pathController = TextEditingController(text: widget.initial?.path);
+    splitDeep = widget.initial?.splitDeep ?? false;
+  }
+
+  @override
+  void dispose() {
+    nameController.dispose();
+    pathController.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final name = nameController.text.trim();
+    final path = pathController.text
+        .trim()
+        .replaceFirst(RegExp(r'^#'), '')
+        .replaceFirst(RegExp(r'/+$'), '');
+    if (name.isEmpty ||
+        utf8.encode(name).length > 128 ||
+        !GalleryTagCategoryRule.isValidCategoryPath(path)) {
+      setState(
+        () => validationError =
+            '名前と、source/art または source/count/* 形式のパスを入力してください。',
+      );
+      return;
+    }
+    Navigator.of(context).pop(
+      GalleryTagCategoryRule(
+        name,
+        path,
+        splitDeep: splitDeep && path.endsWith('*'),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isWildcard = pathController.text.trim().endsWith('*');
+    return M3EDialog(
+      title: widget.initial == null ? 'カテゴリーを追加' : 'カテゴリーを編集',
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          M3ETextField(
+            controller: nameController,
+            autofocus: true,
+            label: 'カテゴリー名',
+            placeholder: '人数',
+            variant: M3ETextFieldVariant.outlined,
+          ),
+          const SizedBox(height: 12),
+          M3ETextField(
+            controller: pathController,
+            label: 'タグパス',
+            placeholder: 'source/count/*',
+            errorText: validationError,
+            variant: M3ETextFieldVariant.outlined,
+            onChanged: (_) => setState(() {}),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              const Expanded(child: Text('3層目以降のタグを自動で分ける')),
+              M3ESwitch(
+                value: splitDeep && isWildcard,
+                onChanged: isWildcard
+                    ? (value) => setState(() => splitDeep = value)
+                    : null,
+                semanticLabel: '3層目以降のタグを自動で分ける',
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: [
+        M3EButton.text(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('キャンセル'),
+        ),
+        M3EButton.filled(onPressed: _submit, child: const Text('保存')),
+      ],
+    );
+  }
+}
+
 class _TagPrefixList extends StatelessWidget {
   const _TagPrefixList({
     required this.prefixes,
@@ -273,12 +551,14 @@ class _TagPrefixDialog extends StatefulWidget {
     this.label = 'タグパス',
     this.hint = 'source/service',
     this.normalizeTagPrefix = true,
+    this.confirmLabel = '追加',
   });
 
   final String title;
   final String label;
   final String hint;
   final bool normalizeTagPrefix;
+  final String confirmLabel;
 
   @override
   State<_TagPrefixDialog> createState() => _TagPrefixDialogState();
@@ -308,7 +588,12 @@ class _TagPrefixDialogState extends State<_TagPrefixDialog> {
       label: widget.label,
       placeholder: widget.hint,
       variant: M3ETextFieldVariant.outlined,
-      onSubmitted: (_) => Navigator.of(context).pop(_normalizedPrefix),
+      onChanged: (_) => setState(() {}),
+      onSubmitted: (_) {
+        if (_normalizedPrefix.isNotEmpty) {
+          Navigator.of(context).pop(_normalizedPrefix);
+        }
+      },
     ),
     actions: [
       M3EButton.text(
@@ -319,7 +604,7 @@ class _TagPrefixDialogState extends State<_TagPrefixDialog> {
         onPressed: _normalizedPrefix.isEmpty
             ? null
             : () => Navigator.of(context).pop(_normalizedPrefix),
-        child: const Text('追加'),
+        child: Text(widget.confirmLabel),
       ),
     ],
   );

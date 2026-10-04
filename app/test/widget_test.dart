@@ -1235,6 +1235,8 @@ void main() {
     expect(find.text('6789'), findsOneWidget);
     await tester.tap(find.text('ソース'));
     await tester.pumpAndSettle();
+    await tester.tap(find.text('タイプ'));
+    await tester.pumpAndSettle();
     for (final count in ['1234', '2345', '3456', '4567']) {
       expect(find.text(count), findsOneWidget);
     }
@@ -1301,6 +1303,8 @@ void main() {
     expect(find.text('test'), findsOneWidget);
     expect(find.text('sub/deep'), findsOneWidget);
     expect(find.byType(m3e.M3ESearchBar), findsNWidgets(2));
+    await tester.tap(find.text('タイプ'));
+    await tester.pumpAndSettle();
     final filterChip = tester.widget<m3e.M3EChip>(
       find.widgetWithText(m3e.M3EChip, 'gender/female'),
     );
@@ -1330,6 +1334,8 @@ void main() {
     expect(find.text('gender/female'), findsOneWidget);
     expect(find.text('test'), findsOneWidget);
     expect(find.text('sub/deep'), findsOneWidget);
+    await tester.tap(find.text('タイプ'));
+    await tester.pumpAndSettle();
     final disabledChip = tester.widget<m3e.M3EChip>(
       find.byKey(const ValueKey('source/type/disabled:filter')),
     );
@@ -1528,7 +1534,7 @@ void main() {
     expect(find.text('確認できなかった項目の詳細'), findsOneWidget);
     expect(find.textContaining('今回の走査では 10 件'), findsOneWidget);
     expect(find.text('確認できない理由の例'), findsOneWidget);
-    expect(find.textContaining('source/ タグがないもの'), findsOneWidget);
+    expect(find.textContaining('source/art タグがないもの'), findsOneWidget);
     expect(find.textContaining('具体的な項目名やノートの内容はこの画面に表示しません。'), findsOneWidget);
     await tester.tap(find.text('閉じる'));
     await tester.pumpAndSettle();
@@ -1629,8 +1635,14 @@ void main() {
     await tester.tap(find.text('タグ設定'));
     await tester.pumpAndSettle();
     expect(find.text('ギャラリー対象タグ'), findsOneWidget);
-    expect(find.text('#source/'), findsOneWidget);
+    expect(find.text('#source/art/'), findsOneWidget);
     expect(find.text('フィルターに含めるタグ'), findsOneWidget);
+    expect(find.text('フィルターのカテゴリー'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('非表示にするタグ'),
+      250,
+      scrollable: _contentScrollable(),
+    );
     expect(find.text('非表示にするタグ'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('タグの色'),
@@ -1676,7 +1688,7 @@ void main() {
     await tester.tap(find.text('Markdownをコピー'));
     await tester.pumpAndSettle();
     expect(copiedText, contains('fictional-rainy-window.webp'));
-    expect(copiedText, contains('source/example'));
+    expect(copiedText, contains('tags: []'));
     expect(copiedText, contains('[架空の投稿者]'));
     expect(
       copiedText!.indexOf('https://example.invalid/posts/aoikasumi-0001'),
@@ -2811,6 +2823,18 @@ class _FakeRepository implements GalleryRepository {
                 count: 1,
                 disabled: false,
               ),
+              GalleryCategoryOption(
+                name: 'test',
+                fullTag: 'source/test',
+                count: 1,
+                disabled: false,
+              ),
+              GalleryCategoryOption(
+                name: 'sub/deep',
+                fullTag: 'source/test/sub/deep',
+                count: 1,
+                disabled: false,
+              ),
             ],
           ),
           GalleryCategory(
@@ -2819,14 +2843,14 @@ class _FakeRepository implements GalleryRepository {
             count: 1,
             options: [
               GalleryCategoryOption(
-                name: 'zebra',
-                fullTag: 'source/type/zebra',
+                name: 'alpha',
+                fullTag: 'source/type/alpha',
                 count: 1,
                 disabled: false,
               ),
               GalleryCategoryOption(
-                name: 'alpha',
-                fullTag: 'source/type/alpha',
+                name: 'zebra',
+                fullTag: 'source/type/zebra',
                 count: 1,
                 disabled: false,
               ),
@@ -2835,38 +2859,6 @@ class _FakeRepository implements GalleryRepository {
                 fullTag: 'source/type/disabled',
                 count: 0,
                 disabled: true,
-              ),
-            ],
-          ),
-          GalleryCategory(
-            path: 'source/test',
-            displayName: 'test',
-            count: 1,
-            options: [
-              GalleryCategoryOption(
-                name: 'test',
-                fullTag: 'source/test',
-                count: 1,
-                disabled: false,
-              ),
-            ],
-          ),
-          GalleryCategory(
-            path: 'source/test/sub',
-            displayName: 'sub',
-            count: 1,
-            options: [
-              GalleryCategoryOption(
-                name: 'sub',
-                fullTag: 'source/test/sub',
-                count: 1,
-                disabled: false,
-              ),
-              GalleryCategoryOption(
-                name: 'deep',
-                fullTag: 'source/test/sub/deep',
-                count: 1,
-                disabled: false,
               ),
             ],
           ),
