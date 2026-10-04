@@ -4,17 +4,14 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
   const _TagRulesSettingsScreen();
 
   Future<String?> _askPrefix(BuildContext context, String title) =>
-      showDialog<String>(
-        context: context,
-        builder: (context) => _TagPrefixDialog(title: title),
-      );
+      M3EDialog.show<String>(context, dialog: _TagPrefixDialog(title: title));
 
   Future<TagColorRule?> _askColor(
     BuildContext context, {
     TagColorRule? initial,
-  }) => showDialog<TagColorRule>(
-    context: context,
-    builder: (context) => _TagColorRuleDialog(initial: initial),
+  }) => M3EDialog.show<TagColorRule>(
+    context,
+    dialog: _TagColorRuleDialog(initial: initial),
   );
 
   Future<void> _save(
@@ -32,8 +29,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
       }
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('タグ設定を保存できませんでした。')));
+        M3ESnackbar.show(context, message: 'タグ設定を保存できませんでした。');
       }
     }
   }
@@ -43,9 +39,12 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
     final settingsState = ref.watch(galleryTagSettingsProvider);
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('タグ設定')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, 'タグ設定'),
+        leading: _expressiveBackButton(context),
+      ),
       body: settingsState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const Center(child: Text('タグ設定を読み込めませんでした。')),
         data: (settings) => ListView(
           padding: const EdgeInsets.all(20),
@@ -143,24 +142,34 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
-            Card(
+            _expressiveCard(
+              context: context,
               color: scheme.surfaceContainerLow,
               child: Column(
                 children: [
                   for (final rule in settings.colors)
-                    ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: Color(rule.color),
-                        radius: 14,
-                      ),
-                      title: Text(rule.prefix),
-                      subtitle: Text(
-                        '#${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                    M3EListItem(
+                      headline: rule.prefix,
+                      supportingText:
+                          '#${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                      leading: Semantics(
+                        label:
+                            '色 #${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                        child: SizedBox.square(
+                          dimension: 28,
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: Color(rule.color),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                        ),
                       ),
                       trailing: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          IconButton(
+                          M3EIconButton(
+                            variant: M3EIconButtonVariant.standard,
                             tooltip: '色を編集',
                             icon: const Icon(Icons.edit_outlined),
                             onPressed: () async {
@@ -184,7 +193,8 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                               );
                             },
                           ),
-                          IconButton(
+                          M3EIconButton(
+                            variant: M3EIconButtonVariant.standard,
                             tooltip: '色設定を削除',
                             icon: const Icon(Icons.delete_outline),
                             onPressed: () => _save(
@@ -200,9 +210,9 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                         ],
                       ),
                     ),
-                  ListTile(
+                  M3EListItem(
+                    headline: '色設定を追加',
                     leading: Icon(Icons.add, color: scheme.primary),
-                    title: const Text('色設定を追加'),
                     onTap: () async {
                       final added = await _askColor(context);
                       if (!context.mounted) return;
@@ -245,25 +255,27 @@ class _TagPrefixList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return _expressiveCard(
+      context: context,
       color: scheme.surfaceContainerLow,
       child: Column(
         children: [
           if (prefixes.isEmpty)
-            ListTile(title: Text(emptyText))
+            M3EListItem(headline: emptyText)
           else
             for (final prefix in prefixes)
-              ListTile(
-                title: Text(prefix == '*' ? 'すべてのタグ (*)' : prefix),
-                trailing: IconButton(
+              M3EListItem(
+                headline: prefix == '*' ? 'すべてのタグ (*)' : prefix,
+                trailing: M3EIconButton(
+                  variant: M3EIconButtonVariant.standard,
                   tooltip: '削除',
                   icon: const Icon(Icons.delete_outline),
                   onPressed: () => onRemove(prefix),
                 ),
               ),
-          ListTile(
+          M3EListItem(
+            headline: 'パスを追加',
             leading: Icon(Icons.add, color: scheme.primary),
-            title: const Text('パスを追加'),
             onTap: onAdd,
           ),
         ],
@@ -305,23 +317,22 @@ class _TagPrefixDialogState extends State<_TagPrefixDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.title),
-    content: TextField(
+  Widget build(BuildContext context) => M3EDialog(
+    title: widget.title,
+    content: M3ETextField(
       controller: controller,
       autofocus: true,
-      decoration: InputDecoration(
-        labelText: widget.label,
-        hintText: widget.hint,
-      ),
+      label: widget.label,
+      placeholder: widget.hint,
+      variant: M3ETextFieldVariant.outlined,
       onSubmitted: (_) => Navigator.of(context).pop(_normalizedPrefix),
     ),
     actions: [
-      TextButton(
+      M3EButton.text(
         onPressed: () => Navigator.of(context).pop(),
         child: const Text('キャンセル'),
       ),
-      FilledButton(
+      M3EButton.filled(
         onPressed: _normalizedPrefix.isEmpty
             ? null
             : () => Navigator.of(context).pop(_normalizedPrefix),
@@ -390,37 +401,35 @@ class _TagColorRuleDialogState extends State<_TagColorRuleDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: Text(widget.initial == null ? 'タグ色を追加' : 'タグ色を編集'),
+  Widget build(BuildContext context) => M3EDialog(
+    title: widget.initial == null ? 'タグ色を追加' : 'タグ色を編集',
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        TextField(
+        M3ETextField(
           controller: prefixController,
           autofocus: true,
-          decoration: const InputDecoration(
-            labelText: 'タグパス',
-            hintText: 'source/type',
-          ),
+          label: 'タグパス',
+          placeholder: 'source/type',
+          variant: M3ETextFieldVariant.outlined,
         ),
         const SizedBox(height: 12),
-        TextField(
+        M3ETextField(
           controller: colorController,
           textCapitalization: TextCapitalization.characters,
-          decoration: InputDecoration(
-            labelText: '色',
-            hintText: '#RRGGBB',
-            errorText: validationError,
-          ),
+          label: '色',
+          placeholder: '#RRGGBB',
+          errorText: validationError,
+          variant: M3ETextFieldVariant.outlined,
         ),
       ],
     ),
     actions: [
-      TextButton(
+      M3EButton.text(
         onPressed: () => Navigator.of(context).pop(),
         child: const Text('キャンセル'),
       ),
-      FilledButton(onPressed: _submit, child: const Text('保存')),
+      M3EButton.filled(onPressed: _submit, child: const Text('保存')),
     ],
   );
 }

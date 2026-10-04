@@ -397,6 +397,7 @@ class GalleryPaginationSettings {
     this.pageSize = defaultPageSize,
     this.showItemCount = true,
     this.showItemNumberOnTiles = false,
+    this.showMissingMediaIcon = false,
   });
 
   static const defaultPageSize = 24;
@@ -413,20 +414,26 @@ class GalleryPaginationSettings {
   /// Whether each gallery tile shows its one-based position in the result list.
   final bool showItemNumberOnTiles;
 
+  /// Whether a missing/loading media thumbnail displays an image or video icon.
+  final bool showMissingMediaIcon;
+
   GalleryPaginationSettings copyWith({
     int? pageSize,
     bool? showItemCount,
     bool? showItemNumberOnTiles,
+    bool? showMissingMediaIcon,
   }) => GalleryPaginationSettings(
     pageSize: pageSize ?? this.pageSize,
     showItemCount: showItemCount ?? this.showItemCount,
     showItemNumberOnTiles: showItemNumberOnTiles ?? this.showItemNumberOnTiles,
+    showMissingMediaIcon: showMissingMediaIcon ?? this.showMissingMediaIcon,
   );
 
   Map<String, Object> toJson() => {
     'pageSize': pageSize,
     'showItemCount': showItemCount,
     'showItemNumberOnTiles': showItemNumberOnTiles,
+    'showMissingMediaIcon': showMissingMediaIcon,
   };
 
   static GalleryPaginationSettings fromJson(Map<String, dynamic> json) {
@@ -434,6 +441,7 @@ class GalleryPaginationSettings {
     final showItemCount = json['showItemCount'] ?? true;
     final showItemNumberOnTiles =
         json['showItemNumberOnTiles'] ?? json['showMediaCountOnTiles'] ?? false;
+    final showMissingMediaIcon = json['showMissingMediaIcon'] ?? false;
     if (pageSize is! int || pageSize < minPageSize || pageSize > maxPageSize) {
       throw const FormatException('Invalid gallery pagination page size.');
     }
@@ -445,10 +453,14 @@ class GalleryPaginationSettings {
     if (showItemNumberOnTiles is! bool) {
       throw const FormatException('Invalid gallery item number flag.');
     }
+    if (showMissingMediaIcon is! bool) {
+      throw const FormatException('Invalid missing media icon flag.');
+    }
     return GalleryPaginationSettings(
       pageSize: pageSize,
       showItemCount: showItemCount,
       showItemNumberOnTiles: showItemNumberOnTiles,
+      showMissingMediaIcon: showMissingMediaIcon,
     );
   }
 }

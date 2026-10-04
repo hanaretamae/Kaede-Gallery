@@ -140,37 +140,62 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
   Widget build(BuildContext context) {
     final categories = ref.watch(galleryCategoriesProvider);
     return categories.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: M3EProgressIndicator.circular()),
       error: (_, _) => const Center(child: Text('タグ一覧を読み込めませんでした。')),
       data: (items) {
         final tagSettingsState = ref.watch(galleryTagSettingsProvider);
         return tagSettingsState.when(
-          loading: () => const Center(child: CircularProgressIndicator()),
+          loading: () => const Center(child: M3EProgressIndicator.circular()),
           error: (_, _) => const Center(child: Text('タグ設定を読み込めませんでした。')),
           data: (tagSettings) {
             final matchingCategories = items
-                .map(
-                  (category) => GalleryCategory(
+                .map((category) {
+                  bool optionMatches(GalleryCategoryOption option) {
+                    final eligible =
+                        option.virtualFilter != null ||
+                        (tagSettings.includes(option.fullTag) &&
+                            !tagSettings.hides(option.fullTag));
+                    return eligible &&
+                        (tagSearch.isEmpty ||
+                            _matchesTagSearch(
+                              '${category.displayName} ${option.sectionPath ?? ''} ${option.name} ${option.fullTag}',
+                              tagSearch,
+                            ));
+                  }
+
+                  final options = category.options
+                      .where(optionMatches)
+                      .toList(growable: false);
+                  final sections = category.sections
+                      .map(
+                        (section) => GalleryCategorySection(
+                          path: section.path,
+                          displayName: section.displayName,
+                          count: section.count,
+                          options: section.options
+                              .where(optionMatches)
+                              .toList(growable: false),
+                        ),
+                      )
+                      .where(
+                        (section) =>
+                            tagSearch.isEmpty || section.options.isNotEmpty,
+                      )
+                      .toList(growable: false);
+                  return GalleryCategory(
                     path: category.path,
                     displayName: category.displayName,
                     count: category.count,
-                    options: category.options
-                        .where((option) {
-                          final eligible =
-                              option.virtualFilter != null ||
-                              (tagSettings.includes(option.fullTag) &&
-                                  !tagSettings.hides(option.fullTag));
-                          return eligible &&
-                              (tagSearch.isEmpty ||
-                                  _matchesTagSearch(
-                                    '${category.displayName} ${option.sectionPath ?? ''} ${option.name} ${option.fullTag}',
-                                    tagSearch,
-                                  ));
-                        })
-                        .toList(growable: false),
-                  ),
+                    options: options,
+                    sections: sections,
+                  );
+                })
+                .where(
+                  (category) =>
+                      category.options.isNotEmpty ||
+                      category.sections.isNotEmpty ||
+                      (tagSearch.isEmpty && category.count != null),
                 )
-                .where((category) => category.options.isNotEmpty)
                 .toList(growable: false);
             final matchingTagPaths = matchingCategories
                 .map((category) => category.path)
@@ -180,7 +205,8 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: Card(
+                  child: _expressiveCard(
+                    context: context,
                     margin: EdgeInsets.zero,
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -188,39 +214,67 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                         spacing: 8,
                         runSpacing: 8,
                         children: [
-                          SegmentedButton<GallerySortField>(
-                            segments: [
-                              for (final field in GallerySortField.values)
-                                ButtonSegment(
-                                  value: field,
-                                  label: Text(field.label),
-                                ),
-                            ],
-                            selected: {sort.field},
-                            showSelectedIcon: false,
-                            onSelectionChanged: (selection) => ref
-                                .read(gallerySortProvider.notifier)
-                                .setField(selection.single),
-                          ),
-                          SegmentedButton<GallerySortDirection>(
-                            segments: [
-                              for (final direction
-                                  in GallerySortDirection.values)
-                                ButtonSegment(
-                                  value: direction,
-                                  icon: Icon(
-                                    direction == GallerySortDirection.ascending
-                                        ? Icons.arrow_upward
-                                        : Icons.arrow_downward,
+                          ExpressiveMaterialScope(
+                            theme: Theme.of(context),
+                            child: M3EButtonGroup(
+                              semanticLabel: '並べ替えの基準',
+                              type: M3EButtonGroupType.connected,
+                              style: M3EButtonStyle.tonal,
+                              decoration: galleryChoiceButtonDecoration(
+                                Theme.of(context).colorScheme,
+                              ),
+                              selectedIndex: GallerySortField.values.indexOf(
+                                sort.field,
+                              ),
+                              selectionRequired: true,
+                              onSelectedIndexChanged: (index) {
+                                if (index == null) return;
+                                ref
+                                    .read(gallerySortProvider.notifier)
+                                    .setField(GallerySortField.values[index]);
+                              },
+                              actions: [
+                                for (final field in GallerySortField.values)
+                                  M3EButtonGroupAction(
+                                    label: Text(field.label),
                                   ),
-                                  label: Text(direction.label),
-                                ),
-                            ],
-                            selected: {sort.direction},
-                            showSelectedIcon: false,
-                            onSelectionChanged: (selection) => ref
-                                .read(gallerySortProvider.notifier)
-                                .setDirection(selection.single),
+                              ],
+                            ),
+                          ),
+                          ExpressiveMaterialScope(
+                            theme: Theme.of(context),
+                            child: M3EButtonGroup(
+                              semanticLabel: '並べ替えの向き',
+                              type: M3EButtonGroupType.connected,
+                              style: M3EButtonStyle.tonal,
+                              decoration: galleryChoiceButtonDecoration(
+                                Theme.of(context).colorScheme,
+                              ),
+                              selectedIndex: GallerySortDirection.values
+                                  .indexOf(sort.direction),
+                              selectionRequired: true,
+                              onSelectedIndexChanged: (index) {
+                                if (index == null) return;
+                                ref
+                                    .read(gallerySortProvider.notifier)
+                                    .setDirection(
+                                      GallerySortDirection.values[index],
+                                    );
+                              },
+                              actions: [
+                                for (final direction
+                                    in GallerySortDirection.values)
+                                  M3EButtonGroupAction(
+                                    icon: Icon(
+                                      direction ==
+                                              GallerySortDirection.ascending
+                                          ? Icons.arrow_upward
+                                          : Icons.arrow_downward,
+                                    ),
+                                    label: Text(direction.label),
+                                  ),
+                              ],
+                            ),
                           ),
                         ],
                       ),
@@ -232,29 +286,28 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: noteSearchController,
-                          textInputAction: TextInputAction.search,
-                          onSubmitted: (_) => _applyNoteSearch(),
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.article_outlined),
+                        child: ExpressiveMaterialScope(
+                          theme: Theme.of(context),
+                          child: M3ESearchBar(
+                            controller: noteSearchController,
                             hintText: 'ノート名 / #タグ / -#タグ / &#タグ',
-                            isDense: true,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.all(
-                                Radius.circular(24),
-                              ),
-                            ),
+                            leading: const Icon(Icons.article_outlined),
+                            textInputAction: TextInputAction.search,
+                            onSubmitted: (_) => _applyNoteSearch(),
+                            margin: 0,
+                            focusedMargin: 0,
                           ),
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IconButton.filledTonal(
+                      M3EIconButton(
+                        variant: M3EIconButtonVariant.tonal,
                         tooltip: 'ノートを検索',
                         onPressed: _applyNoteSearch,
                         icon: const Icon(Icons.search),
                       ),
-                      IconButton(
+                      M3EIconButton(
+                        variant: M3EIconButtonVariant.standard,
                         tooltip: '検索と絞り込みをすべて解除',
                         onPressed: _clearAll,
                         icon: const Icon(Icons.backspace_outlined),
@@ -264,17 +317,24 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                 ),
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: TextField(
-                    controller: tagSearchController,
-                    textInputAction: TextInputAction.search,
-                    decoration: const InputDecoration(
-                      prefixIcon: Icon(Icons.sell_outlined),
-                      hintText: 'タグを検索',
-                      isDense: true,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.all(Radius.circular(24)),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: ExpressiveMaterialScope(
+                          theme: Theme.of(context),
+                          child: M3ESearchBar(
+                            controller: tagSearchController,
+                            leading: const Icon(Icons.sell_outlined),
+                            hintText: 'タグを検索',
+                            textInputAction: TextInputAction.search,
+                            margin: 0,
+                            focusedMargin: 0,
+                          ),
+                        ),
                       ),
-                    ),
+                      // 上段の検索・解除ボタン（8 + 48 + 48）と幅を揃える
+                      const SizedBox(width: 104),
+                    ],
                   ),
                 ),
                 _filterLegend(context),
@@ -373,139 +433,109 @@ class _CategoryCard extends ConsumerWidget {
     final options = category.options;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
+    return M3ECard(
+      variant: M3ECardVariant.filled,
+      focusable: false,
+      showFocusRing: false,
+      showFocusFill: false,
+      trackHover: false,
+      padding: EdgeInsets.zero,
       elevation: 0,
-      margin: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
       color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(GalleryShape.medium),
-        side: BorderSide(
-          color: hasSelection
-              ? colorScheme.primary.withValues(alpha: 0.5)
-              : colorScheme.outlineVariant.withValues(alpha: 0.4),
-        ),
+      borderRadius: BorderRadius.circular(GalleryShape.medium),
+      border: BorderSide(
+        color: hasSelection ? colorScheme.primary : colorScheme.outlineVariant,
+        width: hasSelection ? 1.5 : 1,
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 4, 12, 8),
+        padding: const EdgeInsets.fromLTRB(12, 4, 12, 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            InkWell(
-              borderRadius: BorderRadius.circular(GalleryShape.medium),
-              overlayColor: WidgetStateProperty.resolveWith((states) {
-                if (states.contains(WidgetState.pressed)) {
-                  return colorScheme.primary.withValues(alpha: 0.12);
-                }
-                if (states.contains(WidgetState.focused)) {
-                  return colorScheme.primary.withValues(alpha: 0.08);
-                }
-                if (states.contains(WidgetState.hovered)) {
-                  return colorScheme.primary.withValues(alpha: 0.05);
-                }
-                return Colors.transparent;
-              }),
-              onTap: () => onExpandedChanged(!expanded),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 10),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        category.displayName,
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.w600),
-                      ),
-                    ),
-                    if (hasSelection)
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: Icon(
-                          Icons.check_circle,
-                          size: 18,
-                          color: colorScheme.primary,
+            Semantics(
+              expanded: expanded,
+              child: M3ETappable(
+                onTap: () => onExpandedChanged(!expanded),
+                semanticLabel: category.displayName,
+                builder: (context, state) => M3EStateLayerOverlay(
+                  state: state,
+                  color: colorScheme.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(GalleryShape.medium),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            category.displayName,
+                            style: Theme.of(context).textTheme.titleMedium
+                                ?.copyWith(fontWeight: FontWeight.w600),
+                          ),
                         ),
-                      ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorScheme.secondaryContainer,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '${category.count}',
-                        style: Theme.of(context).textTheme.labelMedium
-                            ?.copyWith(color: colorScheme.onSecondaryContainer),
-                      ),
+                        if (hasSelection)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: Icon(
+                              Icons.check_circle,
+                              size: 18,
+                              color: colorScheme.primary,
+                            ),
+                          ),
+                        if (category.count case final count?)
+                          _TagCountPill(count: count),
+                        AnimatedRotation(
+                          turns: expanded ? 0.5 : 0,
+                          duration: GalleryMotion.duration(GalleryMotion.short),
+                          curve: GalleryMotion.emphasizedCurve,
+                          child: const Icon(Icons.expand_more),
+                        ),
+                      ],
                     ),
-                    AnimatedRotation(
-                      turns: expanded ? 0.5 : 0,
-                      duration: GalleryMotion.short,
-                      curve: GalleryMotion.emphasizedCurve,
-                      child: const Icon(Icons.expand_more),
-                    ),
-                  ],
+                  ),
                 ),
               ),
             ),
             AnimatedSize(
               alignment: Alignment.topCenter,
-              duration: GalleryMotion.medium,
+              duration: GalleryMotion.duration(GalleryMotion.medium),
               curve: GalleryMotion.emphasizedCurve,
               child: expanded
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (options.isEmpty)
+                        if (category.sections.isNotEmpty)
+                          for (final section in category.sections)
+                            _buildOptionSection(
+                              context,
+                              section.displayName,
+                              section.options,
+                              selectedTags: selected,
+                              allRequiredTags: allRequired,
+                              selectedVirtualFilters: selectedVirtual,
+                              count: section.count,
+                            )
+                        else if (options.isEmpty)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8),
                             child: Text('該当する選択肢がありません'),
                           )
                         else ...[
                           for (final section in _optionSections(options))
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  if (category.path == 'source' &&
-                                      section.key != 'source')
-                                    Padding(
-                                      padding: const EdgeInsets.only(bottom: 6),
-                                      child: Text(
-                                        section.key.replaceFirst('source/', ''),
-                                        style: Theme.of(context)
-                                            .textTheme
-                                            .labelLarge
-                                            ?.copyWith(
-                                              color:
-                                                  colorScheme.onSurfaceVariant,
-                                            ),
-                                      ),
+                            _buildOptionSection(
+                              context,
+                              section.key == category.path
+                                  ? ''
+                                  : section.key.replaceFirst(
+                                      '${category.path}/',
+                                      '',
                                     ),
-                                  Wrap(
-                                    spacing: 6,
-                                    runSpacing: 6,
-                                    children: [
-                                      for (final option in section.value)
-                                        _OptionChip(
-                                          option: option,
-                                          selectedTags: selected,
-                                          allRequiredTags: allRequired,
-                                          selectedVirtualFilters:
-                                              selectedVirtual,
-                                          isWholeCategory:
-                                              option.fullTag ==
-                                              (option.sectionPath ??
-                                                  category.path),
-                                        ),
-                                    ],
-                                  ),
-                                ],
-                              ),
+                              section.value,
+                              selectedTags: selected,
+                              allRequiredTags: allRequired,
+                              selectedVirtualFilters: selectedVirtual,
                             ),
                         ],
                       ],
@@ -528,6 +558,94 @@ class _CategoryCard extends ConsumerWidget {
           .add(option);
     }
     return sections.entries.toList(growable: false);
+  }
+
+  Widget _buildOptionSection(
+    BuildContext context,
+    String title,
+    List<GalleryCategoryOption> options, {
+    required Set<String> selectedTags,
+    required Set<String> allRequiredTags,
+    required Set<GalleryVirtualFilter> selectedVirtualFilters,
+    int? count,
+  }) => Padding(
+    padding: const EdgeInsets.only(top: 8),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (count != null || title.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+                  ),
+                ),
+                if (count != null) _TagCountPill(count: count),
+              ],
+            ),
+          ),
+        if (options.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('該当する選択肢がありません'),
+          )
+        else
+          M3EChipGroup(
+            groupLabel: '$title のタグ',
+            child: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final option in options)
+                  _OptionChip(
+                    option: option,
+                    selectedTags: selectedTags,
+                    allRequiredTags: allRequiredTags,
+                    selectedVirtualFilters: selectedVirtualFilters,
+                    isWholeCategory:
+                        option.fullTag == (option.sectionPath ?? category.path),
+                  ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+}
+
+class _TagCountPill extends StatelessWidget {
+  const _TagCountPill({required this.count});
+
+  final int count;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      label: '件数 $count',
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: scheme.secondaryContainer,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          child: Text(
+            '$count',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: scheme.onSecondaryContainer,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -558,68 +676,66 @@ class _OptionChip extends ConsumerWidget {
     final selected = virtualFilter == null
         ? isIncluded || isAllRequired || isExcluded
         : selectedVirtualFilters.contains(virtualFilter);
-    final colorScheme = Theme.of(context).colorScheme;
-    return FilterChip(
-      key: ValueKey('${option.virtualFilter ?? option.fullTag}:filter'),
-      showCheckmark: false,
-      avatar: isIncluded
-          ? const Icon(Icons.add, size: 16)
-          : isAllRequired
-          ? const Icon(Icons.done_all, size: 16)
-          : isExcluded
-          ? Icon(Icons.remove, size: 16, color: colorScheme.onErrorContainer)
-          : isWholeCategory
-          ? Icon(Icons.all_inclusive, size: 16, color: colorScheme.primary)
-          : null,
-      label: Text(
-        option.name,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontWeight: isWholeCategory ? FontWeight.w600 : FontWeight.normal,
-        ),
-      ),
-      labelPadding: const EdgeInsets.symmetric(horizontal: 6),
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      shape: const StadiumBorder(),
-      backgroundColor: option.disabled
-          ? colorScheme.onSurface.withValues(alpha: 0.08)
-          : null,
-      selectedColor: isExcluded ? colorScheme.errorContainer : null,
-      labelStyle: TextStyle(
-        color: option.disabled
-            ? colorScheme.onSurface.withValues(alpha: 0.38)
+    final filterState = isIncluded
+        ? 'いずれかに含める'
+        : isAllRequired
+        ? 'すべてに含める'
+        : isExcluded
+        ? '除外'
+        : '未選択';
+    return Semantics(
+      label: option.fullTag,
+      value: '$filterState、${option.count} 件',
+      enabled: !option.disabled,
+      toggled: selected || isAllRequired,
+      child: M3EChip(
+        key: ValueKey('${option.virtualFilter ?? option.fullTag}:filter'),
+        label: option.name,
+        type: M3EChipType.filter,
+        selected: selected || isAllRequired,
+        leading: isIncluded
+            ? const Icon(Icons.add, size: 16)
+            : isAllRequired
+            ? const Icon(Icons.done_all, size: 16)
             : isExcluded
-            ? colorScheme.onErrorContainer
+            ? const Icon(Icons.remove, size: 16)
+            : isWholeCategory
+            ? const Icon(Icons.all_inclusive, size: 16)
             : null,
-      ),
-      visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-      selected: selected || isAllRequired,
-      onSelected: option.disabled
-          ? null
-          : (_) {
-              if (virtualFilter == null) {
-                final included = ref.read(selectedTagsProvider.notifier);
-                final all = ref.read(allTagsProvider.notifier);
-                final excluded = ref.read(excludedTagsProvider.notifier);
-                if (isIncluded) {
-                  included.toggle(option.fullTag);
-                  all.toggle(option.fullTag);
-                } else if (isAllRequired) {
-                  all.toggle(option.fullTag);
-                  excluded.toggle(option.fullTag);
-                } else if (isExcluded) {
-                  excluded.toggle(option.fullTag);
+        trailing: Text(
+          '${option.count}',
+          maxLines: 1,
+          softWrap: false,
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+            color: Theme.of(context).colorScheme.onSurface,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        onPressed: option.disabled
+            ? null
+            : () {
+                if (virtualFilter == null) {
+                  final included = ref.read(selectedTagsProvider.notifier);
+                  final all = ref.read(allTagsProvider.notifier);
+                  final excluded = ref.read(excludedTagsProvider.notifier);
+                  if (isIncluded) {
+                    included.toggle(option.fullTag);
+                    all.toggle(option.fullTag);
+                  } else if (isAllRequired) {
+                    all.toggle(option.fullTag);
+                    excluded.toggle(option.fullTag);
+                  } else if (isExcluded) {
+                    excluded.toggle(option.fullTag);
+                  } else {
+                    included.toggle(option.fullTag);
+                  }
                 } else {
-                  included.toggle(option.fullTag);
+                  ref
+                      .read(selectedVirtualFiltersProvider.notifier)
+                      .toggle(virtualFilter);
                 }
-              } else {
-                ref
-                    .read(selectedVirtualFiltersProvider.notifier)
-                    .toggle(virtualFilter);
-              }
-            },
+              },
+      ),
     );
   }
 }

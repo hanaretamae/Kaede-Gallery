@@ -1,14 +1,18 @@
 part of 'gallery_screen.dart';
 
+const int _maximumUnboundedGalleryJump = 2147483647;
+
 Future<void> _showGalleryStartIndexDialog(
   BuildContext context,
   WidgetRef ref,
-  int maximum,
+  int? maximum,
 ) async {
-  final value = await showDialog<int>(
-    context: context,
-    builder: (context) => _GalleryStartIndexDialog(
-      initialValue: ref.read(galleryLastJumpIndexProvider).clamp(1, maximum),
+  final value = await M3EDialog.show<int>(
+    context,
+    dialog: _GalleryStartIndexDialog(
+      initialValue: ref
+          .read(galleryLastJumpIndexProvider)
+          .clamp(1, maximum ?? _maximumUnboundedGalleryJump),
       maximum: maximum,
       onSubmit: (index) =>
           ref.read(galleryLastJumpIndexProvider.notifier).set(index),
@@ -24,11 +28,10 @@ Future<void> _showGalleryStartIndexDialog(
       unawaited(ref.read(galleryMediaItemsProvider.notifier).jumpTo(value - 1));
     }
     if (context.mounted) {
-      await showDialog<void>(
-        context: context,
+      await M3EDialog.show<void>(
+        context,
         barrierDismissible: false,
-        builder: (context) =>
-            _GalleryJumpProgressDialog(targetIndex: value - 1),
+        dialog: _GalleryJumpProgressDialog(targetIndex: value - 1),
       );
       ref.read(galleryJumpTargetProvider.notifier).set(null);
       ref.read(galleryJumpStatusProvider.notifier).set(GalleryJumpStatus.idle);
@@ -61,15 +64,15 @@ class _GalleryJumpProgressDialog extends ConsumerWidget {
         status == GalleryJumpStatus.loading ||
         status == GalleryJumpStatus.positioning ||
         status == GalleryJumpStatus.idle;
-    return AlertDialog(
-      title: const Text('指定位置へ移動'),
+    return M3EDialog(
+      title: '指定位置へ移動',
       content: Row(
         children: [
           if (loading) ...[
             const SizedBox(
               width: 24,
               height: 24,
-              child: CircularProgressIndicator(strokeWidth: 3),
+              child: M3EProgressIndicator.circular(strokeWidth: 3),
             ),
             const SizedBox(width: 16),
           ],
@@ -77,7 +80,7 @@ class _GalleryJumpProgressDialog extends ConsumerWidget {
         ],
       ),
       actions: [
-        TextButton(
+        M3EButton.text(
           onPressed: () {
             ref.read(galleryJumpTargetProvider.notifier).set(null);
             ref
@@ -100,7 +103,7 @@ class _GalleryStartIndexDialog extends StatefulWidget {
   });
 
   final int initialValue;
-  final int maximum;
+  final int? maximum;
   final ValueChanged<int> onSubmit;
 
   @override
@@ -119,33 +122,45 @@ class _GalleryStartIndexDialogState extends State<_GalleryStartIndexDialog> {
   }
 
   @override
-  Widget build(BuildContext context) => AlertDialog(
-    title: const Text('指定した位置へ移動'),
-    content: TextField(
+  Widget build(BuildContext context) => M3EDialog(
+    title: '指定した位置へ移動',
+    content: M3ETextField(
       controller: controller,
       autofocus: true,
+      label: '何件目から表示',
+      errorText: errorMessage,
+      variant: M3ETextFieldVariant.outlined,
+      supportingText: errorMessage == null
+          ? widget.maximum == null
+                ? '件数を計算中です。正の整数を指定できます。'
+                : '1 から ${widget.maximum} 件目まで'
+          : null,
       keyboardType: TextInputType.number,
-      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+      inputFormatters: [
+        FilteringTextInputFormatter.digitsOnly,
+        LengthLimitingTextInputFormatter(10),
+      ],
       onChanged: (_) {
         if (errorMessage != null) setState(() => errorMessage = null);
       },
-      decoration: InputDecoration(
-        labelText: '何件目から表示',
-        errorText: errorMessage,
-        helperText: errorMessage == null ? '1 から ${widget.maximum} 件目まで' : null,
-      ),
     ),
     actions: [
-      TextButton(
+      M3EButton.text(
         onPressed: () => Navigator.of(context).pop(),
         child: const Text('キャンセル'),
       ),
-      FilledButton(
+      M3EButton.filled(
         onPressed: () {
           final parsed = int.tryParse(controller.text);
-          if (parsed == null || parsed < 1 || parsed > widget.maximum) {
+          final maximum = widget.maximum;
+          if (parsed == null ||
+              parsed < 1 ||
+              parsed > _maximumUnboundedGalleryJump ||
+              (maximum != null && parsed > maximum)) {
             setState(
-              () => errorMessage = '1 から ${widget.maximum} の範囲で入力してください。',
+              () => errorMessage = widget.maximum == null
+                  ? '1 から $_maximumUnboundedGalleryJump の範囲で入力してください。'
+                  : '1 から ${widget.maximum} の範囲で入力してください。',
             );
             return;
           }

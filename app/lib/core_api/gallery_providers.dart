@@ -33,6 +33,11 @@ final galleryShowTileItemNumberProvider = Provider<bool>((ref) {
   return settings?.pagination.showItemNumberOnTiles ?? false;
 });
 
+final galleryShowMissingMediaIconProvider = Provider<bool>((ref) {
+  final settings = ref.watch(galleryTagSettingsProvider).asData?.value;
+  return settings?.pagination.showMissingMediaIcon ?? false;
+});
+
 final galleryJumpTargetProvider =
     NotifierProvider<GalleryJumpTargetController, int?>(
       GalleryJumpTargetController.new,
@@ -546,32 +551,47 @@ final galleryCategoriesProvider = FutureProvider<List<GalleryCategory>>((
       )
       .toList(growable: false);
   if (sourceCategories.isEmpty) return categories;
+  final sourceSections = sourceCategories
+      .map(
+        (category) => GalleryCategorySection(
+          path: category.path,
+          displayName: category.displayName,
+          count: category.count,
+          options:
+              category.options
+                  .map(
+                    (option) => GalleryCategoryOption(
+                      name: _sourceOptionName(
+                        category.path,
+                        option.fullTag,
+                        option.name,
+                      ),
+                      fullTag: option.fullTag,
+                      count: option.count,
+                      disabled: option.disabled,
+                      sectionPath: category.path,
+                      virtualFilter: option.virtualFilter,
+                    ),
+                  )
+                  .toList()
+                ..sort(
+                  (left, right) => left.fullTag.toLowerCase().compareTo(
+                    right.fullTag.toLowerCase(),
+                  ),
+                ),
+        ),
+      )
+      .toList(growable: false);
   final sourceCategory = GalleryCategory(
     path: 'source',
     displayName: 'ソース',
-    count: sourceCategories
-        .map((category) => category.count)
-        .fold<int>(0, (largest, count) => count > largest ? count : largest),
-    options:
-        [
-          for (final category in sourceCategories)
-            for (final option in category.options)
-              GalleryCategoryOption(
-                name: _sourceOptionName(
-                  category.path,
-                  option.fullTag,
-                  option.name,
-                ),
-                fullTag: option.fullTag,
-                count: option.count,
-                disabled: option.disabled,
-                sectionPath: _sourceSectionPath(category.path),
-                virtualFilter: option.virtualFilter,
-              ),
-        ]..sort(
-          (left, right) =>
-              left.fullTag.toLowerCase().compareTo(right.fullTag.toLowerCase()),
-        ),
+    count: null,
+    sections: sourceSections,
+    options: [for (final section in sourceSections) ...section.options]
+      ..sort(
+        (left, right) =>
+            left.fullTag.toLowerCase().compareTo(right.fullTag.toLowerCase()),
+      ),
   );
   return [...otherCategories, sourceCategory]
     ..sort((left, right) => left.path.compareTo(right.path));

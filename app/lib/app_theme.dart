@@ -1,10 +1,21 @@
 import 'package:flutter/material.dart';
+import 'package:material_3_expressive/material_3_expressive.dart' as m3e;
+import 'package:material_ui/material_ui.dart' as mui;
 
 abstract final class GalleryMotion {
-  static const short = Duration(milliseconds: 160);
-  static const medium = Duration(milliseconds: 240);
-  static const emphasized = Duration(milliseconds: 360);
-  static const emphasizedCurve = Curves.easeInOutCubicEmphasized;
+  static const short = m3e.M3EMotion.short3;
+  static const medium = m3e.M3EMotion.medium1;
+  static const emphasized = m3e.M3EMotion.medium3;
+  static const emphasizedCurve = m3e.M3EMotion.emphasized;
+
+  static Duration duration(Duration token) =>
+      WidgetsBinding
+          .instance
+          .platformDispatcher
+          .accessibilityFeatures
+          .disableAnimations
+      ? Duration.zero
+      : token;
 }
 
 abstract final class GalleryShape {
@@ -14,6 +25,14 @@ abstract final class GalleryShape {
   static const extraLarge = 36.0;
 }
 
+Widget galleryAppBarTitle(BuildContext context, String title) => Text(
+  title,
+  maxLines: 1,
+  overflow: TextOverflow.ellipsis,
+  style: Theme.of(context).textTheme.titleLarge
+      ?.copyWith(fontWeight: FontWeight.w600),
+);
+
 ColorScheme materialYouScheme(
   ColorScheme systemScheme, {
   required Brightness brightness,
@@ -21,6 +40,32 @@ ColorScheme materialYouScheme(
   seedColor: systemScheme.primary,
   brightness: brightness,
 );
+
+m3e.M3EButtonDecoration galleryChoiceButtonDecoration(ColorScheme scheme) =>
+    m3e.M3EButtonDecoration(
+      backgroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) {
+          return Color.alphaBlend(
+            scheme.onSurface.withValues(alpha: 0.12),
+            scheme.surfaceContainerHighest,
+          );
+        }
+        return states.contains(WidgetState.selected)
+            ? scheme.primary
+            : scheme.surfaceContainerHighest;
+      }),
+      foregroundColor: WidgetStateProperty.resolveWith((states) {
+        if (states.contains(WidgetState.disabled)) {
+          return scheme.onSurface.withValues(alpha: 0.38);
+        }
+        return states.contains(WidgetState.selected)
+            ? scheme.onPrimary
+            : scheme.onSurface;
+      }),
+      shadowColor: const WidgetStatePropertyAll(Colors.transparent),
+      elevation: const WidgetStatePropertyAll(0),
+      side: const WidgetStatePropertyAll(BorderSide.none),
+    );
 
 ThemeData galleryTheme(
   Color seed, {
@@ -98,8 +143,8 @@ ThemeData galleryTheme(
       ),
     ),
     inputDecorationTheme: InputDecorationTheme(
-      filled: true,
-      fillColor: colorScheme.surfaceContainerLow,
+      filled: false,
+      fillColor: Colors.transparent,
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       border: roundedOutline,
       enabledBorder: roundedOutline,
@@ -152,16 +197,6 @@ ThemeData galleryTheme(
         shape: const CircleBorder(),
       ),
     ),
-    segmentedButtonTheme: SegmentedButtonThemeData(
-      style: ButtonStyle(
-        minimumSize: const WidgetStatePropertyAll(Size(48, 48)),
-        shape: WidgetStatePropertyAll(
-          RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(GalleryShape.medium),
-          ),
-        ),
-      ),
-    ),
     chipTheme: ChipThemeData(
       showCheckmark: true,
       shape: const StadiumBorder(),
@@ -190,14 +225,6 @@ ThemeData galleryTheme(
         ),
       ),
     ),
-    snackBarTheme: SnackBarThemeData(
-      behavior: SnackBarBehavior.floating,
-      backgroundColor: colorScheme.inverseSurface,
-      contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(GalleryShape.medium),
-      ),
-    ),
     progressIndicatorTheme: ProgressIndicatorThemeData(
       color: colorScheme.primary,
       linearTrackColor: colorScheme.secondaryContainer,
@@ -208,4 +235,78 @@ ThemeData galleryTheme(
       space: 1,
     ),
   );
+}
+
+final _expressiveThemeCache = Expando<m3e.M3EThemeData>();
+
+// ColorScheme.fromSeed は重いため、ThemeData ごとに結果を使い回す。
+m3e.M3EThemeData expressiveThemeFromMaterial(ThemeData theme) =>
+    _expressiveThemeCache[theme] ??= _buildExpressiveTheme(theme);
+
+m3e.M3EThemeData _buildExpressiveTheme(ThemeData theme) {
+  final flutterScheme = theme.colorScheme;
+  final scheme =
+      mui.ColorScheme.fromSeed(
+        seedColor: flutterScheme.primary,
+        brightness: flutterScheme.brightness,
+      ).copyWith(
+        primary: flutterScheme.primary,
+        onPrimary: flutterScheme.onPrimary,
+        primaryContainer: flutterScheme.primaryContainer,
+        onPrimaryContainer: flutterScheme.onPrimaryContainer,
+        secondary: flutterScheme.secondary,
+        onSecondary: flutterScheme.onSecondary,
+        secondaryContainer: flutterScheme.secondaryContainer,
+        onSecondaryContainer: flutterScheme.onSecondaryContainer,
+        tertiary: flutterScheme.tertiary,
+        onTertiary: flutterScheme.onTertiary,
+        tertiaryContainer: flutterScheme.tertiaryContainer,
+        onTertiaryContainer: flutterScheme.onTertiaryContainer,
+        error: flutterScheme.error,
+        onError: flutterScheme.onError,
+        errorContainer: flutterScheme.errorContainer,
+        onErrorContainer: flutterScheme.onErrorContainer,
+        surface: flutterScheme.surface,
+        onSurface: flutterScheme.onSurface,
+        onSurfaceVariant: flutterScheme.onSurfaceVariant,
+        surfaceContainerLowest: flutterScheme.surfaceContainerLowest,
+        surfaceContainerLow: flutterScheme.surfaceContainerLow,
+        surfaceContainer: flutterScheme.surfaceContainer,
+        surfaceContainerHigh: flutterScheme.surfaceContainerHigh,
+        surfaceContainerHighest: flutterScheme.surfaceContainerHighest,
+        surfaceDim: flutterScheme.surfaceDim,
+        surfaceBright: flutterScheme.surfaceBright,
+        inverseSurface: flutterScheme.inverseSurface,
+        onInverseSurface: flutterScheme.onInverseSurface,
+        inversePrimary: flutterScheme.inversePrimary,
+        outline: flutterScheme.outline,
+        outlineVariant: flutterScheme.outlineVariant,
+        shadow: flutterScheme.shadow,
+        scrim: flutterScheme.scrim,
+        surfaceTint: flutterScheme.surfaceTint,
+      );
+  return m3e.M3EThemeData.fromMaterial(mui.ThemeData.from(colorScheme: scheme));
+}
+
+class ExpressiveMaterialScope extends StatelessWidget {
+  const ExpressiveMaterialScope({
+    required this.theme,
+    required this.child,
+    super.key,
+  });
+
+  final ThemeData theme;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final expressiveTheme = expressiveThemeFromMaterial(theme);
+    return m3e.M3ETheme(
+      data: expressiveTheme,
+      child: mui.Theme(
+        data: expressiveTheme.toThemeData(),
+        child: mui.Material(type: mui.MaterialType.transparency, child: child),
+      ),
+    );
+  }
 }

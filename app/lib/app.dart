@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dynamic_color/dynamic_color.dart';
+import 'package:dynamic_color/dynamic_color.dart' as dynamic_color;
 
 import 'app_theme.dart';
 import 'core_api/gallery_appearance.dart';
@@ -19,20 +19,23 @@ class VaultGalleryApp extends ConsumerWidget {
     final portalAccent = appearance.useSystemColor
         ? ref.watch(linuxPortalAccentColorProvider).asData?.value
         : null;
-    return DynamicColorBuilder(
+    return dynamic_color.DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {
         final lightSystemScheme = portalAccent == null
             ? lightDynamic == null
                   ? null
-                  : materialYouScheme(
-                      lightDynamic,
+                  : ColorScheme.fromSeed(
+                      seedColor: lightDynamic.primary,
                       brightness: Brightness.light,
                     )
             : ColorScheme.fromSeed(seedColor: portalAccent);
         final darkSystemScheme = portalAccent == null
             ? darkDynamic == null
                   ? null
-                  : materialYouScheme(darkDynamic, brightness: Brightness.dark)
+                  : ColorScheme.fromSeed(
+                      seedColor: darkDynamic.primary,
+                      brightness: Brightness.dark,
+                    )
             : ColorScheme.fromSeed(
                 seedColor: portalAccent,
                 brightness: Brightness.dark,
@@ -54,6 +57,13 @@ class VaultGalleryApp extends ConsumerWidget {
             dynamicScheme: appearance.useSystemColor ? darkSystemScheme : null,
             pureBlack: appearance.pureBlack,
           ),
+          builder: (context, child) {
+            final theme = Theme.of(context);
+            return ExpressiveMaterialScope(
+              theme: theme,
+              child: child ?? const SizedBox.shrink(),
+            );
+          },
           home: const GalleryScreen(),
         );
       },

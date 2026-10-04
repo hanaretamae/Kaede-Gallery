@@ -10,6 +10,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart' show ScrollDirection;
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:material_3_expressive/material_3_expressive.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 import 'package:path/path.dart' as p;
@@ -26,6 +27,7 @@ import '../../core_api/gallery_tag_settings.dart';
 import '../../platform/android_video_source.dart';
 import '../../platform/linux_file_manager.dart';
 import '../../platform/vault_platform.dart';
+import 'vault_picker_screen.dart';
 
 part 'gallery_jump_dialog.dart';
 part 'gallery_settings_screens.dart';
@@ -35,6 +37,51 @@ part 'appearance_settings.dart';
 part 'tag_filter_panel.dart';
 part 'gallery_grid.dart';
 part 'note_viewer.dart';
+
+M3EListItem _expressiveSwitchTile({
+  required String title,
+  String? subtitle,
+  required bool value,
+  required ValueChanged<bool> onChanged,
+}) => M3EListItem(
+  headline: title,
+  supportingText: subtitle,
+  onTap: () => onChanged(!value),
+  trailing: M3ESwitch(value: value, onChanged: onChanged, semanticLabel: title),
+);
+
+Widget? _expressiveBackButton(BuildContext context) {
+  final navigator = Navigator.of(context);
+  if (!navigator.canPop()) return null;
+  return M3EIconButton(
+    variant: M3EIconButtonVariant.standard,
+    icon: const Icon(Icons.arrow_back),
+    tooltip: 'Back',
+    onPressed: () => navigator.maybePop(),
+  );
+}
+
+Widget _expressiveCard({
+  required BuildContext context,
+  required Widget child,
+  Color? color,
+  EdgeInsetsGeometry? margin,
+  Clip clipBehavior = Clip.antiAlias,
+}) => Padding(
+  padding: margin ?? const EdgeInsets.all(4),
+  child: M3ECard(
+    variant: M3ECardVariant.elevated,
+    color: color ?? Theme.of(context).colorScheme.surfaceContainerLow,
+    padding: EdgeInsets.zero,
+    clipBehavior: clipBehavior,
+    border: BorderSide.none,
+    focusable: false,
+    showFocusRing: false,
+    showFocusFill: false,
+    trackHover: false,
+    child: child,
+  ),
+);
 
 class GalleryScreen extends ConsumerWidget {
   const GalleryScreen({super.key});
@@ -50,9 +97,18 @@ class GalleryScreen extends ConsumerWidget {
       ),
       data: (vault) {
         if (vault == null) {
-          return _VaultPickerScreen(
+          final appTheme = Theme.of(context);
+          return VaultPickerScreen(
             onChooseVault: () =>
                 ref.read(vaultSessionProvider.notifier).chooseVault(),
+            onShowNoteExample: () {
+              Navigator.of(context).push<void>(
+                MaterialPageRoute<void>(
+                  builder: (_) => const _FictionalNoteExampleScreen(),
+                ),
+              );
+            },
+            expressiveTheme: expressiveThemeFromMaterial(appTheme),
           );
         }
         return _GalleryLayout(session: vault);
@@ -66,63 +122,7 @@ class _LoadingScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) =>
-      const Scaffold(body: Center(child: CircularProgressIndicator()));
-}
-
-class _VaultPickerScreen extends StatelessWidget {
-  const _VaultPickerScreen({required this.onChooseVault});
-
-  final VoidCallback onChooseVault;
-
-  @override
-  Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    return Scaffold(
-      appBar: AppBar(),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 88,
-                height: 88,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(GalleryShape.extraLarge),
-                ),
-                child: Icon(
-                  Icons.photo_library_outlined,
-                  size: 42,
-                  color: colorScheme.onPrimaryContainer,
-                ),
-              ),
-              const SizedBox(height: 24),
-              Text(
-                'Kaede Gallery',
-                style: Theme.of(context).textTheme.headlineMedium
-                    ?.copyWith(fontWeight: FontWeight.w600),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Obsidian Vault のメディアをオフラインで閲覧できます。',
-                textAlign: TextAlign.center,
-                style: Theme.of(context).textTheme.bodyLarge
-                    ?.copyWith(color: colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 24),
-              FilledButton.icon(
-                onPressed: onChooseVault,
-                icon: const Icon(Icons.folder_open),
-                label: const Text('Vault を選択'),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+      const Scaffold(body: Center(child: M3EProgressIndicator.circular()));
 }
 
 class _VaultErrorScreen extends StatelessWidget {
@@ -132,7 +132,7 @@ class _VaultErrorScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(),
+    appBar: const M3EAppBar.top(),
     body: Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -141,7 +141,7 @@ class _VaultErrorScreen extends StatelessWidget {
           const SizedBox(height: 12),
           const Text('Vault を開けませんでした。場所とアクセス権を確認してください。'),
           const SizedBox(height: 12),
-          FilledButton(
+          M3EButton.filled(
             onPressed: onChooseVault,
             child: const Text('別の Vault を選択'),
           ),
@@ -187,47 +187,68 @@ class _GalleryLayout extends ConsumerWidget {
         : '$totalCount 件中 ${startIndex + 1} - '
               '${(startIndex + pageSize).clamp(0, totalCount)} 件';
     return Scaffold(
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(vaultName, overflow: TextOverflow.ellipsis),
-            Text(rangeLabel, style: Theme.of(context).textTheme.bodySmall),
-          ],
-        ),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, vaultName),
+        subtitleText: rangeLabel,
         actions: [
-          IconButton(
+          M3EIconButton(
+            variant: M3EIconButtonVariant.standard,
             tooltip: 'タグで絞り込む',
-            onPressed: () => showModalBottomSheet<void>(
-              context: context,
-              showDragHandle: true,
-              isScrollControlled: true,
-              builder: (context) => const FractionallySizedBox(
-                heightFactor: 0.9,
-                child: _TagPanel(),
-              ),
+            onPressed: () => M3EBottomSheet.show<void>(
+              context,
+              initialValue: M3EBottomSheetValue.fullScreen,
+              expandToFullScreen: true,
+              fullScreenTitle: 'タグで絞り込む',
+              builder: (context) =>
+                  const FractionallySizedBox(child: _TagPanel()),
             ),
-            icon: Badge(
-              isLabelVisible: filterCount > 0,
-              label: Text('$filterCount'),
-              child: const Icon(Icons.tune),
+            icon: filterCount == 0
+                ? const Icon(Icons.tune)
+                : M3EBadge(
+                    count: filterCount,
+                    semanticLabel: '$filterCount 件の絞り込み',
+                    child: const Icon(Icons.tune),
+                  ),
+          ),
+          M3EIconButton(
+            variant: M3EIconButtonVariant.standard,
+            tooltip: totalCount == null
+                ? countState.hasError
+                      ? '件数を取得できませんが、指定した位置へ移動できます'
+                      : '件数を計算中ですが、指定した位置へ移動できます'
+                : totalCount == 0
+                ? '表示できる項目がありません'
+                : '指定した位置へ移動',
+            semanticLabel: '指定した位置へ移動',
+            onPressed: totalCount == 0
+                ? null
+                : () => _showGalleryStartIndexDialog(context, ref, totalCount),
+            icon: Stack(
+              clipBehavior: Clip.none,
+              children: [
+                const Icon(Icons.format_list_numbered),
+                if (totalCount == null && countState.isLoading)
+                  const Positioned(
+                    right: -3,
+                    bottom: -3,
+                    child: SizedBox(
+                      width: 12,
+                      height: 12,
+                      child: M3EProgressIndicator.circular(strokeWidth: 2),
+                    ),
+                  ),
+              ],
             ),
           ),
-          if (totalCount != null && totalCount > 0)
-            IconButton(
-              tooltip: '指定した位置へ移動',
-              onPressed: () =>
-                  _showGalleryStartIndexDialog(context, ref, totalCount),
-              icon: const Icon(Icons.format_list_numbered),
-            ),
           const _DisplayModeButton(),
-          IconButton(
+          M3EIconButton(
+            variant: M3EIconButtonVariant.standard,
             tooltip: 'Vault の変更を再読み込み',
             onPressed: () => ref.read(vaultSessionProvider.notifier).rescan(),
             icon: const Icon(Icons.refresh),
           ),
-          IconButton(
+          M3EIconButton(
+            variant: M3EIconButtonVariant.standard,
             tooltip: '設定',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(

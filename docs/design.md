@@ -104,23 +104,74 @@ Material 3 Expressive has official design guidance, including expanded tonal
 color, typographic hierarchy, flexible shape, and more natural motion:
 https://m3.material.io/blog/building-with-m3-expressive
 and https://developer.android.com/design/ui/wear/guides/get-started/apply.
-Flutter's built-in Material library provides stable Material 3 components, but
-not the full Material 3 Expressive component set or its complete token system.
-The app therefore applies those design principles through a shared Flutter
-Material 3 theme (including component shapes, touch targets, surfaces, and
-motion tokens) and native Material components; it must not claim pixel-level or
-component-level conformance to the full Expressive system. Do not add a
-community component package to replace Flutter's Material library.
+Material 3 Expressive is an opt-in extension, not an official requirement to
+replace every Material 3 widget. This app nevertheless targets app-wide
+Expressive treatment with `material_3_expressive` 1.1.5 and `material_ui`.
+Use an M3E component wherever the pinned package has a semantically suitable
+implementation; where it does not, retain the correct native/platform
+component and apply the shared Expressive theme and motion rather than lose
+behavior or accessibility. Keep navigation, state management, and business
+logic unchanged during UI migration. Verify package APIs against the pinned
+release's README, changelog, and examples. The package requires Flutter
+3.47.0+ and Dart 3.13.0+.
+Official component, color, and motion guidance:
+https://m3.material.io/components/buttons/overview,
+https://m3.material.io/components/button-groups/overview,
+https://m3.material.io/components/segmented-buttons/overview, and
+https://m3.material.io/styles/motion/overview/how-it-works.
+Use Material You theme roles for button surfaces and foregrounds; selected and
+unselected controls must remain distinguishable and legible in light, dark,
+system-color, and pure-black themes. Choice groups use primary/on-primary for
+the selected state and surface-container-highest/on-surface for the unselected
+state, with no elevation or shadow:
+https://m3.material.io/styles/color/roles.
+Custom animations use the package's verified expressive motion tokens and
+respect the operating system's reduced-motion preference. Passive Flutter
+Card shells remain where their surface grouping and media hit-target behavior
+are needed; ExpansionTile and ReorderableListView retain their nested editing
+and drag-reorder semantics. System routes, platform pickers, and media overlays
+remain framework-, platform-, or media-specific and are not replaced by
+unrelated controls.
+The supplied leaf artwork is the app icon on supported Android and Linux
+targets; keep the Android adaptive foreground inside its 66dp mask-safe
+region:
+https://developer.android.com/develop/ui/views/launch/launcher-icons#design_adaptive_icons.
+The gallery filter panel uses Expressive search bars for its note and
+tag-option searches; preserve the distinction between submitted note queries
+and live tag-option filtering. Follow the Material 3 Search guidelines:
+https://m3.material.io/components/search/guidelines.
+Button Groups use the simple frameless treatment; state fills still use
+contrast-safe theme colors. The tag-filter panel shows the exact available
+category and option counts from the model without replacing them with aggregate
+totals, omitting zeroes, or capping large values.
+Main settings navigation cards use the higher surface-container role to
+separate tappable actions from the page background. Small app-bar titles use a
+bold headline style while remaining in the app bar's title position.
+Non-search inputs use the outlined Expressive text-field variant; framework
+text fields use the shared transparent outlined input theme. Search bars retain
+their dedicated search treatment.
 
 The settings page groups brightness, system accent color, and pure-black
-controls in one appearance card, using a segmented control for the mutually
-exclusive brightness choice and switches for the independent preferences.
+controls in one appearance card, using a connected Material 3 Expressive button
+group for the mutually exclusive brightness choice and switches for the
+independent preferences. Use connected button groups for mutually exclusive
+choices in the gallery sort controls and note-link resolution settings as well.
 Pure black applies only to dark mode: the app background remains true black
 while item surfaces retain a subtle dark distinction; the selected
 system/dynamic scheme continues to supply accent and foreground roles. Video
 controls remain transparent over media; the seek
 indicator uses the active theme's primary color while text and transport
 controls remain high-contrast white.
+Gallery tile media/memo/related counts and video indicators have no outlines;
+video is identified by an icon with accessible semantics. Note detail
+tags use a tag-seeded Material You tonal surface with no tag icon; frontmatter
+dates share one surface with their labels, while the selectable note path has no
+separate background. Missing/loading media icons are an optional tile setting
+and are hidden by default. The optional tile position indicator is a 24dp
+tonal marker at the upper left, matching the count-icon background size. The
+note title and author occupy the app bar headline and supporting subtitle roles
+respectively. The display-mode popup uses the standard Material You menu
+surface and selected-state color roles.
 Settings are ordered as appearance, list pagination, storage, notes, then
 “このアプリについて”. Vault selection and scan status are grouped under
 “保管庫”. Note structure and tag-filter visibility remain under “ノート”;

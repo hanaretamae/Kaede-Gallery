@@ -21,7 +21,7 @@ class _NoteGrid extends ConsumerWidget {
     final isLoadingMore = ref.watch(galleryItemsLoadingMoreProvider);
     final dataOffset = ref.watch(galleryNotesDataOffsetProvider);
     return gallery.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: M3EProgressIndicator.circular()),
       error: (_, _) => const Center(child: Text('一覧を読み込めませんでした。')),
       data: (notes) {
         if (notes.isEmpty) {
@@ -114,7 +114,7 @@ class _MediaGrid extends ConsumerWidget {
     final isLoadingMore = ref.watch(galleryMediaItemsLoadingMoreProvider);
     final dataOffset = ref.watch(galleryMediaDataOffsetProvider);
     return media.when(
-      loading: () => const Center(child: CircularProgressIndicator()),
+      loading: () => const Center(child: M3EProgressIndicator.circular()),
       error: (_, _) => const Center(child: Text('一覧を読み込めませんでした。')),
       data: (items) {
         if (items.isEmpty) {
@@ -507,7 +507,7 @@ class _ThumbnailGridState extends State<_ThumbnailGrid> {
                     child: SizedBox(
                       width: 28,
                       height: 28,
-                      child: CircularProgressIndicator(strokeWidth: 3),
+                      child: M3EProgressIndicator.circular(strokeWidth: 3),
                     ),
                   ),
                 ),
@@ -537,7 +537,7 @@ class _GalleryJumpHighlightState extends State<_GalleryJumpHighlight>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 1400),
+    duration: GalleryMotion.duration(M3EMotion.extraLong4),
   )..forward();
 
   late final Animation<double> _pulse = TweenSequence<double>([
@@ -614,81 +614,74 @@ class _GalleryTile extends ConsumerWidget {
     final isGrouped =
         ref.watch(galleryDisplayModeProvider) == GalleryDisplayMode.byNote;
     final showItemNumber = ref.watch(galleryShowTileItemNumberProvider);
+    final showMissingMediaIcon = ref.watch(galleryShowMissingMediaIconProvider);
     final thumbnail = mediaId == null
         ? null
         : ref.watch(galleryThumbnailProvider(mediaId));
-    return Card(
-      margin: EdgeInsets.zero,
+    return M3ECard(
+      variant: M3ECardVariant.filled,
+      color: Colors.transparent,
+      elevation: 0,
+      padding: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(GalleryShape.medium),
-      ),
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (context) => _NoteViewerScreen(
-              noteId: note.id,
-              initialMediaId: mediaId,
-              initialPreview: thumbnail?.asData?.value,
-            ),
+      borderRadius: BorderRadius.circular(GalleryShape.medium),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => _NoteViewerScreen(
+            noteId: note.id,
+            initialMediaId: mediaId,
+            initialPreview: thumbnail?.asData?.value,
           ),
         ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            if (thumbnail == null)
-              _MediaPlaceholder(hasVideo: note.videoCount > 0)
-            else
-              _GalleryTileThumbnail(
-                mediaId: mediaId,
-                isVideo:
-                    note.mediaCount > 0 && note.videoCount == note.mediaCount,
-                thumbnail: thumbnail,
+      ),
+      semanticLabel: 'ノートを開く',
+      semanticLink: true,
+      showFocusFill: false,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          if (thumbnail == null)
+            _MediaPlaceholder(
+              hasVideo: note.videoCount > 0,
+              showIcon: showMissingMediaIcon,
+            )
+          else
+            _GalleryTileThumbnail(
+              mediaId: mediaId,
+              isVideo:
+                  note.mediaCount > 0 && note.videoCount == note.mediaCount,
+              thumbnail: thumbnail,
+            ),
+          if (note.videoCount > 0)
+            const Positioned(right: 8, bottom: 8, child: _TileVideoBadge()),
+          if (isGrouped &&
+              (note.mediaCount > 1 ||
+                  note.memoCount > 0 ||
+                  note.relatedCount > 0))
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  if (note.mediaCount > 1)
+                    _TileCount(
+                      icon: Icons.photo_library_outlined,
+                      count: note.mediaCount,
+                    ),
+                  if (note.memoCount > 0)
+                    _TileCount(
+                      icon: Icons.sticky_note_2_outlined,
+                      count: note.memoCount,
+                    ),
+                  if (note.relatedCount > 0)
+                    _TileCount(icon: Icons.link, count: note.relatedCount),
+                ],
               ),
-            if (note.videoCount > 0)
-              const Positioned(
-                right: 8,
-                bottom: 8,
-                child: Icon(Icons.play_circle_outline, size: 30),
-              ),
-            if (isGrouped &&
-                (note.mediaCount > 1 ||
-                    note.memoCount > 0 ||
-                    note.relatedCount > 0))
-              Positioned(
-                left: 8,
-                bottom: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.68),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (note.mediaCount > 1)
-                        _TileCount(
-                          icon: Icons.photo_library_outlined,
-                          count: note.mediaCount,
-                        ),
-                      if (note.memoCount > 0)
-                        _TileCount(
-                          icon: Icons.sticky_note_2_outlined,
-                          count: note.memoCount,
-                        ),
-                      if (note.relatedCount > 0)
-                        _TileCount(icon: Icons.link, count: note.relatedCount),
-                    ],
-                  ),
-                ),
-              ),
-            if (showItemNumber) _TileOrdinalBadge(itemNumber: itemNumber),
-          ],
-        ),
+            ),
+          if (showItemNumber) _TileOrdinalBadge(itemNumber: itemNumber),
+        ],
       ),
     );
   }
@@ -701,21 +694,59 @@ class _TileCount extends StatelessWidget {
   final int count;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 3),
-    child: Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: Colors.white),
-        const SizedBox(width: 3),
-        Text(
-          '$count',
-          style: Theme.of(context).textTheme.labelSmall
-              ?.copyWith(color: Colors.white),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 10, right: 10),
+      child: M3EBadge(
+        count: count,
+        semanticLabel: '$count 件',
+        backgroundColor: scheme.primaryContainer,
+        foregroundColor: scheme.onPrimaryContainer,
+        alignment: M3EBadgeAlignment.topRight,
+        child: Container(
+          width: 24,
+          height: 24,
+          key: ValueKey('gallery-count-icon-${icon.codePoint}'),
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 15, color: scheme.onSurface),
         ),
-      ],
-    ),
-  );
+      ),
+    );
+  }
+}
+
+class _TileVideoBadge extends StatelessWidget {
+  const _TileVideoBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Semantics(
+      key: const ValueKey('gallery-video-indicator'),
+      label: '動画',
+      image: true,
+      container: true,
+      excludeSemantics: true,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: scheme.tertiaryContainer,
+          shape: BoxShape.circle,
+        ),
+        alignment: Alignment.center,
+        child: Icon(
+          Icons.play_arrow_rounded,
+          size: 28,
+          color: scheme.onTertiaryContainer,
+        ),
+      ),
+    );
+  }
 }
 
 class _TileOrdinalBadge extends StatelessWidget {
@@ -724,23 +755,33 @@ class _TileOrdinalBadge extends StatelessWidget {
   final int itemNumber;
 
   @override
-  Widget build(BuildContext context) => Positioned(
-    top: 8,
-    left: 8,
-    child: Container(
-      key: ValueKey('gallery-item-number-$itemNumber'),
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.68),
-        borderRadius: BorderRadius.circular(16),
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned(
+      top: 8,
+      left: 8,
+      child: Semantics(
+        key: ValueKey('gallery-item-number-$itemNumber'),
+        label: '項目 $itemNumber',
+        child: Container(
+          width: 24,
+          height: 24,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: scheme.surfaceContainerLow,
+            shape: BoxShape.circle,
+          ),
+          child: Text(
+            '$itemNumber',
+            style: Theme.of(context).textTheme.labelMedium?.copyWith(
+              color: scheme.onSurface,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
       ),
-      child: Text(
-        '$itemNumber',
-        style: Theme.of(context).textTheme.labelSmall
-            ?.copyWith(color: Colors.white),
-      ),
-    ),
-  );
+    );
+  }
 }
 
 class _MediaTile extends ConsumerWidget {
@@ -755,71 +796,71 @@ class _MediaTile extends ConsumerWidget {
     final showItemNumber = ref.watch(galleryShowTileItemNumberProvider);
     final showCounts =
         item.mediaCount > 1 || item.memoCount > 0 || item.relatedCount > 0;
-    return Card(
-      margin: EdgeInsets.zero,
+    return M3ECard(
+      variant: M3ECardVariant.filled,
+      color: Colors.transparent,
+      elevation: 0,
+      padding: EdgeInsets.zero,
       clipBehavior: Clip.antiAlias,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(GalleryShape.medium),
-      ),
-      child: InkWell(
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute<void>(
-            builder: (context) => _NoteViewerScreen(
-              noteId: item.noteId,
-              initialMediaId: item.id,
-              initialPreview: thumbnail.asData?.value,
-            ),
+      borderRadius: BorderRadius.circular(GalleryShape.medium),
+      onPressed: () => Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (context) => _NoteViewerScreen(
+            noteId: item.noteId,
+            initialMediaId: item.id,
+            initialPreview: thumbnail.asData?.value,
           ),
         ),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            _GalleryTileThumbnail(
-              mediaId: item.id,
-              isVideo: item.isVideo,
-              thumbnail: thumbnail,
-            ),
-            if (item.isVideo)
-              const Positioned(
-                right: 8,
-                bottom: 8,
-                child: Icon(Icons.play_circle_outline, size: 30),
-              ),
-            if (showCounts)
-              Positioned(
-                left: 8,
-                bottom: 8,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 5,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withValues(alpha: 0.68),
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (item.mediaCount > 1)
-                        _TileCount(
-                          icon: Icons.photo_library_outlined,
-                          count: item.mediaCount,
-                        ),
-                      if (item.memoCount > 0)
-                        _TileCount(
-                          icon: Icons.sticky_note_2_outlined,
-                          count: item.memoCount,
-                        ),
-                      if (item.relatedCount > 0)
-                        _TileCount(icon: Icons.link, count: item.relatedCount),
-                    ],
-                  ),
+      ),
+      semanticLabel: 'メディアを開く',
+      semanticLink: true,
+      showFocusFill: false,
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          _GalleryTileThumbnail(
+            mediaId: item.id,
+            isVideo: item.isVideo,
+            thumbnail: thumbnail,
+          ),
+          if (item.isVideo)
+            const Positioned(right: 8, bottom: 8, child: _TileVideoBadge()),
+          if (showCounts)
+            Positioned(
+              left: 8,
+              bottom: 8,
+              child: M3ECard(
+                variant: M3ECardVariant.filled,
+                focusable: false,
+                showFocusRing: false,
+                showFocusFill: false,
+                trackHover: false,
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                borderRadius: BorderRadius.circular(16),
+                color: Theme.of(context).colorScheme.surfaceContainerHighest,
+                elevation: 1,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    if (item.mediaCount > 1)
+                      _TileCount(
+                        icon: Icons.photo_library_outlined,
+                        count: item.mediaCount,
+                      ),
+                    if (item.memoCount > 0)
+                      _TileCount(
+                        icon: Icons.sticky_note_2_outlined,
+                        count: item.memoCount,
+                      ),
+                    if (item.relatedCount > 0)
+                      _TileCount(icon: Icons.link, count: item.relatedCount),
+                  ],
                 ),
               ),
-            if (showItemNumber) _TileOrdinalBadge(itemNumber: itemNumber),
-          ],
-        ),
+            ),
+          if (showItemNumber) _TileOrdinalBadge(itemNumber: itemNumber),
+        ],
       ),
     );
   }
@@ -839,6 +880,9 @@ class _GalleryTileThumbnail extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) => LayoutBuilder(
     builder: (context, constraints) {
+      final showMissingMediaIcon = ref.watch(
+        galleryShowMissingMediaIconProvider,
+      );
       final cacheWidth =
           (constraints.maxWidth * MediaQuery.devicePixelRatioOf(context))
               .ceil()
@@ -850,16 +894,31 @@ class _GalleryTileThumbnail extends ConsumerWidget {
         fit: BoxFit.cover,
         gaplessPlayback: true,
         filterQuality: FilterQuality.low,
-        errorBuilder: (context, error, stackTrace) =>
-            _MediaPlaceholder(hasVideo: isVideo),
+        errorBuilder: (context, error, stackTrace) => _MediaPlaceholder(
+          hasVideo: isVideo,
+          showIcon: showMissingMediaIcon,
+        ),
       );
 
       return thumbnail.when(
-        loading: () => _MediaPlaceholder(hasVideo: isVideo),
-        error: (_, _) => _sourceOrPlaceholder(context, ref, cacheWidth),
+        loading: () => _MediaPlaceholder(
+          hasVideo: isVideo,
+          showIcon: showMissingMediaIcon,
+        ),
+        error: (_, _) => _sourceOrPlaceholder(
+          context,
+          ref,
+          cacheWidth,
+          showMissingMediaIcon,
+        ),
         data: (bytes) => bytes != null
             ? image(bytes)
-            : _sourceOrPlaceholder(context, ref, cacheWidth),
+            : _sourceOrPlaceholder(
+                context,
+                ref,
+                cacheWidth,
+                showMissingMediaIcon,
+              ),
       );
     },
   );
@@ -868,17 +927,21 @@ class _GalleryTileThumbnail extends ConsumerWidget {
     BuildContext context,
     WidgetRef ref,
     int cacheWidth,
+    bool showMissingMediaIcon,
   ) {
     final id = mediaId;
     if (id == null || isVideo) {
-      return _MediaPlaceholder(hasVideo: isVideo);
+      return _MediaPlaceholder(
+        hasVideo: isVideo,
+        showIcon: showMissingMediaIcon,
+      );
     }
     final path = ref.watch(galleryMediaSourcePathProvider(id));
     return path.when(
-      loading: () => const _MediaPlaceholder(),
-      error: (_, _) => const _MediaPlaceholder(),
+      loading: () => _MediaPlaceholder(showIcon: showMissingMediaIcon),
+      error: (_, _) => _MediaPlaceholder(showIcon: showMissingMediaIcon),
       data: (value) => value == null
-          ? const _MediaPlaceholder()
+          ? _MediaPlaceholder(showIcon: showMissingMediaIcon)
           : Image.file(
               File(value),
               cacheWidth: cacheWidth,
@@ -886,25 +949,30 @@ class _GalleryTileThumbnail extends ConsumerWidget {
               gaplessPlayback: true,
               filterQuality: FilterQuality.low,
               errorBuilder: (context, error, stackTrace) =>
-                  const _MediaPlaceholder(),
+                  _MediaPlaceholder(showIcon: showMissingMediaIcon),
             ),
     );
   }
 }
 
 class _MediaPlaceholder extends StatelessWidget {
-  const _MediaPlaceholder({this.hasVideo = false});
+  const _MediaPlaceholder({this.hasVideo = false, this.showIcon = false});
 
   final bool hasVideo;
+  final bool showIcon;
 
   @override
   Widget build(BuildContext context) => ColoredBox(
     color: Theme.of(context).colorScheme.surfaceContainerHighest,
-    child: Center(
-      child: Icon(
-        hasVideo ? Icons.movie_outlined : Icons.image_not_supported_outlined,
-        size: 42,
-      ),
-    ),
+    child: showIcon
+        ? Center(
+            child: Icon(
+              hasVideo
+                  ? Icons.movie_outlined
+                  : Icons.image_not_supported_outlined,
+              size: 42,
+            ),
+          )
+        : const SizedBox.expand(),
   );
 }

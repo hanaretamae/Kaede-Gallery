@@ -18,33 +18,35 @@ class _GallerySettingsScreen extends ConsumerWidget {
         const ['source/'];
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('設定')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, '設定'),
+        leading: _expressiveBackButton(context),
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           _settingsSectionHeading(context, '外観', first: true),
           const _AppearanceSettings(),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+          _settingsGroup(context, [
+            M3EListItem(
+              headline: 'ページングと一覧表示',
+              supportingText: '一覧の読み込み単位や件数、タイルの表示を設定します',
               leading: const Icon(Icons.view_agenda_outlined),
-              title: const Text('ページングと一覧表示'),
-              subtitle: const Text('一覧の読み込み単位や件数表示を設定します'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _PaginationSettingsScreen(),
                 ),
               ),
             ),
-          ),
+          ]),
           _settingsSectionHeading(context, '保管庫'),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+          _settingsGroup(context, [
+            M3EListItem(
+              headline: '選択中の Vault',
+              supportingText: vaultDisplayName(session.vaultPath),
               leading: const Icon(Icons.folder_outlined),
-              title: const Text('選択中の Vault'),
-              subtitle: Text(vaultDisplayName(session.vaultPath)),
-              trailing: IconButton(
+              trailing: M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
                 tooltip: 'Vault を切り替え',
                 icon: const Icon(Icons.folder_open),
                 onPressed: () {
@@ -53,10 +55,11 @@ class _GallerySettingsScreen extends ConsumerWidget {
                 },
               ),
             ),
-          ),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+            M3EListItem(
+              headline: '確認できなかった項目',
+              supportingText: warnings == 0
+                  ? 'ありません'
+                  : '$warnings 件。内容を確認できないため、ギャラリー対象かは判定できません。',
               leading: Icon(
                 warnings > 0
                     ? Icons.warning_amber_rounded
@@ -65,22 +68,17 @@ class _GallerySettingsScreen extends ConsumerWidget {
                     ? colorScheme.tertiary
                     : colorScheme.primary,
               ),
-              title: const Text('確認できなかった項目'),
-              subtitle: Text(
-                warnings == 0
-                    ? 'ありません'
-                    : '$warnings 件。内容を確認できないため、ギャラリー対象かは判定できません。',
-              ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  IconButton(
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
                     tooltip: '確認できなかった項目の詳細',
                     icon: const Icon(Icons.info_outline),
-                    onPressed: () => showDialog<void>(
-                      context: context,
-                      builder: (context) => AlertDialog(
-                        title: const Text('確認できなかった項目の詳細'),
+                    onPressed: () => M3EDialog.show<void>(
+                      context,
+                      dialog: M3EDialog(
+                        title: '確認できなかった項目の詳細',
                         content: SingleChildScrollView(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -125,7 +123,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
                           ),
                         ),
                         actions: [
-                          TextButton(
+                          M3EButton.text(
                             onPressed: () => Navigator.of(context).pop(),
                             child: const Text('閉じる'),
                           ),
@@ -133,7 +131,8 @@ class _GallerySettingsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                  IconButton(
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
                     tooltip: '再走査',
                     icon: const Icon(Icons.refresh),
                     onPressed: () =>
@@ -142,89 +141,86 @@ class _GallerySettingsScreen extends ConsumerWidget {
                 ],
               ),
             ),
-          ),
+          ]),
           _settingsSectionHeading(context, 'ノート'),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+          _settingsGroup(context, [
+            M3EListItem(
+              headline: 'ノート構造と表示',
+              supportingText: 'ノートの項目順や見出しの読み取り、一覧表示を設定します',
               leading: const Icon(Icons.account_tree_outlined),
-              title: const Text('ノート構造と表示'),
-              subtitle: const Text('ノートの項目順や見出しの読み取り、一覧表示を設定します'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _NoteStructureSettingsScreen(),
                 ),
               ),
             ),
-          ),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+            M3EListItem(
+              headline: 'タグ設定',
+              supportingText: 'ギャラリー対象タグ、絞り込み、表示色を設定します',
               leading: const Icon(Icons.label_outline),
-              title: const Text('タグ設定'),
-              subtitle: const Text('ギャラリー対象タグ、絞り込み、表示色を設定します'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _TagRulesSettingsScreen(),
                 ),
               ),
             ),
-          ),
+          ]),
           _settingsSectionHeading(context, 'このアプリについて'),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+          _settingsGroup(context, [
+            M3EListItem(
+              headline: '情報とライセンス',
               leading: const Icon(Icons.info_outline),
-              title: const Text('情報とライセンス'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _AboutScreen(),
                 ),
               ),
             ),
-          ),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+            M3EListItem(
+              headline: 'インポート・エクスポート・リセット',
               leading: const Icon(Icons.storage_outlined),
-              title: const Text('インポート・エクスポート・リセット'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _DataSettingsScreen(),
                 ),
               ),
             ),
-          ),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+            M3EListItem(
+              headline: 'ヘルプと使い方',
               leading: const Icon(Icons.help_outline),
-              title: const Text('ヘルプと使い方'),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _GalleryHelpScreen(),
                 ),
               ),
             ),
-          ),
+          ]),
         ],
       ),
     );
   }
 }
 
+Widget _settingsGroup(BuildContext context, List<M3EListItem> items) => Padding(
+  padding: const EdgeInsets.only(bottom: 8),
+  child: M3EList(
+    itemCount: items.length,
+    itemBuilder: (context, index) => items[index],
+    onTap: (index) => items[index].onTap?.call(),
+    color: Theme.of(context).colorScheme.surfaceContainerHigh,
+  ),
+);
+
 Widget _settingsSectionHeading(
   BuildContext context,
   String title, {
   bool first = false,
 }) => Padding(
-  padding: EdgeInsets.fromLTRB(4, first ? 8 : 20, 4, 4),
+  padding: EdgeInsets.fromLTRB(16, first ? 8 : 24, 16, 8),
   child: Text(
     title,
-    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-      color: Theme.of(context).colorScheme.primary,
-      fontWeight: FontWeight.w600,
-    ),
+    style: Theme.of(context).textTheme.labelLarge
+        ?.copyWith(color: Theme.of(context).colorScheme.primary),
   ),
 );
 
@@ -243,8 +239,7 @@ class _PaginationSettingsScreen extends ConsumerWidget {
       await ref.read(vaultSessionProvider.notifier).rescan();
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('ページング設定を保存できませんでした。')));
+        M3ESnackbar.show(context, message: 'ページング設定を保存できませんでした。');
       }
     }
   }
@@ -253,9 +248,12 @@ class _PaginationSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(galleryTagSettingsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('ページングと一覧表示')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, 'ページングと一覧表示'),
+        leading: _expressiveBackButton(context),
+      ),
       body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const Center(child: Text('一覧設定を読み込めませんでした。')),
         data: (settings) => ListView(
           padding: const EdgeInsets.all(20),
@@ -282,7 +280,10 @@ class _GalleryHelpScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('ヘルプと使い方')),
+    appBar: M3EAppBar.top(
+      title: galleryAppBarTitle(context, 'ヘルプと使い方'),
+      leading: _expressiveBackButton(context),
+    ),
     body: ListView(
       padding: const EdgeInsets.all(20),
       children: const [
@@ -318,17 +319,13 @@ class _HelpSection extends StatelessWidget {
   final String body;
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => _expressiveCard(
+    context: context,
     margin: const EdgeInsets.only(bottom: 12),
-    child: ListTile(
-      contentPadding: const EdgeInsets.all(16),
+    child: M3EListItem(
+      headline: title,
+      supportingText: body,
       leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-      title: Text(title),
-      subtitle: Padding(
-        padding: const EdgeInsets.only(top: 8),
-        child: Text(body),
-      ),
-      isThreeLine: true,
     ),
   );
 }
@@ -346,11 +343,15 @@ class _AboutScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('このアプリについて')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, 'このアプリについて'),
+        leading: _expressiveBackButton(context),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Card(
+          _expressiveCard(
+            context: context,
             color: colorScheme.surfaceContainerLow,
             child: Padding(
               padding: const EdgeInsets.all(20),
@@ -379,13 +380,14 @@ class _AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text('情報', style: Theme.of(context).textTheme.titleLarge),
-          Card(
+          _expressiveCard(
+            context: context,
             color: colorScheme.surfaceContainerLow,
             child: Column(
               children: [
-                ListTile(
+                M3EListItem(
+                  headline: 'アプリ情報',
                   leading: const Icon(Icons.info_outline),
-                  title: const Text('アプリ情報'),
                   onTap: () => showAboutDialog(
                     context: context,
                     applicationName: 'Kaede Gallery',
@@ -393,19 +395,19 @@ class _AboutScreen extends StatelessWidget {
                     applicationLegalese: 'オフラインで動作する Obsidian Vault ギャラリー',
                   ),
                 ),
-                ListTile(
+                M3EListItem(
+                  headline: 'オープンソースライセンス',
                   leading: const Icon(Icons.article_outlined),
-                  title: const Text('オープンソースライセンス'),
                   onTap: () => showLicensePage(
                     context: context,
                     applicationName: 'Kaede Gallery',
                     applicationVersion: _version,
                   ),
                 ),
-                ListTile(
+                M3EListItem(
+                  headline: 'GitHub リポジトリ',
+                  supportingText: _repositoryUrl,
                   leading: const Icon(Icons.open_in_new),
-                  title: const Text('GitHub リポジトリ'),
-                  subtitle: const Text(_repositoryUrl),
                   onTap: () =>
                       _openExternalUri(context, Uri.parse(_repositoryUrl)),
                 ),
@@ -439,8 +441,7 @@ class _DataSettingsScreen extends ConsumerWidget {
             .safAccess
             .saveJson('vault-gallery-settings.json', '$json\n');
         if (saved && context.mounted) {
-          ScaffoldMessenger.of(context)
-              .showSnackBar(const SnackBar(content: Text('設定をJSONで保存しました。')));
+          M3ESnackbar.show(context, message: '設定をJSONで保存しました。');
         }
         return;
       }
@@ -454,38 +455,32 @@ class _DataSettingsScreen extends ConsumerWidget {
       final session = ref.read(vaultSessionProvider).asData?.value;
       if (await _destinationIsInsideVault(outputPath.path, session)) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Vault 内には保存できません。別の保存先を選択してください。')),
+          M3ESnackbar.show(
+            context,
+            message: 'Vault 内には保存できません。別の保存先を選択してください。',
           );
         }
         return;
       }
       await File(outputPath.path).writeAsString('$json\n', flush: true);
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('設定をJSONで保存しました。')));
+        M3ESnackbar.show(context, message: '設定をJSONで保存しました。');
       }
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('設定をJSONに保存できませんでした。')));
+        M3ESnackbar.show(context, message: '設定をJSONに保存できませんでした。');
       }
     } on FormatException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('設定を読み取れないため、JSONに保存できませんでした。')),
-        );
+        M3ESnackbar.show(context, message: '設定を読み取れないため、JSONに保存できませんでした。');
       }
     } on PlatformException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              error.code == 'VAULT_READ_ONLY'
-                  ? 'Vault 内には保存できません。別の保存先を選択してください。'
-                  : '設定ファイルの保存先を開けませんでした。',
-            ),
-          ),
+        M3ESnackbar.show(
+          context,
+          message: error.code == 'VAULT_READ_ONLY'
+              ? 'Vault 内には保存できません。別の保存先を選択してください。'
+              : '設定ファイルの保存先を開けませんでした。',
         );
       }
     }
@@ -543,45 +538,39 @@ class _DataSettingsScreen extends ConsumerWidget {
           .updateAppearance(appearance);
       await ref.read(vaultSessionProvider.notifier).rescan();
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('設定をインポートしました。')));
+        M3ESnackbar.show(context, message: '設定をインポートしました。');
       }
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('設定ファイルを読み書きできませんでした。')));
+        M3ESnackbar.show(context, message: '設定ファイルを読み書きできませんでした。');
       }
     } on FormatException catch (error) {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(SnackBar(content: Text(error.message)));
+        M3ESnackbar.show(context, message: error.message);
       }
     } on PlatformException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('設定ファイルを開けませんでした。')));
+        M3ESnackbar.show(context, message: '設定ファイルを開けませんでした。');
       }
     } on StateError {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('設定が初期化されていません。')));
+        M3ESnackbar.show(context, message: '設定が初期化されていません。');
       }
     }
   }
 
   Future<void> _resetSettings(BuildContext context, WidgetRef ref) async {
-    final reset = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('設定をリセット'),
+    final reset = await M3EDialog.show<bool>(
+      context,
+      dialog: M3EDialog(
+        title: '設定をリセット',
         content: const Text('外観・タグ・ノート構造の設定をすべて既定値に戻します。Vault内のノートは変更しません。'),
         actions: [
-          TextButton(
+          M3EButton.text(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('キャンセル'),
           ),
-          FilledButton(
+          M3EButton.filled(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('既定値に戻す'),
           ),
@@ -598,13 +587,11 @@ class _DataSettingsScreen extends ConsumerWidget {
           .updateAppearance(const GalleryAppearance());
       await ref.read(vaultSessionProvider.notifier).rescan();
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('すべての設定を既定値に戻しました。')));
+        M3ESnackbar.show(context, message: 'すべての設定を既定値に戻しました。');
       }
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('設定をリセットできませんでした。')));
+        M3ESnackbar.show(context, message: '設定をリセットできませんでした。');
       }
     }
   }
@@ -615,21 +602,21 @@ class _DataSettingsScreen extends ConsumerWidget {
     VaultSession session,
   ) async {
     final isSafVault = session.vaultPath.startsWith('content://');
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('この Vault を忘れる'),
+    final confirmed = await M3EDialog.show<bool>(
+      context,
+      dialog: M3EDialog(
+        title: 'この Vault を忘れる',
         content: Text(
           '${vaultDisplayName(session.vaultPath)} のアプリ内インデックス、キャッシュ、選択情報'
           '${isSafVault ? 'と読み取りアクセス権' : ''}を削除します。'
           'Vault 内のファイルと外観・タグなどのアプリ設定は変更しません。',
         ),
         actions: [
-          TextButton(
+          M3EButton.text(
             onPressed: () => Navigator.of(context).pop(false),
             child: const Text('キャンセル'),
           ),
-          FilledButton(
+          M3EButton.filled(
             onPressed: () => Navigator.of(context).pop(true),
             child: const Text('忘れる'),
           ),
@@ -640,24 +627,20 @@ class _DataSettingsScreen extends ConsumerWidget {
     try {
       await ref.read(vaultSessionProvider.notifier).forgetVault();
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('Vault のアプリ内データを削除しました。')));
+        Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } on Exception {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Vault のアプリ内データを削除できませんでした。もう一度お試しください。'),
-          ),
+        M3ESnackbar.show(
+          context,
+          message: 'Vault のアプリ内データを削除できませんでした。もう一度お試しください。',
         );
       }
     } on StateError {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Vault のアプリ内データを削除できませんでした。もう一度お試しください。'),
-          ),
+        M3ESnackbar.show(
+          context,
+          message: 'Vault のアプリ内データを削除できませんでした。もう一度お試しください。',
         );
       }
     }
@@ -665,50 +648,42 @@ class _DataSettingsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final colorScheme = Theme.of(context).colorScheme;
     final session = ref.watch(vaultSessionProvider).asData?.value;
     return Scaffold(
-      appBar: AppBar(title: const Text('アプリ')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, 'アプリ'),
+        leading: _expressiveBackButton(context),
+      ),
       body: ListView(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+          _settingsGroup(context, [
+            M3EListItem(
+              headline: '設定をJSONでエクスポート',
+              supportingText: '外観とタグ設定を1つのJSONファイルに保存します',
               leading: const Icon(Icons.save_alt),
-              title: const Text('設定をJSONでエクスポート'),
-              subtitle: const Text('外観とタグ設定を1つのJSONファイルに保存します'),
               onTap: () => _exportSettings(context, ref),
             ),
-          ),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+            M3EListItem(
+              headline: '設定をJSONからインポート',
+              supportingText: '以前にエクスポートした設定を読み込みます',
               leading: const Icon(Icons.file_open_outlined),
-              title: const Text('設定をJSONからインポート'),
-              subtitle: const Text('以前にエクスポートした設定を読み込みます'),
               onTap: () => _importSettings(context, ref),
             ),
-          ),
-          Card(
-            color: colorScheme.surfaceContainerLow,
-            child: ListTile(
+            M3EListItem(
+              headline: '設定をリセット',
+              supportingText: '外観・ノート設定を既定値に戻します',
               leading: const Icon(Icons.settings_backup_restore_outlined),
-              title: const Text('設定をリセット'),
-              subtitle: const Text('外観・ノート設定を既定値に戻します'),
               onTap: () => _resetSettings(context, ref),
             ),
-          ),
-          if (session != null)
-            Card(
-              color: colorScheme.surfaceContainerLow,
-              child: ListTile(
+            if (session != null)
+              M3EListItem(
+                headline: 'この Vault を忘れる',
+                supportingText: 'Vault の選択情報、インデックスとキャッシュを削除します',
                 leading: const Icon(Icons.delete_outline),
-                title: const Text('この Vault を忘れる'),
-                subtitle: const Text('Vault の選択情報、インデックスとキャッシュを削除します'),
                 onTap: () => _forgetVault(context, ref, session),
               ),
-            ),
+          ]),
         ],
       ),
     );

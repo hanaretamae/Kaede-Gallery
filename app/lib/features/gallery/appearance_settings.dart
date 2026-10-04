@@ -14,8 +14,7 @@ class _AppearanceSettings extends ConsumerWidget {
           .updateAppearance(appearance);
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('外観設定を保存できませんでした。')));
+        M3ESnackbar.show(context, message: '外観設定を保存できませんでした。');
       }
     }
   }
@@ -28,78 +27,87 @@ class _AppearanceSettings extends ConsumerWidget {
     final colorScheme = Theme.of(context).colorScheme;
     return Column(
       children: [
-        Card(
-          color: colorScheme.surfaceContainerLow,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-                  child: Text(
-                    'テーマ',
-                    style: Theme.of(context).textTheme.titleMedium,
-                  ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: SegmentedButton<GalleryBrightnessMode>(
-                    segments: const [
-                      ButtonSegment(
-                        value: GalleryBrightnessMode.system,
-                        icon: Icon(Icons.brightness_auto),
-                        label: Text('システム'),
-                      ),
-                      ButtonSegment(
-                        value: GalleryBrightnessMode.light,
-                        icon: Icon(Icons.light_mode_outlined),
-                        label: Text('ライト'),
-                      ),
-                      ButtonSegment(
-                        value: GalleryBrightnessMode.dark,
-                        icon: Icon(Icons.dark_mode_outlined),
-                        label: Text('ダーク'),
-                      ),
-                    ],
-                    selected: {appearance.brightness},
-                    onSelectionChanged: (selection) => _save(
-                      context,
-                      ref,
-                      appearance.copyWith(brightness: selection.single),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 8),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
+                    child: Text(
+                      'テーマ',
+                      style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
-                ),
-                const Divider(height: 24, indent: 16, endIndent: 16),
-                SwitchListTile(
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                  title: const Text('システムカラー（Material You）'),
-                  subtitle: const Text('システムのアクセントカラーを使用します'),
-                  value: appearance.useSystemColor,
-                  onChanged: (value) => _save(
-                    context,
-                    ref,
-                    appearance.copyWith(useSystemColor: value),
-                  ),
-                ),
-                if (appearance.brightness != GalleryBrightnessMode.light)
-                  SwitchListTile(
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16),
-                    title: const Text('ピュアブラック'),
-                    subtitle: const Text(
-                      'ダークテーマの背景面を黒にします。システムカラーはアクセントとして併用できます',
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: ExpressiveMaterialScope(
+                      theme: Theme.of(context),
+                      child: M3EButtonGroup(
+                        semanticLabel: '画面テーマ',
+                        type: M3EButtonGroupType.connected,
+                        style: M3EButtonStyle.tonal,
+                        decoration: galleryChoiceButtonDecoration(colorScheme),
+                        selectedIndex: GalleryBrightnessMode.values.indexOf(
+                          appearance.brightness,
+                        ),
+                        selectionRequired: true,
+                        onSelectedIndexChanged: (index) {
+                          if (index == null) return;
+                          _save(
+                            context,
+                            ref,
+                            appearance.copyWith(
+                              brightness: GalleryBrightnessMode.values[index],
+                            ),
+                          );
+                        },
+                        actions: const [
+                          M3EButtonGroupAction(
+                            icon: Icon(Icons.brightness_auto),
+                            label: Text('システム'),
+                          ),
+                          M3EButtonGroupAction(
+                            icon: Icon(Icons.light_mode_outlined),
+                            label: Text('ライト'),
+                          ),
+                          M3EButtonGroupAction(
+                            icon: Icon(Icons.dark_mode_outlined),
+                            label: Text('ダーク'),
+                          ),
+                        ],
+                      ),
                     ),
-                    value: appearance.pureBlack,
-                    onChanged: (value) => _save(
-                      context,
-                      ref,
-                      appearance.copyWith(pureBlack: value),
-                    ),
                   ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
+        _settingsGroup(context, [
+          _expressiveSwitchTile(
+            title: 'システムカラー（Material You）',
+            subtitle: 'システムのアクセントカラーを使用します',
+            value: appearance.useSystemColor,
+            onChanged: (value) =>
+                _save(context, ref, appearance.copyWith(useSystemColor: value)),
+          ),
+          if (appearance.brightness != GalleryBrightnessMode.light)
+            _expressiveSwitchTile(
+              title: 'ピュアブラック',
+              subtitle: 'ダークテーマの背景面を黒にします。システムカラーはアクセントとして併用できます',
+              value: appearance.pureBlack,
+              onChanged: (value) =>
+                  _save(context, ref, appearance.copyWith(pureBlack: value)),
+            ),
+        ]),
       ],
     );
   }
@@ -111,36 +119,34 @@ class _DisplayModeButton extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mode = ref.watch(galleryDisplayModeProvider);
-    return PopupMenuButton<GalleryDisplayMode>(
-      tooltip: '表示方法',
-      icon: Icon(
-        mode == GalleryDisplayMode.byNote
-            ? Icons.grid_view
-            : Icons.photo_library_outlined,
-      ),
-      initialValue: mode,
-      onSelected: (value) =>
-          ref.read(galleryDisplayModeProvider.notifier).set(value),
-      itemBuilder: (context) => [
-        PopupMenuItem(
-          value: GalleryDisplayMode.byNote,
-          child: Row(
-            children: [
-              const Expanded(child: Text('ノートごとにまとめる')),
-              if (mode == GalleryDisplayMode.byNote)
-                const Icon(Icons.check, size: 18),
-            ],
-          ),
+    return M3EMenu(
+      colorStyle: M3EMenuColorStyle.standard,
+      selectedValue: mode,
+      onSelected: (value) {
+        if (value is GalleryDisplayMode) {
+          ref.read(galleryDisplayModeProvider.notifier).set(value);
+        }
+      },
+      anchorBuilder: (context, open) => M3EIconButton(
+        variant: M3EIconButtonVariant.standard,
+        tooltip: '表示方法',
+        onPressed: open,
+        icon: Icon(
+          mode == GalleryDisplayMode.byNote
+              ? Icons.grid_view
+              : Icons.photo_library_outlined,
         ),
-        PopupMenuItem(
+      ),
+      children: [
+        M3EMenuSelectable(
+          value: GalleryDisplayMode.byNote,
+          label: 'ノートごとにまとめる',
+          selected: mode == GalleryDisplayMode.byNote,
+        ),
+        M3EMenuSelectable(
           value: GalleryDisplayMode.allMedia,
-          child: Row(
-            children: [
-              const Expanded(child: Text('すべてのメディアを表示')),
-              if (mode == GalleryDisplayMode.allMedia)
-                const Icon(Icons.check, size: 18),
-            ],
-          ),
+          label: 'すべてのメディアを表示',
+          selected: mode == GalleryDisplayMode.allMedia,
         ),
       ],
     );

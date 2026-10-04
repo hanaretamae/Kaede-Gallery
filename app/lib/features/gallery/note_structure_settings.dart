@@ -15,9 +15,7 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
       await ref.read(vaultSessionProvider.notifier).rescan();
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('ノート構造の設定を保存できませんでした。')));
+        M3ESnackbar.show(context, message: 'ノート構造の設定を保存できませんでした。');
       }
     }
   }
@@ -27,9 +25,12 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
     final state = ref.watch(galleryTagSettingsProvider);
     final scheme = Theme.of(context).colorScheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('ノート構造')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, 'ノート構造'),
+        leading: _expressiveBackButton(context),
+      ),
       body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const Center(child: Text('タグ設定を読み込めませんでした。')),
         data: (settings) {
           final structure = settings.noteStructure;
@@ -75,7 +76,8 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              Card(
+              _expressiveCard(
+                context: context,
                 color: scheme.surfaceContainerLow,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
@@ -87,30 +89,35 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 8),
-                      SegmentedButton<GalleryLinkResolution>(
-                        segments: const [
-                          ButtonSegment(
-                            value: GalleryLinkResolution.shortestPath,
-                            label: Text('最短'),
+                      ExpressiveMaterialScope(
+                        theme: Theme.of(context),
+                        child: M3EButtonGroup(
+                          semanticLabel: 'ノートリンクの解決方法',
+                          type: M3EButtonGroupType.connected,
+                          style: M3EButtonStyle.tonal,
+                          decoration: galleryChoiceButtonDecoration(scheme),
+                          selectedIndex: GalleryLinkResolution.values.indexOf(
+                            structure.linkResolution,
                           ),
-                          ButtonSegment(
-                            value: GalleryLinkResolution.relativePath,
-                            label: Text('相対'),
-                          ),
-                          ButtonSegment(
-                            value: GalleryLinkResolution.absolutePath,
-                            label: Text('絶対'),
-                          ),
-                        ],
-                        selected: {structure.linkResolution},
-                        onSelectionChanged: (selection) => _save(
-                          context,
-                          ref,
-                          settings.copyWith(
-                            noteStructure: structure.copyWith(
-                              linkResolution: selection.single,
-                            ),
-                          ),
+                          selectionRequired: true,
+                          onSelectedIndexChanged: (index) {
+                            if (index == null) return;
+                            _save(
+                              context,
+                              ref,
+                              settings.copyWith(
+                                noteStructure: structure.copyWith(
+                                  linkResolution:
+                                      GalleryLinkResolution.values[index],
+                                ),
+                              ),
+                            );
+                          },
+                          actions: const [
+                            M3EButtonGroupAction(label: Text('最短')),
+                            M3EButtonGroupAction(label: Text('相対')),
+                            M3EButtonGroupAction(label: Text('絶対')),
+                          ],
                         ),
                       ),
                       const SizedBox(height: 8),
@@ -121,12 +128,13 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              Card(
+              _expressiveCard(
+                context: context,
                 color: scheme.surfaceContainerLow,
-                child: ListTile(
+                child: M3EListItem(
+                  headline: '架空のノート例を見る・コピー',
+                  supportingText: '設定中の項目順を反映した表示例も確認できます',
                   leading: const Icon(Icons.content_copy_outlined),
-                  title: const Text('架空のノート例を見る・コピー'),
-                  subtitle: const Text('設定中の項目順を反映した表示例も確認できます'),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (context) => const _FictionalNoteExampleScreen(),
@@ -159,16 +167,14 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
       await ref.read(vaultSessionProvider.notifier).rescan();
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(const SnackBar(content: Text('ノート構造の設定を保存できませんでした。')));
+        M3ESnackbar.show(context, message: 'ノート構造の設定を保存できませんでした。');
       }
     }
   }
 
-  Future<String?> _askHeading(BuildContext context) => showDialog<String>(
-    context: context,
-    builder: (context) => _TagPrefixDialog(
+  Future<String?> _askHeading(BuildContext context) => M3EDialog.show<String>(
+    context,
+    dialog: _TagPrefixDialog(
       title: '${block.label}の見出しを追加',
       label: '見出し名',
       hint: '制作メモ',
@@ -180,9 +186,12 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsState = ref.watch(galleryTagSettingsProvider);
     return Scaffold(
-      appBar: AppBar(title: Text('${block.label}の設定')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, '${block.label}の設定'),
+        leading: _expressiveBackButton(context),
+      ),
       body: settingsState.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const Center(child: Text('ノート設定を読み込めませんでした。')),
         data: (settings) {
           final structure = settings.noteStructure;
@@ -212,21 +221,22 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(20),
             children: [
               if (block == GalleryNoteBlock.author)
-                const Card(
-                  child: ListTile(
+                _expressiveCard(
+                  context: context,
+                  child: M3EListItem(
+                    headline: '投稿者の抽出',
+                    supportingText:
+                        'ノート本文の先頭にある投稿者リンクから自動で取得します。独立した投稿者キーはありません。',
                     leading: Icon(Icons.info_outline),
-                    title: Text('投稿者の抽出'),
-                    subtitle: Text(
-                      'ノート本文の先頭にある投稿者リンクから自動で取得します。独立した投稿者キーはありません。',
-                    ),
                   ),
                 )
               else if (block == GalleryNoteBlock.postText)
-                Card(
+                _expressiveCard(
+                  context: context,
                   color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  child: SwitchListTile(
-                    title: const Text('投稿文に引用（> ）を含める'),
-                    subtitle: const Text('オフにすると引用行を投稿文から除外します。'),
+                  child: _expressiveSwitchTile(
+                    title: '投稿文に引用（> ）を含める',
+                    subtitle: 'オフにすると引用行を投稿文から除外します。',
                     value: structure.postTextIncludeQuote,
                     onChanged: (value) => _save(
                       context,
@@ -289,9 +299,7 @@ class _FrontmatterSettingsScreen extends ConsumerWidget {
       await ref.read(vaultSessionProvider.notifier).rescan();
     } on FileSystemException {
       if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Frontmatter 設定を保存できませんでした。')),
-        );
+        M3ESnackbar.show(context, message: 'Frontmatter 設定を保存できませんでした。');
       }
     }
   }
@@ -300,9 +308,12 @@ class _FrontmatterSettingsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(galleryTagSettingsProvider);
     return Scaffold(
-      appBar: AppBar(title: const Text('Frontmatter の設定')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, 'Frontmatter の設定'),
+        leading: _expressiveBackButton(context),
+      ),
       body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const Center(child: Text('ノート設定を読み込めませんでした。')),
         data: (settings) {
           final structure = settings.noteStructure;
@@ -401,13 +412,13 @@ Future<void> _showNoteStructureInfo(
   BuildContext context,
   String title,
   String description,
-) => showDialog<void>(
-  context: context,
-  builder: (context) => AlertDialog(
-    title: Text(title),
+) => M3EDialog.show<void>(
+  context,
+  dialog: M3EDialog(
+    title: title,
     content: Text(description),
     actions: [
-      TextButton(
+      M3EButton.text(
         onPressed: () => Navigator.of(context).pop(),
         child: const Text('閉じる'),
       ),
@@ -433,19 +444,21 @@ class _BlockOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return _expressiveCard(
+      context: context,
       color: scheme.surfaceContainerLow,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
+          M3EListItem(
+            headline: 'Frontmatter',
+            supportingText: '常に先頭に固定（並べ替え不可）',
             leading: Icon(Icons.push_pin_outlined, color: scheme.primary),
-            title: const Text('Frontmatter'),
-            subtitle: const Text('常に先頭に固定（並べ替え不可）'),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
-                IconButton(
+                M3EIconButton(
+                  variant: M3EIconButtonVariant.standard,
                   tooltip: 'Frontmatter の説明',
                   onPressed: () => _showNoteStructureInfo(
                     context,
@@ -455,7 +468,8 @@ class _BlockOrderCard extends StatelessWidget {
                   ),
                   icon: const Icon(Icons.info_outline),
                 ),
-                IconButton(
+                M3EIconButton(
+                  variant: M3EIconButtonVariant.standard,
                   tooltip: 'Frontmatter の設定',
                   onPressed: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
@@ -467,7 +481,7 @@ class _BlockOrderCard extends StatelessWidget {
               ],
             ),
           ),
-          const Divider(height: 1),
+          const M3EDivider(thickness: 1, indent: 0, endIndent: 0),
           ReorderableListView(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -480,14 +494,15 @@ class _BlockOrderCard extends StatelessWidget {
             },
             children: [
               for (final (index, block) in blockOrder.indexed)
-                ListTile(
+                M3EListItem(
                   key: ValueKey(block),
+                  headline: block.label,
                   leading: Icon(block.icon),
-                  title: Text(block.label),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(
+                      M3EIconButton(
+                        variant: M3EIconButtonVariant.standard,
                         tooltip: '${block.label}の説明',
                         onPressed: () => _showNoteStructureInfo(
                           context,
@@ -497,17 +512,19 @@ class _BlockOrderCard extends StatelessWidget {
                         icon: const Icon(Icons.info_outline),
                       ),
                       if (_noteBlockHasSettings(block))
-                        IconButton(
+                        M3EIconButton(
+                          variant: M3EIconButtonVariant.standard,
                           tooltip: '${block.label}の設定',
                           onPressed: () => onConfigure(block),
                           icon: const Icon(Icons.tune),
                         ),
                       if (block != GalleryNoteBlock.postTextEnd &&
                           block != GalleryNoteBlock.media)
-                        Switch(
+                        M3ESwitch(
                           value: !hiddenBlocks.contains(block),
                           onChanged: (value) =>
                               onToggleVisibility(block, value),
+                          semanticLabel: '${block.label}を表示',
                         ),
                       ReorderableDragStartListener(
                         index: index,
@@ -577,42 +594,48 @@ class _PaginationSettingsCardState extends State<_PaginationSettingsCard> {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return _expressiveCard(
+      context: context,
       color: scheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TextField(
+            M3ETextField(
               controller: _pageSizeController,
               keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: 'ページサイズ',
-                helperText:
-                    '${GalleryPaginationSettings.minPageSize}〜'
-                    '${GalleryPaginationSettings.maxPageSize}（既定 '
-                    '${GalleryPaginationSettings.defaultPageSize}）',
-              ),
+              label: 'ページサイズ',
+              variant: M3ETextFieldVariant.outlined,
+              supportingText:
+                  '${GalleryPaginationSettings.minPageSize}〜'
+                  '${GalleryPaginationSettings.maxPageSize}（既定 '
+                  '${GalleryPaginationSettings.defaultPageSize}）',
               onSubmitted: _submitPageSize,
               onEditingComplete: () =>
                   _submitPageSize(_pageSizeController.text),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('読み込み済み件数を表示'),
-              subtitle: const Text('上部バーに現在表示中の件数を表示します。'),
+            _expressiveSwitchTile(
+              title: '読み込み済み件数を表示',
+              subtitle: '上部バーに現在表示中の件数を表示します。',
               value: widget.pagination.showItemCount,
               onChanged: (value) => widget.onChanged(
                 widget.pagination.copyWith(showItemCount: value),
               ),
             ),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('タイルに一覧内の位置（何件目）を表示'),
+            _expressiveSwitchTile(
+              title: 'タイルに一覧内の位置（何件目）を表示',
               value: widget.pagination.showItemNumberOnTiles,
               onChanged: (value) => widget.onChanged(
                 widget.pagination.copyWith(showItemNumberOnTiles: value),
+              ),
+            ),
+            _expressiveSwitchTile(
+              title: '未表示メディアのアイコンを表示',
+              subtitle: '既定ではアイコンを表示しません。',
+              value: widget.pagination.showMissingMediaIcon,
+              onChanged: (value) => widget.onChanged(
+                widget.pagination.copyWith(showMissingMediaIcon: value),
               ),
             ),
           ],
@@ -640,7 +663,8 @@ class _HeadingRuleCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return _expressiveCard(
+      context: context,
       color: scheme.surfaceContainerLow,
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
@@ -660,15 +684,17 @@ class _HeadingRuleCard extends StatelessWidget {
                 runSpacing: 8,
                 children: [
                   for (final heading in headings)
-                    InputChip(
-                      label: Text(heading),
+                    M3EChip(
+                      label: heading,
+                      type: M3EChipType.input,
                       onDeleted: () => onRemove(heading),
                     ),
                 ],
               ),
             Align(
               alignment: Alignment.centerRight,
-              child: TextButton.icon(
+              child: M3EButton.icon(
+                style: M3EButtonStyle.text,
                 onPressed: onAdd,
                 icon: const Icon(Icons.add),
                 label: const Text('見出しを追加'),
@@ -691,10 +717,9 @@ class _GalleryTagPrefixCard extends StatelessWidget {
   final ValueChanged<List<String>> onChanged;
 
   Future<void> _add(BuildContext context) async {
-    final prefix = await showDialog<String>(
-      context: context,
-      builder: (context) =>
-          const _TagPrefixDialog(title: 'ギャラリー対象タグを追加', hint: 'source'),
+    final prefix = await M3EDialog.show<String>(
+      context,
+      dialog: const _TagPrefixDialog(title: 'ギャラリー対象タグを追加', hint: 'source'),
     );
     if (!context.mounted ||
         prefix == null ||
@@ -707,7 +732,8 @@ class _GalleryTagPrefixCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
+  Widget build(BuildContext context) => _expressiveCard(
+    context: context,
     color: Theme.of(context).colorScheme.surfaceContainerLow,
     margin: const EdgeInsets.only(bottom: 16),
     child: Padding(
@@ -728,8 +754,9 @@ class _GalleryTagPrefixCard extends StatelessWidget {
               runSpacing: 8,
               children: [
                 for (final prefix in prefixes)
-                  InputChip(
-                    label: Text('#${prefix.replaceFirst(RegExp(r'/+$'), '')}/'),
+                  M3EChip(
+                    label: '#${prefix.replaceFirst(RegExp(r'/+$'), '')}/',
+                    type: M3EChipType.input,
                     onDeleted: () => onChanged(
                       prefixes
                           .where((item) => item != prefix)
@@ -740,7 +767,8 @@ class _GalleryTagPrefixCard extends StatelessWidget {
             ),
           Align(
             alignment: Alignment.centerRight,
-            child: TextButton.icon(
+            child: M3EButton.icon(
+              style: M3EButtonStyle.text,
               onPressed: () => _add(context),
               icon: const Icon(Icons.add),
               label: const Text('タグを追加'),
@@ -766,9 +794,9 @@ class _FrontmatterKeyCard extends StatelessWidget {
   final bool allowEmpty;
 
   Future<void> _addKey(BuildContext context) async {
-    final key = await showDialog<String>(
-      context: context,
-      builder: (context) => _TagPrefixDialog(
+    final key = await M3EDialog.show<String>(
+      context,
+      dialog: _TagPrefixDialog(
         title: '$title のキーを追加',
         label: 'Frontmatter キー',
         hint: 'custom_$title',
@@ -782,39 +810,48 @@ class _FrontmatterKeyCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => Card(
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
-    margin: const EdgeInsets.only(bottom: 8),
-    child: ExpansionTile(
-      title: Text(title),
-      subtitle: Text(keys.isEmpty ? '設定なし' : keys.join(' / ')),
-      children: [
-        for (final key in keys)
-          ListTile(
-            dense: true,
-            title: Text(key),
-            trailing: IconButton(
-              tooltip: 'キーを削除',
-              icon: const Icon(Icons.remove_circle_outline),
-              onPressed: () {
-                if (!allowEmpty && keys.length == 1) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('タグを読み取るキーは最低1つ必要です。')),
-                  );
-                  return;
-                }
-                onChanged(
-                  keys.where((item) => item != key).toList(growable: false),
-                );
-              },
-            ),
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.only(bottom: 8),
+    child: M3EList(
+      itemCount: 1,
+      itemBuilder: (context, index) => M3EListItem(
+        headline: title,
+        supportingText: keys.isEmpty ? '設定なし' : keys.join(' / '),
+        expanded: M3EExpandableExpanded.content(
+          Column(
+            children: [
+              for (final key in keys)
+                M3EListItem(
+                  headline: key,
+                  trailing: M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
+                    tooltip: 'キーを削除',
+                    icon: const Icon(Icons.remove_circle_outline),
+                    onPressed: () {
+                      if (!allowEmpty && keys.length == 1) {
+                        M3ESnackbar.show(
+                          context,
+                          message: 'タグを読み取るキーは最低1つ必要です。',
+                        );
+                        return;
+                      }
+                      onChanged(
+                        keys
+                            .where((item) => item != key)
+                            .toList(growable: false),
+                      );
+                    },
+                  ),
+                ),
+              M3EListItem(
+                headline: 'キーを追加',
+                leading: const Icon(Icons.add),
+                onTap: () => _addKey(context),
+              ),
+            ],
           ),
-        ListTile(
-          leading: const Icon(Icons.add),
-          title: const Text('キーを追加'),
-          onTap: () => _addKey(context),
         ),
-      ],
+      ),
     ),
   );
 }
@@ -825,8 +862,7 @@ class _FictionalNoteExampleScreen extends ConsumerWidget {
   Future<void> _copyMarkdown(BuildContext context, String markdown) async {
     await Clipboard.setData(ClipboardData(text: markdown));
     if (context.mounted) {
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('架空のノート例をコピーしました。')));
+      M3ESnackbar.show(context, message: '架空のノート例をコピーしました。');
     }
   }
 
@@ -837,11 +873,15 @@ class _FictionalNoteExampleScreen extends ConsumerWidget {
         const GalleryTagSettings();
     final markdown = _fictionalNoteExample(settings);
     return Scaffold(
-      appBar: AppBar(title: const Text('架空のノート例')),
+      appBar: M3EAppBar.top(
+        title: galleryAppBarTitle(context, '架空のノート例'),
+        leading: _expressiveBackButton(context),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          Card(
+          _expressiveCard(
+            context: context,
             color: Theme.of(context).colorScheme.secondaryContainer,
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -857,7 +897,8 @@ class _FictionalNoteExampleScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const _FictionalNoteLayoutPreview(),
           const SizedBox(height: 12),
-          Card(
+          _expressiveCard(
+            context: context,
             color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -870,7 +911,8 @@ class _FictionalNoteExampleScreen extends ConsumerWidget {
           ),
           Align(
             alignment: Alignment.centerRight,
-            child: FilledButton.icon(
+            child: M3EButton.icon(
+              style: M3EButtonStyle.filled,
               onPressed: () => _copyMarkdown(context, markdown),
               icon: const Icon(Icons.copy),
               label: const Text('Markdownをコピー'),
@@ -894,7 +936,8 @@ class _FictionalNoteLayoutPreview extends ConsumerWidget {
     final hidden = settings.noteStructure.hiddenBlocks;
     final tags = _fictionalNoteTags(settings);
     final scheme = Theme.of(context).colorScheme;
-    return Card(
+    return _expressiveCard(
+      context: context,
       color: scheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -920,30 +963,28 @@ class _FictionalNoteLayoutPreview extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            ListTile(
-              contentPadding: EdgeInsets.zero,
+            M3EListItem(
+              headline: 'Frontmatter',
+              supportingText: 'タグ・タイトルなど（固定）',
               leading: Icon(Icons.push_pin_outlined, color: scheme.primary),
-              title: const Text('Frontmatter'),
-              subtitle: const Text('タグ・タイトルなど（固定）'),
             ),
             for (final block in order.where(
               (block) =>
                   block == GalleryNoteBlock.postTextEnd ||
                   !hidden.contains(block),
             ))
-              ListTile(
+              M3EListItem(
                 key: ValueKey('fictional-${block.name}'),
-                contentPadding: EdgeInsets.zero,
-                leading: Icon(block.icon),
-                title: Text(block.label),
-                subtitle: Text(switch (block) {
+                headline: block.label,
+                supportingText: switch (block) {
                   GalleryNoteBlock.author => '架空の投稿者リンク',
                   GalleryNoteBlock.media => '架空の画像埋め込み',
                   GalleryNoteBlock.postText => '架空の投稿文',
                   GalleryNoteBlock.memo => '平文・引用・コード内の覚書',
                   GalleryNoteBlock.related => '架空のノートへのリンク',
                   GalleryNoteBlock.postTextEnd => '本文中の # 文書 見出し',
-                }),
+                },
+                leading: Icon(block.icon),
               ),
           ],
         ),

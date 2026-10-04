@@ -18,19 +18,19 @@ class _NoteViewerScreen extends ConsumerWidget {
     final detail = ref.watch(galleryNoteDetailProvider(noteId));
     return detail.when(
       loading: () => Scaffold(
-        appBar: AppBar(),
+        appBar: M3EAppBar.top(leading: _expressiveBackButton(context)),
         body: const ColoredBox(
           color: Colors.black,
-          child: Center(child: CircularProgressIndicator()),
+          child: Center(child: M3EProgressIndicator.circular()),
         ),
       ),
       error: (_, _) => Scaffold(
-        appBar: AppBar(),
+        appBar: M3EAppBar.top(leading: _expressiveBackButton(context)),
         body: const Center(child: Text('ノートの詳細を読み込めませんでした。')),
       ),
       data: (note) => note == null
           ? Scaffold(
-              appBar: AppBar(),
+              appBar: M3EAppBar.top(leading: _expressiveBackButton(context)),
               body: const Center(child: Text('ノートが見つかりません。再走査してください。')),
             )
           : _NoteViewerContent(
@@ -100,7 +100,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
     fullscreen = Platform.isAndroid && !controlsVisible;
     _detailsVisibilityController = AnimationController(
       vsync: this,
-      duration: GalleryMotion.emphasized,
+      duration: GalleryMotion.duration(GalleryMotion.emphasized),
     )..value = controlsVisible ? 1 : 0;
     _detailsVisibilityAnimation = CurvedAnimation(
       parent: _detailsVisibilityController,
@@ -195,8 +195,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
       }
     } on PlatformException {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('全画面表示を切り替えられませんでした。')));
+        M3ESnackbar.show(context, message: '全画面表示を切り替えられませんでした。');
       }
     }
   }
@@ -214,8 +213,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
       }
     } on PlatformException {
       if (mounted) {
-        ScaffoldMessenger.of(context)
-            .showSnackBar(const SnackBar(content: Text('詳細表示に切り替えられませんでした。')));
+        M3ESnackbar.show(context, message: '詳細表示に切り替えられませんでした。');
       }
     }
   }
@@ -230,7 +228,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
     if (page == currentPage) return;
     pageController.animateToPage(
       page,
-      duration: GalleryMotion.medium,
+      duration: GalleryMotion.duration(GalleryMotion.medium),
       curve: GalleryMotion.emphasizedCurve,
     );
   }
@@ -490,10 +488,9 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
                                 ClipboardData(text: note.url!),
                               );
                               if (context.mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text('URL をコピーしました。'),
-                                  ),
+                                M3ESnackbar.show(
+                                  context,
+                                  message: 'URL をコピーしました。',
                                 );
                               }
                             },
@@ -585,88 +582,67 @@ class _ViewerTopOverlay extends StatelessWidget {
       child: FadeTransition(
         key: const ValueKey('viewer-top-overlay-opacity'),
         opacity: visibilityAnimation,
-        child: Material(
-          color: Theme.of(context).colorScheme.surface,
+        child: M3EAppBar.top(
+          semanticLabel: 'ノート詳細操作',
+          backgroundColor: Theme.of(context).colorScheme.surface,
+          foregroundColor: Theme.of(context).colorScheme.onSurface,
           elevation: 2,
-          child: SafeArea(
-            bottom: false,
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-              child: Row(
-                children: [
-                  IconButton(
-                    tooltip: '閉じる',
-                    onPressed: onClose,
-                    icon: const Icon(Icons.arrow_back),
-                  ),
-                  const SizedBox(width: 4),
-                  Expanded(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (author != null)
-                          Text(
-                            author!,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: Theme.of(context).textTheme.labelMedium,
-                          ),
-                        Text(
-                          title,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                      ],
-                    ),
-                  ),
-                  IconButton(
-                    tooltip: fullscreen ? '全画面表示を終了' : '全画面表示',
-                    onPressed: onToggleFullscreen,
-                    icon: Icon(
-                      fullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
-                    ),
-                  ),
-                  if (profileUrl != null)
-                    IconButton(
-                      tooltip: '投稿者のプロフィールを開く',
-                      onPressed: onOpenProfile,
-                      icon: const Icon(Icons.person_outline),
-                    ),
-                  if (_isWebUri(postUrl))
-                    IconButton(
-                      tooltip: '元のページを開く',
-                      onPressed: onOpenPost,
-                      icon: const Icon(Icons.link),
-                    ),
-                  if (_isWebUri(postUrl))
-                    IconButton(
-                      tooltip: 'ページ URL をコピー',
-                      onPressed: onCopyPostUrl,
-                      icon: const Icon(Icons.copy),
-                    ),
-                  if (mediaPath != null)
-                    IconButton(
-                      tooltip: 'メディアを開く',
-                      onPressed: () => _showMediaOpenActions(
-                        context,
-                        mediaPath!,
-                        safAccess: safAccess,
-                        vaultPath: vaultPath,
-                      ),
-                      icon: const Icon(Icons.perm_media_outlined),
-                    ),
-                  if (onOpenObsidian != null)
-                    IconButton(
-                      tooltip: 'Obsidian でノートを開く',
-                      onPressed: onOpenObsidian,
-                      icon: const Icon(Icons.open_in_new),
-                    ),
-                ],
-              ),
-            ),
+          title: galleryAppBarTitle(context, title),
+          subtitleText: author,
+          leading: M3EIconButton(
+            variant: M3EIconButtonVariant.standard,
+            tooltip: '閉じる',
+            onPressed: onClose,
+            icon: const Icon(Icons.arrow_back),
           ),
+          actions: [
+            M3EIconButton(
+              variant: M3EIconButtonVariant.standard,
+              tooltip: fullscreen ? '全画面表示を終了' : '全画面表示',
+              onPressed: onToggleFullscreen,
+              icon: Icon(fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
+            ),
+            if (profileUrl != null)
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: '投稿者のプロフィールを開く',
+                onPressed: onOpenProfile,
+                icon: const Icon(Icons.person_outline),
+              ),
+            if (_isWebUri(postUrl))
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: '元のページを開く',
+                onPressed: onOpenPost,
+                icon: const Icon(Icons.link),
+              ),
+            if (_isWebUri(postUrl))
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: 'ページ URL をコピー',
+                onPressed: onCopyPostUrl,
+                icon: const Icon(Icons.copy),
+              ),
+            if (mediaPath != null)
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: 'メディアを開く',
+                onPressed: () => _showMediaOpenActions(
+                  context,
+                  mediaPath!,
+                  safAccess: safAccess,
+                  vaultPath: vaultPath,
+                ),
+                icon: const Icon(Icons.perm_media_outlined),
+              ),
+            if (onOpenObsidian != null)
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: 'Obsidian でノートを開く',
+                onPressed: onOpenObsidian,
+                icon: const Icon(Icons.open_in_new),
+              ),
+          ],
         ),
       ),
     ),
@@ -679,21 +655,21 @@ Future<void> _showMediaOpenActions(
   required SafVaultAccess safAccess,
   String? vaultPath,
 }) async {
-  final action = await showModalBottomSheet<_MediaOpenAction>(
-    context: context,
-    showDragHandle: true,
+  final action = await M3EBottomSheet.showAdaptive<_MediaOpenAction>(
+    context,
+    title: 'メディアを開く',
     builder: (context) => SafeArea(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          ListTile(
+          M3EListItem(
+            headline: '画像・動画を開くアプリを選択',
             leading: const Icon(Icons.open_in_new),
-            title: const Text('画像・動画を開くアプリを選択'),
             onTap: () => Navigator.of(context).pop(_MediaOpenAction.chooseApp),
           ),
-          ListTile(
+          M3EListItem(
+            headline: 'ファイルマネージャーでファイルを表示',
             leading: const Icon(Icons.folder_open),
-            title: const Text('ファイルマネージャーでファイルを表示'),
             onTap: () =>
                 Navigator.of(context).pop(_MediaOpenAction.revealInFileManager),
           ),
@@ -713,14 +689,11 @@ Future<void> _showMediaOpenActions(
       );
     } on PlatformException catch (error) {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            error.code == 'SAF_UNSUPPORTED'
-                ? '選択したアプリでファイルを表示できませんでした。'
-                : 'メディアを開けませんでした。',
-          ),
-        ),
+      M3ESnackbar.show(
+        context,
+        message: error.code == 'SAF_UNSUPPORTED'
+            ? '選択したアプリでファイルを表示できませんでした。'
+            : 'メディアを開けませんでした。',
       );
     }
     return;
@@ -730,19 +703,13 @@ Future<void> _showMediaOpenActions(
       await revealFileInLinuxFileManager(mediaPath);
     } on DBusMethodResponseException {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ファイルマネージャーでファイルを表示できませんでした。')),
-      );
+      M3ESnackbar.show(context, message: 'ファイルマネージャーでファイルを表示できませんでした。');
     } on DBusReplySignatureException {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('ファイルマネージャーでファイルを表示できませんでした。')),
-      );
+      M3ESnackbar.show(context, message: 'ファイルマネージャーでファイルを表示できませんでした。');
     } on SocketException {
       if (!context.mounted) return;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('ファイルマネージャーを起動できませんでした。')));
+      M3ESnackbar.show(context, message: 'ファイルマネージャーを起動できませんでした。');
     }
     return;
   }
@@ -766,9 +733,17 @@ class _ViewerBottomOverlay extends StatelessWidget {
   final ScrollController scrollController;
 
   @override
-  Widget build(BuildContext context) => Material(
+  Widget build(BuildContext context) => M3ECard(
+    variant: M3ECardVariant.filled,
     color: Theme.of(context).colorScheme.surfaceContainerLow,
     elevation: 3,
+    expanded: true,
+    focusable: false,
+    showFocusRing: false,
+    showFocusFill: false,
+    trackHover: false,
+    borderRadius: BorderRadius.zero,
+    padding: EdgeInsets.zero,
     child: SingleChildScrollView(
       controller: scrollController,
       padding: const EdgeInsets.only(top: 16, bottom: 16),
@@ -811,7 +786,7 @@ class _ViewerMedia extends ConsumerWidget {
     final source = ref.watch(galleryMediaSourcePathProvider(media.id));
     return source.when(
       loading: () => preview == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(child: M3EProgressIndicator.circular())
           : Image.memory(preview, fit: BoxFit.contain, gaplessPlayback: true),
       error: (_, _) => preview == null
           ? const _ViewerMessage('Vault のメディアを開けませんでした。')
@@ -902,7 +877,7 @@ class _ViewerImageState extends ConsumerState<_ViewerImage> {
     if (widget.path.startsWith('content://')) {
       final bytes = ref.watch(gallerySafImageBytesProvider(widget.path));
       final image = bytes.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
+        loading: () => const Center(child: M3EProgressIndicator.circular()),
         error: (_, _) => const _ViewerMessage('画像を表示できませんでした。'),
         data: (value) => _imageWithFullImage(MemoryImage(value)),
       );
@@ -920,7 +895,7 @@ class _ViewerImageState extends ConsumerState<_ViewerImage> {
       const ColoredBox(color: Colors.black),
       AnimatedOpacity(
         opacity: fullImageLoaded ? 1 : 0,
-        duration: const Duration(milliseconds: 120),
+        duration: GalleryMotion.duration(M3EMotion.short2),
         child: Center(
           child: Image(
             image: ResizeImage(provider, width: widget.cacheWidth),
@@ -1114,7 +1089,7 @@ class _LocalVideoPlayerState extends State<_LocalVideoPlayer> {
                 ignoring: !widget.controlsVisible,
                 child: AnimatedOpacity(
                   opacity: widget.controlsVisible ? 1 : 0,
-                  duration: GalleryMotion.medium,
+                  duration: GalleryMotion.duration(GalleryMotion.medium),
                   child: _VideoControlBar(
                     playing: playing,
                     looping: looping,
@@ -1232,7 +1207,7 @@ class _AndroidVideoPlayerState extends State<_AndroidVideoPlayer> {
       fit: StackFit.expand,
       children: [
         if (!value.isInitialized)
-          const Center(child: CircularProgressIndicator())
+          const Center(child: M3EProgressIndicator.circular())
         else
           Center(
             child: AspectRatio(
@@ -1250,7 +1225,7 @@ class _AndroidVideoPlayerState extends State<_AndroidVideoPlayer> {
             ignoring: !widget.controlsVisible || !value.isInitialized,
             child: AnimatedOpacity(
               opacity: widget.controlsVisible && value.isInitialized ? 1 : 0,
-              duration: GalleryMotion.medium,
+              duration: GalleryMotion.duration(GalleryMotion.medium),
               child: _VideoControlBar(
                 playing: playing,
                 looping: looping,
@@ -1305,7 +1280,6 @@ class _VideoControlBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
     final rawMaxSeconds = duration.inMilliseconds.toDouble();
     final maxSeconds = rawMaxSeconds <= 0 ? 1.0 : rawMaxSeconds;
     final positionMilliseconds = position.inMilliseconds;
@@ -1320,16 +1294,17 @@ class _VideoControlBar extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SliderTheme(
-            data: SliderTheme.of(context).copyWith(
-              activeTrackColor: colorScheme.primary,
-              inactiveTrackColor: Colors.white38,
-              thumbColor: colorScheme.primary,
-              overlayColor: colorScheme.primary.withValues(alpha: 0.2),
-            ),
-            child: Slider(
+          M3ETheme(
+            data: _wideIndicatorTheme(context),
+            child: M3ESlider(
               value: currentSeconds,
               max: maxSeconds,
+              semanticLabel: '動画の再生位置',
+              label: _formatDuration(
+                Duration(milliseconds: currentSeconds.round()),
+              ),
+              semanticFormatterCallback: (value) =>
+                  _formatDuration(Duration(milliseconds: value.round())),
               onChanged: duration == Duration.zero
                   ? null
                   : (value) => onSeek(Duration(milliseconds: value.round())),
@@ -1337,11 +1312,14 @@ class _VideoControlBar extends StatelessWidget {
           ),
           Row(
             children: [
-              IconButton(
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
                 tooltip: playing ? '一時停止' : '再生',
                 onPressed: onPlayPause,
-                color: Colors.white,
-                icon: Icon(playing ? Icons.pause : Icons.play_arrow),
+                icon: Icon(
+                  playing ? Icons.pause : Icons.play_arrow,
+                  color: Colors.white,
+                ),
               ),
               const SizedBox(width: 4),
               Text(
@@ -1350,42 +1328,45 @@ class _VideoControlBar extends StatelessWidget {
                     ?.copyWith(color: Colors.white),
               ),
               const Spacer(),
-              PopupMenuButton<double>(
-                tooltip: '再生速度',
-                initialValue: rate,
-                onSelected: onRate,
-                itemBuilder: (context) => [
-                  for (final value in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
-                    PopupMenuItem(
-                      value: value,
-                      child: Row(
-                        children: [
-                          Expanded(child: Text('${value}x')),
-                          if (rate == value) const Icon(Icons.check, size: 18),
-                        ],
-                      ),
-                    ),
-                ],
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 8),
+              M3EMenu(
+                selectedValue: rate,
+                onSelected: (value) {
+                  if (value is double) onRate(value);
+                },
+                anchorBuilder: (context, open) => M3EButton.text(
+                  onPressed: open,
                   child: Text(
                     '${rate}x',
                     style: Theme.of(context).textTheme.labelLarge
                         ?.copyWith(color: Colors.white),
                   ),
                 ),
+                children: [
+                  for (final value in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
+                    M3EMenuSelectable(
+                      value: value,
+                      label: '${value}x',
+                      selected: rate == value,
+                    ),
+                ],
               ),
-              IconButton(
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
                 tooltip: looping ? 'ループをオフ' : '1本をループ',
                 onPressed: () => onLoopChanged(!looping),
-                color: looping ? Colors.white : Colors.white70,
-                icon: const Icon(Icons.repeat_one),
+                icon: Icon(
+                  Icons.repeat_one,
+                  color: looping ? Colors.white : Colors.white70,
+                ),
               ),
-              IconButton(
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
                 tooltip: muted ? 'ミュートを解除' : 'ミュート',
                 onPressed: () => onMuteChanged(!muted),
-                color: Colors.white,
-                icon: Icon(muted ? Icons.volume_off : Icons.volume_up),
+                icon: Icon(
+                  muted ? Icons.volume_off : Icons.volume_up,
+                  color: Colors.white,
+                ),
               ),
             ],
           ),
@@ -1395,11 +1376,18 @@ class _VideoControlBar extends StatelessWidget {
   }
 }
 
+M3EThemeData _wideIndicatorTheme(BuildContext context) {
+  final theme = M3ETheme.of(context);
+  return theme.copyWith(
+    sliderTheme: theme.sliderTheme.copyWith(valueIndicatorWidth: 96),
+  );
+}
+
 String _formatDuration(Duration value) {
-  final hours = value.inHours;
   final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
   final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
-  return hours > 0 ? '$hours:$minutes:$seconds' : '$minutes:$seconds';
+  if (value.inHours == 0) return '$minutes:$seconds';
+  return '${value.inHours.toString().padLeft(2, '0')}:$minutes:$seconds';
 }
 
 class _NoteDetailsPanel extends ConsumerWidget {
@@ -1437,19 +1425,23 @@ class _NoteDetailsPanel extends ConsumerWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          SelectableText(
-            note.path,
-            style: Theme.of(context).textTheme.bodySmall,
-          ),
-          if (note.published != null)
-            _MetadataRow(
-              label: '公開日',
-              value: _displayDateTime(note.published!),
+          SizedBox(
+            width: double.infinity,
+            child: SelectableText(
+              note.path,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
             ),
-          if (note.created != null)
-            _MetadataRow(label: '作成日', value: _displayDateTime(note.created!)),
-          if (note.updated != null)
-            _MetadataRow(label: '更新日', value: _displayDateTime(note.updated!)),
+          ),
+          if (note.published != null ||
+              note.created != null ||
+              note.updated != null)
+            _FrontmatterDates(
+              published: note.published,
+              created: note.created,
+              updated: note.updated,
+            ),
           if (note.tags.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text('タグ', style: Theme.of(context).textTheme.titleSmall),
@@ -1510,38 +1502,82 @@ class _AuthorDetail extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 16),
-    child: Card(
-      color: Theme.of(context).colorScheme.surfaceContainerHigh,
-      child: ListTile(
-        leading: const Icon(Icons.person_outline),
-        title: const Text('投稿者'),
-        subtitle: Text(author),
-        trailing: _isWebUri(url) ? const Icon(Icons.open_in_new) : null,
-        onTap: _isWebUri(url)
-            ? () => _openExternalUri(context, Uri.parse(url!))
-            : null,
-      ),
+    child: M3EListItem(
+      headline: '投稿者',
+      supportingText: author,
+      leading: const Icon(Icons.person_outline),
+      trailing: _isWebUri(url) ? const Icon(Icons.open_in_new) : null,
+      onTap: _isWebUri(url)
+          ? () => _openExternalUri(context, Uri.parse(url!))
+          : null,
     ),
   );
 }
 
-class _MetadataRow extends StatelessWidget {
-  const _MetadataRow({required this.label, required this.value});
+class _FrontmatterDates extends StatelessWidget {
+  const _FrontmatterDates({this.published, this.created, this.updated});
 
-  final String label;
-  final String value;
+  final String? published;
+  final String? created;
+  final String? updated;
 
   @override
-  Widget build(BuildContext context) => Padding(
-    padding: const EdgeInsets.only(top: 8),
-    child: Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        SizedBox(width: 72, child: Text(label)),
-        Expanded(child: SelectableText(value)),
-      ],
-    ),
-  );
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    final dates = [
+      if (published != null) ('公開日', published!),
+      if (created != null) ('作成日', created!),
+      if (updated != null) ('更新日', updated!),
+    ];
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: M3ECard(
+        variant: M3ECardVariant.filled,
+        color: scheme.secondaryContainer,
+        padding: EdgeInsets.zero,
+        borderRadius: BorderRadius.circular(GalleryShape.medium),
+        focusable: false,
+        showFocusRing: false,
+        showFocusFill: false,
+        trackHover: false,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final (label, value) in dates)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 4),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 64,
+                        child: Text(
+                          label,
+                          style: Theme.of(context).textTheme.labelMedium
+                              ?.copyWith(
+                                color: scheme.onSecondaryContainer,
+                                fontWeight: FontWeight.w600,
+                              ),
+                        ),
+                      ),
+                      Expanded(
+                        child: SelectableText(
+                          _displayDateTime(value),
+                          style: Theme.of(context).textTheme.bodySmall
+                              ?.copyWith(color: scheme.onSecondaryContainer),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _DetailLines extends StatelessWidget {
@@ -1568,18 +1604,17 @@ class _DetailLines extends StatelessWidget {
               top: 6,
               left: line.indentLevel.clamp(0, 8) * 16.0,
             ),
-            child: Card(
-              margin: EdgeInsets.zero,
+            child: M3ECard(
+              variant: M3ECardVariant.filled,
+              focusable: false,
+              showFocusRing: false,
+              showFocusFill: false,
+              trackHover: false,
+              padding: EdgeInsets.zero,
               color: commentStyle
                   ? Theme.of(context).colorScheme.surfaceContainerHighest
                   : Theme.of(context).colorScheme.surfaceContainerHigh,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(GalleryShape.medium),
-                side: BorderSide(
-                  color: Theme.of(context).colorScheme.outlineVariant
-                      .withValues(alpha: 0.5),
-                ),
-              ),
+              borderRadius: BorderRadius.circular(GalleryShape.medium),
               child: Padding(
                 padding: const EdgeInsets.all(8),
                 child: Row(
@@ -1600,7 +1635,8 @@ class _DetailLines extends StatelessWidget {
                           if (!commentStyle && line.linkedNoteId != null)
                             SizedBox(
                               width: double.infinity,
-                              child: TextButton(
+                              child: M3EButton(
+                                style: M3EButtonStyle.text,
                                 key: ValueKey(
                                   'related-note-${line.linkedNoteId}',
                                 ),
@@ -1613,17 +1649,6 @@ class _DetailLines extends StatelessWidget {
                                     ),
                                   ),
                                 ),
-                                style: TextButton.styleFrom(
-                                  alignment: Alignment.centerLeft,
-                                  minimumSize: const Size.fromHeight(48),
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 4,
-                                    vertical: 4,
-                                  ),
-                                  tapTargetSize:
-                                      MaterialTapTargetSize.shrinkWrap,
-                                ),
-                                clipBehavior: Clip.antiAlias,
                                 child: Row(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
@@ -1649,7 +1674,8 @@ class _DetailLines extends StatelessWidget {
                           else if (line.urls.length == 1 &&
                               !commentStyle &&
                               _isWebUri(line.urls.single))
-                            TextButton.icon(
+                            M3EButton.icon(
+                              style: M3EButtonStyle.text,
                               onPressed: () => _openExternalUri(
                                 context,
                                 Uri.parse(line.urls.single),
@@ -1665,7 +1691,8 @@ class _DetailLines extends StatelessWidget {
                                 children: [
                                   for (final url in line.urls)
                                     if (_isWebUri(url))
-                                      TextButton.icon(
+                                      M3EButton.icon(
+                                        style: M3EButtonStyle.text,
                                         onPressed: () => _openExternalUri(
                                           context,
                                           Uri.parse(url),
@@ -1702,25 +1729,35 @@ class _ViewerTagChip extends ConsumerWidget {
     final settings = ref.watch(galleryTagSettingsProvider);
     return settings.when(
       loading: () => const SizedBox.shrink(),
-      error: (_, _) => const Tooltip(
+      error: (_, _) => const M3ETooltip(
         message: 'タグ設定を読み込めませんでした。',
         child: Icon(Icons.warning_amber_rounded),
       ),
       data: (value) {
         if (value.hides(tag)) return const SizedBox.shrink();
-        final color = value.colorFor(tag);
-        return DecoratedBox(
-          decoration: BoxDecoration(
-            color: color.withValues(alpha: 0.22),
-            borderRadius: BorderRadius.circular(GalleryShape.medium),
-            border: Border.all(color: color.withValues(alpha: 0.72)),
-          ),
+        final scheme = Theme.of(context).colorScheme;
+        final tagColor = value.colorFor(tag);
+        final tagScheme = ColorScheme.fromSeed(
+          seedColor: tagColor,
+          brightness: scheme.brightness,
+        );
+        return M3ECard(
+          variant: M3ECardVariant.filled,
+          color: tagScheme.primaryContainer,
+          padding: EdgeInsets.zero,
+          borderRadius: BorderRadius.circular(GalleryShape.medium),
+          focusable: false,
+          showFocusRing: false,
+          showFocusFill: false,
+          trackHover: false,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-            child: Text(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: SelectableText(
               tag,
-              style: Theme.of(context).textTheme.labelMedium
-                  ?.copyWith(color: color, fontWeight: FontWeight.w600),
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: tagScheme.onPrimaryContainer,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         );
@@ -1737,16 +1774,15 @@ class _PostTextCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 16),
-    child: Card(
+    child: M3ECard(
+      variant: M3ECardVariant.filled,
       color: Theme.of(context).colorScheme.surfaceContainerHighest,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(GalleryShape.large),
-        side: BorderSide(
-          color: Theme.of(context).colorScheme.outlineVariant
-              .withValues(alpha: 0.85),
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
+      borderRadius: BorderRadius.circular(GalleryShape.large),
+      focusable: false,
+      showFocusRing: false,
+      showFocusFill: false,
+      trackHover: false,
+      padding: EdgeInsets.zero,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -1900,8 +1936,6 @@ Future<void> _openExternalUri(BuildContext context, Uri uri) async {
     launched = false;
   }
   if (!launched && context.mounted) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('外部アプリで開けませんでした。対応アプリを確認してください。')),
-    );
+    M3ESnackbar.show(context, message: '外部アプリで開けませんでした。対応アプリを確認してください。');
   }
 }
