@@ -142,96 +142,84 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
-            _expressiveCard(
-              context: context,
-              color: scheme.surfaceContainerLow,
-              child: Column(
-                children: [
-                  for (final rule in settings.colors)
-                    M3EListItem(
-                      headline: rule.prefix,
-                      supportingText:
-                          '#${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
-                      leading: Semantics(
-                        label:
-                            '色 #${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
-                        child: SizedBox.square(
-                          dimension: 28,
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: Color(rule.color),
-                              shape: BoxShape.circle,
-                            ),
+            _settingsGroup(context, [
+              for (final rule in settings.colors)
+                M3EListItem(
+                  headline: rule.prefix,
+                  supportingText:
+                      '#${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                  leading: Semantics(
+                    label:
+                        '色 #${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                    child: SizedBox.square(
+                      dimension: 28,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: Color(rule.color),
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ),
+                  ),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      M3EIconButton(
+                        variant: M3EIconButtonVariant.standard,
+                        tooltip: '色を編集',
+                        icon: const Icon(Icons.edit_outlined),
+                        onPressed: () async {
+                          final updated = await _askColor(
+                            context,
+                            initial: rule,
+                          );
+                          if (!context.mounted) return;
+                          if (updated == null) return;
+                          final colors =
+                              settings.colors
+                                  .where((item) => item.prefix != rule.prefix)
+                                  .toList(growable: true)
+                                ..add(updated);
+                          await _save(
+                            context,
+                            ref,
+                            settings.copyWith(colors: colors),
+                          );
+                        },
+                      ),
+                      M3EIconButton(
+                        variant: M3EIconButtonVariant.standard,
+                        tooltip: '色設定を削除',
+                        icon: const Icon(Icons.delete_outline),
+                        onPressed: () => _save(
+                          context,
+                          ref,
+                          settings.copyWith(
+                            colors: settings.colors
+                                .where((item) => item.prefix != rule.prefix)
+                                .toList(growable: false),
                           ),
                         ),
                       ),
-                      trailing: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          M3EIconButton(
-                            variant: M3EIconButtonVariant.standard,
-                            tooltip: '色を編集',
-                            icon: const Icon(Icons.edit_outlined),
-                            onPressed: () async {
-                              final updated = await _askColor(
-                                context,
-                                initial: rule,
-                              );
-                              if (!context.mounted) return;
-                              if (updated == null) return;
-                              final colors =
-                                  settings.colors
-                                      .where(
-                                        (item) => item.prefix != rule.prefix,
-                                      )
-                                      .toList(growable: true)
-                                    ..add(updated);
-                              await _save(
-                                context,
-                                ref,
-                                settings.copyWith(colors: colors),
-                              );
-                            },
-                          ),
-                          M3EIconButton(
-                            variant: M3EIconButtonVariant.standard,
-                            tooltip: '色設定を削除',
-                            icon: const Icon(Icons.delete_outline),
-                            onPressed: () => _save(
-                              context,
-                              ref,
-                              settings.copyWith(
-                                colors: settings.colors
-                                    .where((item) => item.prefix != rule.prefix)
-                                    .toList(growable: false),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  M3EListItem(
-                    headline: '色設定を追加',
-                    leading: Icon(Icons.add, color: scheme.primary),
-                    onTap: () async {
-                      final added = await _askColor(context);
-                      if (!context.mounted) return;
-                      if (added == null) return;
-                      final colors =
-                          settings.colors
-                              .where((item) => item.prefix != added.prefix)
-                              .toList(growable: true)
-                            ..add(added);
-                      await _save(
-                        context,
-                        ref,
-                        settings.copyWith(colors: colors),
-                      );
-                    },
+                    ],
                   ),
-                ],
+                ),
+              M3EListItem(
+                headline: '色設定を追加',
+                leading: Icon(Icons.add, color: scheme.primary),
+                onTap: () async {
+                  final added = await _askColor(context);
+                  if (!context.mounted) return;
+                  if (added == null) return;
+                  final colors =
+                      settings.colors
+                          .where((item) => item.prefix != added.prefix)
+                          .toList(growable: true)
+                        ..add(added);
+                  await _save(context, ref, settings.copyWith(colors: colors));
+                },
               ),
-            ),
+            ]),
           ],
         ),
       ),
@@ -255,32 +243,26 @@ class _TagPrefixList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return _expressiveCard(
-      context: context,
-      color: scheme.surfaceContainerLow,
-      child: Column(
-        children: [
-          if (prefixes.isEmpty)
-            M3EListItem(headline: emptyText)
-          else
-            for (final prefix in prefixes)
-              M3EListItem(
-                headline: prefix == '*' ? 'すべてのタグ (*)' : prefix,
-                trailing: M3EIconButton(
-                  variant: M3EIconButtonVariant.standard,
-                  tooltip: '削除',
-                  icon: const Icon(Icons.delete_outline),
-                  onPressed: () => onRemove(prefix),
-                ),
-              ),
+    return _settingsGroup(context, [
+      if (prefixes.isEmpty)
+        M3EListItem(headline: emptyText)
+      else
+        for (final prefix in prefixes)
           M3EListItem(
-            headline: 'パスを追加',
-            leading: Icon(Icons.add, color: scheme.primary),
-            onTap: onAdd,
+            headline: prefix == '*' ? 'すべてのタグ (*)' : prefix,
+            trailing: M3EIconButton(
+              variant: M3EIconButtonVariant.standard,
+              tooltip: '削除',
+              icon: const Icon(Icons.delete_outline),
+              onPressed: () => onRemove(prefix),
+            ),
           ),
-        ],
+      M3EListItem(
+        headline: 'パスを追加',
+        leading: Icon(Icons.add, color: scheme.primary),
+        onTap: onAdd,
       ),
-    );
+    ]);
   }
 }
 

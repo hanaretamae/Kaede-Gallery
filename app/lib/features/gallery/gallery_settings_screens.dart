@@ -285,50 +285,36 @@ class _GalleryHelpScreen extends StatelessWidget {
       leading: _expressiveBackButton(context),
     ),
     body: ListView(
-      padding: const EdgeInsets.all(20),
-      children: const [
-        _HelpSection(
-          icon: Icons.link,
-          title: '関連ノート',
-          body: '関連見出し内の Markdown link / image link と Obsidian wikilink / embed は、Vault内のノートを指していればタップして詳細を開けます。',
-        ),
-        _HelpSection(
-          icon: Icons.tune,
-          title: 'ノート構造',
-          body: '項目順の説明アイコンで読み取り方法を確認できます。見出しやFrontmatterキーなど変更できる設定は、各項目の設定ボタンにまとめています。',
-        ),
-        _HelpSection(
-          icon: Icons.search,
-          title: '検索と絞り込み',
-          body: 'ノート検索は名前・パスに加えて #タグ、-#タグ、&#タグに対応します。下のタグ検索は絞り込み候補の表示だけを絞ります。',
-        ),
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+      children: [
+        _settingsGroup(context, [
+          _helpItem(
+            icon: Icons.link,
+            title: '関連ノート',
+            body: '関連見出し内の Markdown link / image link と Obsidian wikilink / embed は、Vault内のノートを指していればタップして詳細を開けます。',
+          ),
+          _helpItem(
+            icon: Icons.tune,
+            title: 'ノート構造',
+            body: '項目順の説明アイコンで読み取り方法を確認できます。見出しやFrontmatterキーなど変更できる設定は、各項目の設定ボタンにまとめています。',
+          ),
+          _helpItem(
+            icon: Icons.search,
+            title: '検索と絞り込み',
+            body:
+                'ノート検索は名前・パスに加えて #タグ、-#タグ、&#タグに対応します。下のタグ検索は絞り込み候補の表示だけを絞ります。',
+          ),
+        ]),
       ],
     ),
   );
 }
 
-class _HelpSection extends StatelessWidget {
-  const _HelpSection({
-    required this.icon,
-    required this.title,
-    required this.body,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-
-  @override
-  Widget build(BuildContext context) => _expressiveCard(
-    context: context,
-    margin: const EdgeInsets.only(bottom: 12),
-    child: M3EListItem(
-      headline: title,
-      supportingText: body,
-      leading: Icon(icon, color: Theme.of(context).colorScheme.primary),
-    ),
-  );
-}
+M3EListItem _helpItem({
+  required IconData icon,
+  required String title,
+  required String body,
+}) => M3EListItem(headline: title, supportingText: body, leading: Icon(icon));
 
 class _AboutScreen extends StatelessWidget {
   const _AboutScreen();
@@ -380,40 +366,33 @@ class _AboutScreen extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           Text('情報', style: Theme.of(context).textTheme.titleLarge),
-          _expressiveCard(
-            context: context,
-            color: colorScheme.surfaceContainerLow,
-            child: Column(
-              children: [
-                M3EListItem(
-                  headline: 'アプリ情報',
-                  leading: const Icon(Icons.info_outline),
-                  onTap: () => showAboutDialog(
-                    context: context,
-                    applicationName: 'Kaede Gallery',
-                    applicationVersion: _version,
-                    applicationLegalese: 'オフラインで動作する Obsidian Vault ギャラリー',
-                  ),
-                ),
-                M3EListItem(
-                  headline: 'オープンソースライセンス',
-                  leading: const Icon(Icons.article_outlined),
-                  onTap: () => showLicensePage(
-                    context: context,
-                    applicationName: 'Kaede Gallery',
-                    applicationVersion: _version,
-                  ),
-                ),
-                M3EListItem(
-                  headline: 'GitHub リポジトリ',
-                  supportingText: _repositoryUrl,
-                  leading: const Icon(Icons.open_in_new),
-                  onTap: () =>
-                      _openExternalUri(context, Uri.parse(_repositoryUrl)),
-                ),
-              ],
+          _settingsGroup(context, [
+            M3EListItem(
+              headline: 'アプリ情報',
+              leading: const Icon(Icons.info_outline),
+              onTap: () => showAboutDialog(
+                context: context,
+                applicationName: 'Kaede Gallery',
+                applicationVersion: _version,
+                applicationLegalese: 'オフラインで動作する Obsidian Vault ギャラリー',
+              ),
             ),
-          ),
+            M3EListItem(
+              headline: 'オープンソースライセンス',
+              leading: const Icon(Icons.article_outlined),
+              onTap: () => showLicensePage(
+                context: context,
+                applicationName: 'Kaede Gallery',
+                applicationVersion: _version,
+              ),
+            ),
+            M3EListItem(
+              headline: 'GitHub リポジトリ',
+              supportingText: _repositoryUrl,
+              leading: const Icon(Icons.open_in_new),
+              onTap: () => _openExternalUri(context, Uri.parse(_repositoryUrl)),
+            ),
+          ]),
         ],
       ),
     );

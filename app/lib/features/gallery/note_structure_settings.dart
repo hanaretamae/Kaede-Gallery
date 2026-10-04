@@ -128,10 +128,8 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                   ),
                 ),
               ),
-              _expressiveCard(
-                context: context,
-                color: scheme.surfaceContainerLow,
-                child: M3EListItem(
+              _settingsGroup(context, [
+                M3EListItem(
                   headline: '架空のノート例を見る・コピー',
                   supportingText: '設定中の項目順を反映した表示例も確認できます',
                   leading: const Icon(Icons.content_copy_outlined),
@@ -141,7 +139,7 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-              ),
+              ]),
             ],
           );
         },
@@ -221,20 +219,17 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(20),
             children: [
               if (block == GalleryNoteBlock.author)
-                _expressiveCard(
-                  context: context,
-                  child: M3EListItem(
+                _settingsGroup(context, [
+                  M3EListItem(
                     headline: '投稿者の抽出',
                     supportingText:
                         'ノート本文の先頭にある投稿者リンクから自動で取得します。独立した投稿者キーはありません。',
                     leading: Icon(Icons.info_outline),
                   ),
-                )
+                ])
               else if (block == GalleryNoteBlock.postText)
-                _expressiveCard(
-                  context: context,
-                  color: Theme.of(context).colorScheme.surfaceContainerLow,
-                  child: _expressiveSwitchTile(
+                _settingsGroup(context, [
+                  _expressiveSwitchTile(
                     title: '投稿文に引用（> ）を含める',
                     subtitle: 'オフにすると引用行を投稿文から除外します。',
                     value: structure.postTextIncludeQuote,
@@ -248,7 +243,7 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
                       ),
                     ),
                   ),
-                )
+                ])
               else ...[
                 _HeadingRuleCard(
                   title: '${block.label}として認識する見出し',
@@ -444,12 +439,9 @@ class _BlockOrderCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
-    return _expressiveCard(
-      context: context,
-      color: scheme.surfaceContainerLow,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+    return Column(
+      children: [
+        _settingsGroup(context, [
           M3EListItem(
             headline: 'Frontmatter',
             supportingText: '常に先頭に固定（並べ替え不可）',
@@ -481,65 +473,67 @@ class _BlockOrderCard extends StatelessWidget {
               ],
             ),
           ),
-          const M3EDivider(thickness: 1, indent: 0, endIndent: 0),
-          ReorderableListView(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            buildDefaultDragHandles: false,
-            onReorderItem: (oldIndex, newIndex) {
-              final updated = [...blockOrder];
-              final moved = updated.removeAt(oldIndex);
-              updated.insert(newIndex, moved);
-              onReorder(updated);
-            },
-            children: [
-              for (final (index, block) in blockOrder.indexed)
-                M3EListItem(
-                  key: ValueKey(block),
-                  headline: block.label,
-                  leading: Icon(block.icon),
-                  trailing: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      M3EIconButton(
-                        variant: M3EIconButtonVariant.standard,
-                        tooltip: '${block.label}の説明',
-                        onPressed: () => _showNoteStructureInfo(
-                          context,
-                          block.label,
-                          _noteBlockDescription(block),
-                        ),
-                        icon: const Icon(Icons.info_outline),
-                      ),
-                      if (_noteBlockHasSettings(block))
+        ]),
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: ColoredBox(
+              color: scheme.surfaceContainerHigh,
+              child: ReorderableListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                buildDefaultDragHandles: false,
+                itemCount: blockOrder.length,
+                onReorderItem: (oldIndex, newIndex) {
+                  final updated = [...blockOrder];
+                  final moved = updated.removeAt(oldIndex);
+                  updated.insert(newIndex, moved);
+                  onReorder(updated);
+                },
+                itemBuilder: (context, index) {
+                  final block = blockOrder[index];
+                  return M3EListItem(
+                    key: ValueKey(block),
+                    headline: block.label,
+                    leading: Icon(block.icon),
+                    trailing: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
                         M3EIconButton(
                           variant: M3EIconButtonVariant.standard,
-                          tooltip: '${block.label}の設定',
-                          onPressed: () => onConfigure(block),
-                          icon: const Icon(Icons.tune),
+                          tooltip: '${block.label}の説明',
+                          onPressed: () => _showNoteStructureInfo(
+                            context,
+                            block.label,
+                            _noteBlockDescription(block),
+                          ),
+                          icon: const Icon(Icons.info_outline),
                         ),
-                      if (block != GalleryNoteBlock.postTextEnd &&
-                          block != GalleryNoteBlock.media)
-                        M3ESwitch(
-                          value: !hiddenBlocks.contains(block),
-                          onChanged: (value) =>
-                              onToggleVisibility(block, value),
-                          semanticLabel: '${block.label}を表示',
-                        ),
-                      ReorderableDragStartListener(
-                        index: index,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8),
-                          child: Icon(Icons.drag_handle),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-            ],
+                        if (_noteBlockHasSettings(block))
+                          M3EIconButton(
+                            variant: M3EIconButtonVariant.standard,
+                            tooltip: '${block.label}の設定',
+                            onPressed: () => onConfigure(block),
+                            icon: const Icon(Icons.tune),
+                          ),
+                        if (block != GalleryNoteBlock.postTextEnd &&
+                            block != GalleryNoteBlock.media)
+                          M3ESwitch(
+                            value: !hiddenBlocks.contains(block),
+                            onChanged: (value) =>
+                                onToggleVisibility(block, value),
+                            semanticLabel: '${block.label}を表示',
+                          ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
