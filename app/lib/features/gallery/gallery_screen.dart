@@ -55,7 +55,7 @@ M3EListItem _expressiveSwitchTile({
 /// container roles.
 Widget _settingsIcon(BuildContext context, IconData icon, {int tone = 0}) {
   final scheme = Theme.of(context).colorScheme;
-  final (background, foreground) = switch (tone % 3) {
+  final (background, foreground) = switch (tone) {
     0 => (scheme.primaryContainer, scheme.onPrimaryContainer),
     1 => (scheme.secondaryContainer, scheme.onSecondaryContainer),
     _ => (scheme.tertiaryContainer, scheme.onTertiaryContainer),

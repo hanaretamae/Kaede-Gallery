@@ -349,16 +349,6 @@ class _AboutScreen extends StatelessWidget {
           _settingsSectionHeading(context, '情報'),
           _settingsGroup(context, [
             M3EListItem(
-              headline: 'アプリ情報',
-              leading: Icon(Icons.info_outline),
-              onTap: () => showAboutDialog(
-                context: context,
-                applicationName: 'Kaede Gallery',
-                applicationVersion: _version,
-                applicationLegalese: 'オフラインで動作する Obsidian Vault ギャラリー',
-              ),
-            ),
-            M3EListItem(
               headline: 'オープンソースライセンス',
               leading: const Icon(Icons.article_outlined),
               onTap: () => showLicensePage(
