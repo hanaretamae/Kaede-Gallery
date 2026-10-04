@@ -76,9 +76,8 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                 ),
               ),
               const SizedBox(height: 20),
-              _expressiveCard(
+              _settingsPanel(
                 context: context,
-                color: scheme.surfaceContainerLow,
                 child: Padding(
                   padding: const EdgeInsets.all(16),
                   child: Column(
@@ -525,6 +524,13 @@ class _BlockOrderCard extends StatelessWidget {
                                 onToggleVisibility(block, value),
                             semanticLabel: '${block.label}を表示',
                           ),
+                        ReorderableDragStartListener(
+                          index: index,
+                          child: const Padding(
+                            padding: EdgeInsets.all(8),
+                            child: Icon(Icons.drag_handle),
+                          ),
+                        ),
                       ],
                     ),
                   );
@@ -587,10 +593,8 @@ class _PaginationSettingsCardState extends State<_PaginationSettingsCard> {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return _expressiveCard(
+    return _settingsPanel(
       context: context,
-      color: scheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -656,10 +660,8 @@ class _HeadingRuleCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return _expressiveCard(
+    return _settingsPanel(
       context: context,
-      color: scheme.surfaceContainerLow,
       margin: const EdgeInsets.only(bottom: 16),
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -726,9 +728,8 @@ class _GalleryTagPrefixCard extends StatelessWidget {
   }
 
   @override
-  Widget build(BuildContext context) => _expressiveCard(
+  Widget build(BuildContext context) => _settingsPanel(
     context: context,
-    color: Theme.of(context).colorScheme.surfaceContainerLow,
     margin: const EdgeInsets.only(bottom: 16),
     child: Padding(
       padding: const EdgeInsets.all(16),
@@ -874,7 +875,7 @@ class _FictionalNoteExampleScreen extends ConsumerWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _expressiveCard(
+          _settingsPanel(
             context: context,
             color: Theme.of(context).colorScheme.secondaryContainer,
             child: Padding(
@@ -891,9 +892,8 @@ class _FictionalNoteExampleScreen extends ConsumerWidget {
           const SizedBox(height: 12),
           const _FictionalNoteLayoutPreview(),
           const SizedBox(height: 12),
-          _expressiveCard(
+          _settingsPanel(
             context: context,
-            color: Theme.of(context).colorScheme.surfaceContainerLow,
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: SelectableText(
@@ -930,9 +930,8 @@ class _FictionalNoteLayoutPreview extends ConsumerWidget {
     final hidden = settings.noteStructure.hiddenBlocks;
     final tags = _fictionalNoteTags(settings);
     final scheme = Theme.of(context).colorScheme;
-    return _expressiveCard(
+    return _settingsPanel(
       context: context,
-      color: scheme.surfaceContainerLow,
       child: Padding(
         padding: const EdgeInsets.all(16),
         child: Column(

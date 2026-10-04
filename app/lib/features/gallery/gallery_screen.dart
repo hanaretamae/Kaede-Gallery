@@ -61,24 +61,18 @@ Widget? _expressiveBackButton(BuildContext context) {
   );
 }
 
-Widget _expressiveCard({
+Widget _settingsPanel({
   required BuildContext context,
   required Widget child,
   Color? color,
-  EdgeInsetsGeometry? margin,
-  Clip clipBehavior = Clip.antiAlias,
+  EdgeInsetsGeometry margin = const EdgeInsets.only(bottom: 8),
 }) => Padding(
-  padding: margin ?? const EdgeInsets.all(4),
-  child: M3ECard(
-    variant: M3ECardVariant.elevated,
-    color: color ?? Theme.of(context).colorScheme.surfaceContainerLow,
-    padding: EdgeInsets.zero,
-    clipBehavior: clipBehavior,
-    border: BorderSide.none,
-    focusable: false,
-    showFocusRing: false,
-    showFocusFill: false,
-    trackHover: false,
+  padding: margin,
+  child: DecoratedBox(
+    decoration: BoxDecoration(
+      color: color ?? Theme.of(context).colorScheme.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(16),
+    ),
     child: child,
   ),
 );
@@ -252,7 +246,8 @@ class _GalleryLayout extends ConsumerWidget {
             tooltip: '設定',
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
-                builder: (context) => _GallerySettingsScreen(session: session),
+                builder: (context) =>
+                    _GallerySettingsScreen(initialSession: session),
               ),
             ),
             icon: const Icon(Icons.settings_outlined),

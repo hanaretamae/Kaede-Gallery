@@ -659,9 +659,9 @@ Future<void> _showMediaOpenActions(
     context,
     title: 'メディアを開く',
     builder: (context) => SafeArea(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: _settingsGroup(context, [
           M3EListItem(
             headline: '画像・動画を開くアプリを選択',
             leading: const Icon(Icons.open_in_new),
@@ -673,7 +673,7 @@ Future<void> _showMediaOpenActions(
             onTap: () =>
                 Navigator.of(context).pop(_MediaOpenAction.revealInFileManager),
           ),
-        ],
+        ]),
       ),
     ),
   );

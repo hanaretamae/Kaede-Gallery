@@ -1,12 +1,14 @@
 part of 'gallery_screen.dart';
 
 class _GallerySettingsScreen extends ConsumerWidget {
-  const _GallerySettingsScreen({required this.session});
+  const _GallerySettingsScreen({required this.initialSession});
 
-  final VaultSession session;
+  final VaultSession initialSession;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final session =
+        ref.watch(vaultSessionProvider).asData?.value ?? initialSession;
     final warnings = session.scanReport.warnings;
     final galleryTagPrefixes =
         ref
@@ -49,10 +51,8 @@ class _GallerySettingsScreen extends ConsumerWidget {
                 variant: M3EIconButtonVariant.standard,
                 tooltip: 'Vault を切り替え',
                 icon: const Icon(Icons.folder_open),
-                onPressed: () {
-                  Navigator.of(context).pop();
-                  ref.read(vaultSessionProvider.notifier).chooseVault();
-                },
+                onPressed: () =>
+                    ref.read(vaultSessionProvider.notifier).chooseVault(),
               ),
             ),
             M3EListItem(
@@ -336,9 +336,8 @@ class _AboutScreen extends StatelessWidget {
       body: ListView(
         padding: const EdgeInsets.all(20),
         children: [
-          _expressiveCard(
+          _settingsPanel(
             context: context,
-            color: colorScheme.surfaceContainerLow,
             child: Padding(
               padding: const EdgeInsets.all(20),
               child: Column(

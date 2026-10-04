@@ -205,7 +205,7 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
               children: [
                 Padding(
                   padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
-                  child: _expressiveCard(
+                  child: _settingsPanel(
                     context: context,
                     margin: EdgeInsets.zero,
                     child: Padding(
