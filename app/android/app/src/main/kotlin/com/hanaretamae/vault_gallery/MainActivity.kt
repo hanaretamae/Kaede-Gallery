@@ -220,13 +220,16 @@ class MainActivity : FlutterActivity() {
                 val mediaUri = call.argument<String>("mediaUri")?.let(Uri::parse)
                 val revealInFileManager =
                     call.argument<Boolean>("revealInFileManager") ?: false
-                val intent = createMediaOpenIntent(vault, mediaUri, revealInFileManager)
+                val setAsWallpaper = call.argument<Boolean>("setAsWallpaper") ?: false
+                val intent = createMediaOpenIntent(vault, mediaUri, revealInFileManager, setAsWallpaper)
                 mainHandler.post {
                     try {
                         startActivity(
                             Intent.createChooser(
                                 intent,
-                                if (revealInFileManager) {
+                                if (setAsWallpaper) {
+                                    "壁紙に設定するアプリを選択"
+                                } else if (revealInFileManager) {
                                     "ファイルを表示するアプリを選択"
                                 } else {
                                     "画像・動画を開くアプリを選択"
@@ -878,12 +881,21 @@ class MainActivity : FlutterActivity() {
         tree: Uri,
         mediaUri: Uri?,
         revealInFileManager: Boolean,
+        setAsWallpaper: Boolean = false,
     ): Intent {
         val target = checkedMediaUri(tree, mediaUri ?: error("Invalid media URI"))
         val mimeType = if (revealInFileManager) {
             "*/*"
         } else {
             contentResolver.getType(target) ?: "*/*"
+        }
+        if (setAsWallpaper) {
+            val type = contentResolver.getType(target)
+            require(type?.startsWith("image/") == true) { "Not an image" }
+            return Intent(Intent.ACTION_ATTACH_DATA).apply {
+                setDataAndType(target, type)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
         }
         return Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(target, mimeType)

@@ -102,7 +102,7 @@ awk -v version="${tag#v}" '
 [[ -s $notes_file ]] || fail "CHANGELOG.md has no release notes for $tag"
 
 dart tools/generate_saf_limits.dart --check
-rustup target add aarch64-linux-android
+rustup target add aarch64-linux-android x86_64-linux-android
 cargo test --locked --workspace
 (
   cd app
@@ -128,7 +128,8 @@ fi
 [[ -n $signing_password ]] || fail "the KeePassXC signing entry has no password"
 
 ndk_bin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
-[[ -x $ndk_bin/aarch64-linux-android35-clang ]] || fail "Android NDK compiler was not found"
+[[ -x $ndk_bin/aarch64-linux-android35-clang && -x $ndk_bin/x86_64-linux-android35-clang ]] ||
+  fail "Android NDK compiler was not found"
 rust_toolchain_bin=$(dirname "$(rustup which rustc)")
 export PATH="$rust_toolchain_bin:$PATH"
 export CC_aarch64_linux_android="$ndk_bin/aarch64-linux-android35-clang"
@@ -136,6 +137,11 @@ export CXX_aarch64_linux_android="$ndk_bin/aarch64-linux-android35-clang++"
 export AR_aarch64_linux_android="$ndk_bin/llvm-ar"
 export RANLIB_aarch64_linux_android="$ndk_bin/llvm-ranlib"
 export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
+export CC_x86_64_linux_android="$ndk_bin/x86_64-linux-android35-clang"
+export CXX_x86_64_linux_android="$ndk_bin/x86_64-linux-android35-clang++"
+export AR_x86_64_linux_android="$ndk_bin/llvm-ar"
+export RANLIB_x86_64_linux_android="$ndk_bin/llvm-ranlib"
+export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$CC_x86_64_linux_android"
 
 (
   cd app
@@ -144,7 +150,7 @@ export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
     ANDROID_KEY_ALIAS=kaede-gallery \
     ANDROID_KEY_PASSWORD="$signing_password" \
   GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.daemon=false" \
-  flutter build apk --release --target-platform android-arm64
+  flutter build apk --release --target-platform android-arm64,android-x64
 )
 unset signing_password
 rm -f -- "$keystore_path"

@@ -664,22 +664,13 @@ class _AboutHero extends StatelessWidget {
             width: double.infinity,
             child: Column(
               children: [
-                DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: scheme.surface,
-                    borderRadius: BorderRadius.circular(GalleryShape.large),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(GalleryShape.small),
-                      child: Image.asset(
-                        'assets/branding/kaede-gallery-icon.png',
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(GalleryShape.large),
+                  child: Image.asset(
+                    'assets/branding/kaede-gallery-icon.png',
                         width: 88,
                         height: 88,
                         semanticLabel: 'Kaede Gallery のアイコン',
-                      ),
-                    ),
                   ),
                 ),
                 const SizedBox(height: 20),

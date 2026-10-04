@@ -86,6 +86,7 @@ abstract interface class SafVaultAccess {
     String vaultUri,
     String? mediaUri, {
     bool revealInFileManager = false,
+    bool setAsWallpaper = false,
   });
   Future<bool> saveJson(String fileName, String contents);
   Future<Uint8List?> thumbnail(
@@ -331,10 +332,12 @@ class AndroidSafAccess implements SafVaultAccess {
     String vaultUri,
     String? mediaUri, {
     bool revealInFileManager = false,
+    bool setAsWallpaper = false,
   }) => _channel.invokeMethod<void>('openMedia', {
     'vaultUri': vaultUri,
     'mediaUri': mediaUri,
     'revealInFileManager': revealInFileManager,
+    if (setAsWallpaper) 'setAsWallpaper': true,
   });
 
   @override

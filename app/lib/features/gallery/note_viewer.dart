@@ -655,6 +655,7 @@ Future<void> _showMediaOpenActions(
   required SafVaultAccess safAccess,
   String? vaultPath,
 }) async {
+  final canSetWallpaper = _canSetWallpaper(mediaPath);
   final action = await M3EBottomSheet.showAdaptive<_MediaOpenAction>(
     context,
     title: 'メディアを開く',
@@ -667,6 +668,12 @@ Future<void> _showMediaOpenActions(
             leading: const Icon(Icons.open_in_new),
             onTap: () => Navigator.of(context).pop(_MediaOpenAction.chooseApp),
           ),
+          if (canSetWallpaper)
+            M3EListItem(
+              headline: '画像を壁紙にする',
+              leading: const Icon(Icons.wallpaper),
+              onTap: () => Navigator.of(context).pop(_MediaOpenAction.setWallpaper),
+            ),
           M3EListItem(
             headline: 'ファイルマネージャーでファイルを表示',
             leading: const Icon(Icons.folder_open),
@@ -679,6 +686,7 @@ Future<void> _showMediaOpenActions(
   );
   if (action == null || !context.mounted) return;
   final revealInFileManager = action == _MediaOpenAction.revealInFileManager;
+  final setAsWallpaper = action == _MediaOpenAction.setWallpaper;
   if (mediaPath.startsWith('content://')) {
     if (vaultPath == null || !vaultPath.startsWith('content://')) return;
     try {
@@ -686,6 +694,7 @@ Future<void> _showMediaOpenActions(
         vaultPath,
         mediaPath,
         revealInFileManager: revealInFileManager,
+        setAsWallpaper: setAsWallpaper,
       );
     } on PlatformException catch (error) {
       if (!context.mounted) return;
@@ -696,6 +705,15 @@ Future<void> _showMediaOpenActions(
             : 'メディアを開けませんでした。',
       );
     }
+    return;
+  }
+  if (setAsWallpaper) {
+    final ok = await _setLinuxWallpaper(mediaPath);
+    if (!context.mounted) return;
+    M3ESnackbar.show(
+      context,
+      message: ok ? '壁紙に設定しました。' : '壁紙に設定できませんでした。',
+    );
     return;
   }
   if (revealInFileManager && Platform.isLinux) {
@@ -717,7 +735,43 @@ Future<void> _showMediaOpenActions(
   await _openExternalUri(context, uri);
 }
 
-enum _MediaOpenAction { chooseApp, revealInFileManager }
+enum _MediaOpenAction { chooseApp, revealInFileManager, setWallpaper }
+
+const _wallpaperExtensions = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.gif'};
+
+// Android resolves the image type from the content provider; Linux needs a
+// local image file and a GNOME session.
+bool _canSetWallpaper(String mediaPath) {
+  var lower = mediaPath.toLowerCase();
+  try {
+    lower = Uri.decodeFull(mediaPath).toLowerCase();
+  } on ArgumentError {
+    // Fall back to the raw path.
+  }
+  if (!_wallpaperExtensions.any(lower.endsWith)) return false;
+  if (mediaPath.startsWith('content://')) return Platform.isAndroid;
+  if (!Platform.isLinux) return false;
+  final desktop = Platform.environment['XDG_CURRENT_DESKTOP'] ?? '';
+  return desktop.toUpperCase().contains('GNOME');
+}
+
+Future<bool> _setLinuxWallpaper(String path) async {
+  final uri = Uri.file(path).toString();
+  try {
+    for (final key in const ['picture-uri', 'picture-uri-dark']) {
+      final result = await Process.run('gsettings', [
+        'set',
+        'org.gnome.desktop.background',
+        key,
+        uri,
+      ]);
+      if (result.exitCode != 0) return false;
+    }
+    return true;
+  } on ProcessException {
+    return false;
+  }
+}
 
 class _ViewerBottomOverlay extends StatelessWidget {
   const _ViewerBottomOverlay({

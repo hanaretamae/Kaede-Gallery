@@ -152,12 +152,12 @@ GDK_BACKEND=wayland flutter run -d linux
 #### ビルド環境とローカルAPK
 
 Nix 開発シェルには Android SDK（API 35/36）、Build Tools 36、NDK 28.2、
-CMake 3.22.1、JDK 17 が含まれます。Linux x86_64 で arm64 APK を作る場合、
+CMake 3.22.1、JDK 17 が含まれます。Linux x86_64 で arm64 と x86_64 の APK を作る場合、
 Rust の Android ターゲットを一度追加してから、NDK のクロスコンパイラを指定します。
 
 ```sh
 nix develop
-rustup target add aarch64-linux-android
+rustup target add aarch64-linux-android x86_64-linux-android
 cd app
 NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
 PATH="$(dirname "$(rustup which rustc)"):$PATH" \
@@ -166,7 +166,12 @@ PATH="$(dirname "$(rustup which rustc)"):$PATH" \
   AR_aarch64_linux_android="$NDK_BIN/llvm-ar" \
   RANLIB_aarch64_linux_android="$NDK_BIN/llvm-ranlib" \
   CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android35-clang" \
-  flutter build apk --release --target-platform android-arm64
+  CC_x86_64_linux_android="$NDK_BIN/x86_64-linux-android35-clang" \
+  CXX_x86_64_linux_android="$NDK_BIN/x86_64-linux-android35-clang++" \
+  AR_x86_64_linux_android="$NDK_BIN/llvm-ar" \
+  RANLIB_x86_64_linux_android="$NDK_BIN/llvm-ranlib" \
+  CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android35-clang" \
+  flutter build apk --release --target-platform android-arm64,android-x64
 ```
 
 生成物は `app/build/app/outputs/flutter-apk/app-release.apk` です。署名鍵を設定しない
