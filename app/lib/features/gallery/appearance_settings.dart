@@ -107,6 +107,11 @@ class _AppearanceSettings extends ConsumerWidget {
               onChanged: (value) =>
                   _save(context, ref, appearance.copyWith(pureBlack: value)),
             ),
+          M3EListItem(
+            headline: '初期設定に戻す',
+            leading: Icon(Icons.restore),
+            onTap: () => _save(context, ref, const GalleryAppearance()),
+          ),
         ]),
       ],
     );

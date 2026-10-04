@@ -155,7 +155,7 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                 M3EListItem(
                   headline: '架空のノート例を見る・コピー',
                   supportingText: '設定中の項目順を反映した表示例も確認できます',
-                  leading: const Icon(Icons.content_copy_outlined),
+                  leading: _settingsIcon(context, Icons.content_copy_outlined, tone: 1),
                   onTap: () => Navigator.of(context).push(
                     MaterialPageRoute<void>(
                       builder: (context) => const _FictionalNoteExampleScreen(),
@@ -263,6 +263,21 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
                       settings.copyWith(
                         noteStructure: structure.copyWith(
                           postTextIncludeQuote: value,
+                        ),
+                      ),
+                    ),
+                  ),
+                  M3EListItem(
+                    headline: '初期設定に戻す',
+                    leading: Icon(Icons.restore),
+                    onTap: () => _save(
+                      context,
+                      ref,
+                      settings.copyWith(
+                        noteStructure: structure.copyWith(
+                          postTextIncludeQuote:
+                              const GalleryNoteStructureSettings()
+                                  .postTextIncludeQuote,
                         ),
                       ),
                     ),
@@ -482,111 +497,103 @@ class _BlockOrderCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
-    return Column(
-      children: [
-        _settingsGroup(context, [
-          M3EListItem(
-            headline: 'Frontmatter',
-            supportingText: '常に先頭に固定（並べ替え不可）',
-            leading: Icon(Icons.push_pin_outlined, color: scheme.primary),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                M3EIconButton(
-                  variant: M3EIconButtonVariant.standard,
-                  tooltip: 'Frontmatter の説明',
-                  onPressed: () => _showNoteStructureInfo(
-                    context,
-                    'Frontmatter',
-                    'タグ、タイトル、URL、日付、カバーなどのメタデータです。'
-                        '詳細欄の先頭に固定され、並べ替えや非表示はできません。',
-                  ),
-                  icon: const Icon(Icons.info_outline),
+    void move(int index, int delta) {
+      final target = index + delta;
+      if (target < 0 || target >= blockOrder.length) return;
+      final updated = [...blockOrder];
+      updated.insert(target, updated.removeAt(index));
+      onReorder(updated);
+    }
+
+    return _settingsGroup(context, [
+      M3EListItem(
+        headline: 'Frontmatter',
+        supportingText: '常に先頭に固定（並べ替え不可）',
+        leading: Icon(Icons.push_pin_outlined),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            M3EIconButton(
+              variant: M3EIconButtonVariant.standard,
+              tooltip: 'Frontmatter の説明',
+              onPressed: () => _showNoteStructureInfo(
+                context,
+                'Frontmatter',
+                'タグ、タイトル、URL、日付、カバーなどのメタデータです。'
+                    '詳細欄の先頭に固定され、並べ替えや非表示はできません。',
+              ),
+              icon: const Icon(Icons.info_outline),
+            ),
+            M3EIconButton(
+              variant: M3EIconButtonVariant.standard,
+              tooltip: 'Frontmatter の設定',
+              onPressed: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (context) => const _FrontmatterSettingsScreen(),
                 ),
+              ),
+              icon: const Icon(Icons.tune),
+            ),
+          ],
+        ),
+      ),
+      for (final (index, block) in blockOrder.indexed)
+        M3EListItem(
+          key: ValueKey(block),
+          headline: block.label,
+          leading: Icon(block.icon),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: '${block.label}の説明',
+                onPressed: () => _showNoteStructureInfo(
+                  context,
+                  block.label,
+                  _noteBlockDescription(block),
+                ),
+                icon: const Icon(Icons.info_outline),
+              ),
+              if (_noteBlockHasSettings(block))
                 M3EIconButton(
                   variant: M3EIconButtonVariant.standard,
-                  tooltip: 'Frontmatter の設定',
-                  onPressed: () => Navigator.of(context).push(
-                    MaterialPageRoute<void>(
-                      builder: (context) => const _FrontmatterSettingsScreen(),
-                    ),
-                  ),
+                  tooltip: '${block.label}の設定',
+                  onPressed: () => onConfigure(block),
                   icon: const Icon(Icons.tune),
                 ),
-              ],
-            ),
-          ),
-        ]),
-        Padding(
-          padding: const EdgeInsets.only(top: 8),
-          child: M3ETheme(
-            data: _listContainerTheme(context, scheme.surfaceContainerHigh),
-            child: ReorderableListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              buildDefaultDragHandles: false,
-              itemCount: blockOrder.length,
-              onReorderItem: (oldIndex, newIndex) {
-                final updated = [...blockOrder];
-                final moved = updated.removeAt(oldIndex);
-                updated.insert(newIndex, moved);
-                onReorder(updated);
-              },
-              itemBuilder: (context, index) {
-                final block = blockOrder[index];
-                return Padding(
-                  key: ValueKey(block),
-                  padding: const EdgeInsets.only(bottom: 2),
-                  child: M3EListItem(
-                    headline: block.label,
-                    leading: Icon(block.icon),
-                    trailing: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        M3EIconButton(
-                          variant: M3EIconButtonVariant.standard,
-                          tooltip: '${block.label}の説明',
-                          onPressed: () => _showNoteStructureInfo(
-                            context,
-                            block.label,
-                            _noteBlockDescription(block),
-                          ),
-                          icon: const Icon(Icons.info_outline),
-                        ),
-                        if (_noteBlockHasSettings(block))
-                          M3EIconButton(
-                            variant: M3EIconButtonVariant.standard,
-                            tooltip: '${block.label}の設定',
-                            onPressed: () => onConfigure(block),
-                            icon: const Icon(Icons.tune),
-                          ),
-                        if (block != GalleryNoteBlock.postTextEnd &&
-                            block != GalleryNoteBlock.media)
-                          M3ESwitch(
-                            value: !hiddenBlocks.contains(block),
-                            onChanged: (value) =>
-                                onToggleVisibility(block, value),
-                            semanticLabel: '${block.label}を表示',
-                          ),
-                        ReorderableDragStartListener(
-                          index: index,
-                          child: const Padding(
-                            padding: EdgeInsets.all(8),
-                            child: Icon(Icons.drag_handle),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            ),
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: '${block.label}を上へ',
+                onPressed: index == 0 ? null : () => move(index, -1),
+                icon: const Icon(Icons.arrow_upward),
+              ),
+              M3EIconButton(
+                variant: M3EIconButtonVariant.standard,
+                tooltip: '${block.label}を下へ',
+                onPressed: index == blockOrder.length - 1
+                    ? null
+                    : () => move(index, 1),
+                icon: const Icon(Icons.arrow_downward),
+              ),
+              if (block != GalleryNoteBlock.postTextEnd &&
+                  block != GalleryNoteBlock.media)
+                M3ESwitch(
+                  value: !hiddenBlocks.contains(block),
+                  onChanged: (value) => onToggleVisibility(block, value),
+                  semanticLabel: '${block.label}を表示',
+                )
+              else
+                const SizedBox(width: 52),
+            ],
           ),
         ),
-        _ResetDefaultsButton(onPressed: onReset),
-      ],
-    );
+      M3EListItem(
+        headline: '初期設定に戻す',
+        leading: Icon(Icons.restore),
+        onTap: onReset,
+      ),
+    ]);
   }
 }
 
@@ -702,10 +709,13 @@ class _PaginationSettingsCardState extends State<_PaginationSettingsCard> {
               widget.pagination.copyWith(showMissingMediaIcon: value),
             ),
           ),
+          M3EListItem(
+            headline: '初期設定に戻す',
+            leading: Icon(Icons.restore),
+            onTap: () =>
+                widget.onChanged(const GalleryPaginationSettings()),
+          ),
         ]),
-        _ResetDefaultsButton(
-          onPressed: () => widget.onChanged(const GalleryPaginationSettings()),
-        ),
       ],
     );
   }
@@ -917,12 +927,12 @@ class _FrontmatterKeyCard extends StatelessWidget {
                 ),
               M3EListItem(
                 headline: 'キーを追加',
-                leading: const Icon(Icons.add),
+                leading: Icon(Icons.add),
                 onTap: () => _addKey(context),
               ),
               M3EListItem(
                 headline: '初期設定に戻す',
-                leading: const Icon(Icons.restore),
+                leading: Icon(Icons.restore),
                 onTap: () => onChanged(defaults),
               ),
             ],
@@ -1011,7 +1021,6 @@ class _FictionalNoteLayoutPreview extends ConsumerWidget {
     final order = settings.noteStructure.blockOrder;
     final hidden = settings.noteStructure.hiddenBlocks;
     final tags = _fictionalNoteTags(settings);
-    final scheme = Theme.of(context).colorScheme;
     return _settingsPanel(
       context: context,
       child: Padding(
@@ -1038,41 +1047,34 @@ class _FictionalNoteLayoutPreview extends ConsumerWidget {
               style: Theme.of(context).textTheme.titleMedium,
             ),
             const SizedBox(height: 8),
-            M3EListItem(
-              headline: 'Frontmatter',
-              supportingText: 'タグ・タイトルなど（固定）',
-              leading: Icon(Icons.push_pin_outlined, color: scheme.primary),
-            ),
-            for (final block in order.where(
-              (block) =>
-                  block == GalleryNoteBlock.postTextEnd ||
-                  !hidden.contains(block),
-            ))
+            _settingsGroup(context, [
               M3EListItem(
-                key: ValueKey('fictional-${block.name}'),
-                headline: block.label,
-                supportingText: switch (block) {
-                  GalleryNoteBlock.author => '架空の投稿者リンク',
-                  GalleryNoteBlock.media => '架空の画像埋め込み',
-                  GalleryNoteBlock.postText => '架空の投稿文',
-                  GalleryNoteBlock.memo => '平文・引用・コード内の覚書',
-                  GalleryNoteBlock.related => '架空のノートへのリンク',
-                  GalleryNoteBlock.postTextEnd => '本文中の # 文書 見出し',
-                },
-                leading: Icon(block.icon),
+                headline: 'Frontmatter',
+                supportingText: 'タグ・タイトルなど（固定）',
+                leading: const Icon(Icons.push_pin_outlined),
               ),
+              for (final block in order.where(
+                (block) =>
+                    block == GalleryNoteBlock.postTextEnd ||
+                    !hidden.contains(block),
+              ))
+                M3EListItem(
+                  key: ValueKey('fictional-${block.name}'),
+                  headline: block.label,
+                  supportingText: switch (block) {
+                    GalleryNoteBlock.author => '架空の投稿者リンク',
+                    GalleryNoteBlock.media => '架空の画像埋め込み',
+                    GalleryNoteBlock.postText => '架空の投稿文',
+                    GalleryNoteBlock.memo => '平文・引用・コード内の覚書',
+                    GalleryNoteBlock.related => '架空のノートへのリンク',
+                    GalleryNoteBlock.postTextEnd => '本文中の # 文書 見出し',
+                  },
+                  leading: Icon(block.icon),
+                ),
+            ]),
           ],
         ),
       ),
     );
   }
-}
-
-M3EThemeData _listContainerTheme(BuildContext context, Color color) {
-  final theme = M3ETheme.of(context);
-  return theme.copyWith(
-    listTheme: theme.listTheme.copyWith(
-      item: theme.listTheme.item.copyWith(containerColor: color),
-    ),
-  );
 }

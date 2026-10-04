@@ -50,6 +50,25 @@ M3EListItem _expressiveSwitchTile({
   trailing: M3ESwitch(value: value, onChanged: onChanged, semanticLabel: title),
 );
 
+/// Leading icon on a tonal circular container, as in Material 3 Expressive
+/// settings lists. [tone] cycles through the primary, secondary and tertiary
+/// container roles.
+Widget _settingsIcon(BuildContext context, IconData icon, {int tone = 0}) {
+  final scheme = Theme.of(context).colorScheme;
+  final (background, foreground) = switch (tone % 3) {
+    0 => (scheme.primaryContainer, scheme.onPrimaryContainer),
+    1 => (scheme.secondaryContainer, scheme.onSecondaryContainer),
+    _ => (scheme.tertiaryContainer, scheme.onTertiaryContainer),
+  };
+  return Container(
+    width: 40,
+    height: 40,
+    decoration: BoxDecoration(color: background, shape: BoxShape.circle),
+    alignment: Alignment.center,
+    child: Icon(icon, size: 24, color: foreground),
+  );
+}
+
 Widget? _expressiveBackButton(BuildContext context) {
   final navigator = Navigator.of(context);
   if (!navigator.canPop()) return null;
@@ -193,6 +212,9 @@ class _GalleryLayout extends ConsumerWidget {
               initialValue: M3EBottomSheetValue.fullScreen,
               expandToFullScreen: true,
               fullScreenTitle: 'タグで絞り込む',
+              // Closing through the dismiss guard bypasses the sheet's
+              // predictive-back transform, which left the sheet misdrawn.
+              onDismissRequest: () async => true,
               builder: (context) =>
                   const FractionallySizedBox(child: _TagPanel()),
             ),

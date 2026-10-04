@@ -37,7 +37,6 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final settingsState = ref.watch(galleryTagSettingsProvider);
-    final scheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: M3EAppBar.top(
         title: galleryAppBarTitle(context, 'タグ設定'),
@@ -238,7 +237,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 ),
               M3EListItem(
                 headline: '色設定を追加',
-                leading: Icon(Icons.add, color: scheme.primary),
+                leading: Icon(Icons.add),
                 onTap: () async {
                   final added = await _askColor(context);
                   if (!context.mounted) return;
@@ -253,7 +252,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
               ),
               M3EListItem(
                 headline: '初期設定に戻す',
-                leading: Icon(Icons.restore, color: scheme.primary),
+                leading: Icon(Icons.restore),
                 onTap: () => _save(
                   context,
                   ref,
@@ -304,7 +303,6 @@ class _TagCategoryRuleList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final rules = settings.categories;
     final other = settings.other;
     return Column(
@@ -356,7 +354,7 @@ class _TagCategoryRuleList extends StatelessWidget {
           if (rules.length < GalleryTagCategorySettings.maxCategories)
             M3EListItem(
               headline: 'カテゴリーを追加',
-              leading: Icon(Icons.add, color: scheme.primary),
+              leading: Icon(Icons.add),
               onTap: () async {
                 final added = await _ask(context);
                 if (!context.mounted || added == null) return;
@@ -369,7 +367,7 @@ class _TagCategoryRuleList extends StatelessWidget {
             ),
           M3EListItem(
             headline: '初期設定に戻す',
-            leading: Icon(Icons.restore, color: scheme.primary),
+            leading: Icon(Icons.restore),
             onTap: () => onChanged(
               settings.copyWith(
                 categories: GalleryTagCategorySettings.defaultCategories,
@@ -397,7 +395,7 @@ class _TagCategoryRuleList extends StatelessWidget {
           M3EListItem(
             headline: 'カテゴリー名',
             supportingText: other.name,
-            leading: Icon(Icons.edit_outlined, color: scheme.primary),
+            leading: Icon(Icons.edit_outlined),
             onTap: () async {
               final name = await M3EDialog.show<String>(
                 context,
@@ -419,6 +417,13 @@ class _TagCategoryRuleList extends StatelessWidget {
             value: other.splitDeep,
             onChanged: (value) => onChanged(
               settings.copyWith(other: other.copyWith(splitDeep: value)),
+            ),
+          ),
+          M3EListItem(
+            headline: '初期設定に戻す',
+            leading: Icon(Icons.restore),
+            onTap: () => onChanged(
+              settings.copyWith(other: const GalleryOtherCategorySettings()),
             ),
           ),
         ]),
@@ -548,7 +553,6 @@ class _TagPrefixList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return _settingsGroup(context, [
       if (prefixes.isEmpty)
         M3EListItem(headline: emptyText)
@@ -565,12 +569,12 @@ class _TagPrefixList extends StatelessWidget {
           ),
       M3EListItem(
         headline: 'パスを追加',
-        leading: Icon(Icons.add, color: scheme.primary),
+        leading: Icon(Icons.add),
         onTap: onAdd,
       ),
       M3EListItem(
         headline: '初期設定に戻す',
-        leading: Icon(Icons.restore, color: scheme.primary),
+        leading: Icon(Icons.restore),
         onTap: onReset,
       ),
     ]);

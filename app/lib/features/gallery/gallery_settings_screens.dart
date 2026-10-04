@@ -18,7 +18,6 @@ class _GallerySettingsScreen extends ConsumerWidget {
             .noteStructure
             .galleryTagPrefixes ??
         const ['source/'];
-    final colorScheme = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: M3EAppBar.top(
         title: galleryAppBarTitle(context, '設定'),
@@ -33,7 +32,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: 'ページングと一覧表示',
               supportingText: '一覧の読み込み単位や件数、タイルの表示を設定します',
-              leading: const Icon(Icons.view_agenda_outlined),
+              leading: _settingsIcon(context, Icons.view_agenda_outlined),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _PaginationSettingsScreen(),
@@ -46,7 +45,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: '選択中の Vault',
               supportingText: vaultDisplayName(session.vaultPath),
-              leading: const Icon(Icons.folder_outlined),
+              leading: Icon(Icons.folder_outlined),
               trailing: M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
                 tooltip: 'Vault を切り替え',
@@ -65,8 +64,8 @@ class _GallerySettingsScreen extends ConsumerWidget {
                     ? Icons.warning_amber_rounded
                     : Icons.check_circle_outline,
                 color: warnings > 0
-                    ? colorScheme.tertiary
-                    : colorScheme.primary,
+                    ? Theme.of(context).colorScheme.tertiary
+                    : Theme.of(context).colorScheme.primary,
               ),
               trailing: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -147,7 +146,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: 'ノート構造と表示',
               supportingText: 'ノートの項目順や見出しの読み取り、一覧表示を設定します',
-              leading: const Icon(Icons.account_tree_outlined),
+              leading: _settingsIcon(context, Icons.account_tree_outlined),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _NoteStructureSettingsScreen(),
@@ -157,7 +156,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: 'タグ設定',
               supportingText: 'ギャラリー対象タグ、絞り込み、表示色を設定します',
-              leading: const Icon(Icons.label_outline),
+              leading: _settingsIcon(context, Icons.label_outline, tone: 0),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _TagRulesSettingsScreen(),
@@ -169,7 +168,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
           _settingsGroup(context, [
             M3EListItem(
               headline: '情報とライセンス',
-              leading: const Icon(Icons.info_outline),
+              leading: _settingsIcon(context, Icons.info_outline, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _AboutScreen(),
@@ -178,7 +177,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             ),
             M3EListItem(
               headline: 'インポート・エクスポート・リセット',
-              leading: const Icon(Icons.storage_outlined),
+              leading: _settingsIcon(context, Icons.storage_outlined, tone: 2),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _DataSettingsScreen(),
@@ -187,7 +186,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             ),
             M3EListItem(
               headline: 'ヘルプと使い方',
-              leading: const Icon(Icons.help_outline),
+              leading: _settingsIcon(context, Icons.help_outline, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _GalleryHelpScreen(),
@@ -202,7 +201,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
 }
 
 Widget _settingsGroup(BuildContext context, List<M3EListItem> items) => Padding(
-  padding: const EdgeInsets.only(bottom: 8),
+  padding: const EdgeInsets.only(bottom: 12),
   child: M3EList(
     itemCount: items.length,
     itemBuilder: (context, index) => items[index],
@@ -311,11 +310,16 @@ class _GalleryHelpScreen extends StatelessWidget {
   );
 }
 
-M3EListItem _helpItem({
+M3EListItem _helpItem(
+  {
   required IconData icon,
   required String title,
   required String body,
-}) => M3EListItem(headline: title, supportingText: body, leading: Icon(icon));
+}) => M3EListItem(
+  headline: title,
+  supportingText: body,
+  leading: Icon(icon),
+);
 
 class _AboutScreen extends StatelessWidget {
   const _AboutScreen();
@@ -372,7 +376,7 @@ class _AboutScreen extends StatelessWidget {
           _settingsGroup(context, [
             M3EListItem(
               headline: 'アプリ情報',
-              leading: const Icon(Icons.info_outline),
+              leading: Icon(Icons.info_outline),
               onTap: () => showAboutDialog(
                 context: context,
                 applicationName: 'Kaede Gallery',
@@ -382,7 +386,7 @@ class _AboutScreen extends StatelessWidget {
             ),
             M3EListItem(
               headline: 'オープンソースライセンス',
-              leading: const Icon(Icons.article_outlined),
+              leading: _settingsIcon(context, Icons.article_outlined, tone: 1),
               onTap: () => showLicensePage(
                 context: context,
                 applicationName: 'Kaede Gallery',
@@ -392,7 +396,7 @@ class _AboutScreen extends StatelessWidget {
             M3EListItem(
               headline: 'GitHub リポジトリ',
               supportingText: _repositoryUrl,
-              leading: const Icon(Icons.open_in_new),
+              leading: Icon(Icons.open_in_new),
               onTap: () => _openExternalUri(context, Uri.parse(_repositoryUrl)),
             ),
           ]),
@@ -643,13 +647,13 @@ class _DataSettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: '設定をJSONでエクスポート',
               supportingText: '外観とタグ設定を1つのJSONファイルに保存します',
-              leading: const Icon(Icons.save_alt),
+              leading: Icon(Icons.save_alt),
               onTap: () => _exportSettings(context, ref),
             ),
             M3EListItem(
               headline: '設定をJSONからインポート',
               supportingText: '以前にエクスポートした設定を読み込みます',
-              leading: const Icon(Icons.file_open_outlined),
+              leading: Icon(Icons.file_open_outlined),
               onTap: () => _importSettings(context, ref),
             ),
             M3EListItem(
@@ -662,7 +666,7 @@ class _DataSettingsScreen extends ConsumerWidget {
               M3EListItem(
                 headline: 'この Vault を忘れる',
                 supportingText: 'Vault の選択情報、インデックスとキャッシュを削除します',
-                leading: const Icon(Icons.delete_outline),
+                leading: Icon(Icons.delete_outline),
                 onTap: () => _forgetVault(context, ref, session),
               ),
           ]),
