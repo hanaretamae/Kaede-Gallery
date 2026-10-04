@@ -236,7 +236,7 @@ git push origin vX.Y.Z
 ```sh
 KEEPASSXC_DATABASE="/path/to/keepass.kdbx" \
 KEEPASSXC_KEY_FILE="/path/to/key-file.keyx" \
-nix develop --command ./tools/release-android.sh vX.Y.Z
+nix develop --command ./tools/release.sh vX.Y.Z
 ```
 
 実行前に、コマンド内の `vX.Y.Z` を `app/pubspec.yaml` および `CHANGELOG.md` に記載した
@@ -256,9 +256,8 @@ DB とキーファイルは Vault や Git 管理下に置かず、端末上の�
 スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査します。
 タグが HEAD より前でも、タグ以降の変更が `CHANGELOG.md` を除く Markdown 文書と
 リリーススクリプトだけなら許可し、アプリやビルド設定の変更があれば停止します。
-Rust/Flutter のテスト、arm64 APK の署名ビルドと検証の後、Release を作成して APK を添付します。
-作成した Release から APK をダウンロードできます。private repository のため、Release も
-リポジトリへのアクセス権があるアカウントだけが取得できます。GitHub Actions は設定せず、
+Rust/Flutter のテスト、署名 APK（arm64・x86_64・universal）と Linux 実行ファイル（x86_64・aarch64）のビルドと検証の後、Release を作成して添付します。aarch64 の Linux 実行ファイルをビルドするには binfmt（QEMU）か remote builder が必要で、省略する場合は `SKIP_LINUX_ARCHES=aarch64-linux` を指定します。Windows は Nix でクロスビルドできる可能性がありますが、未対応です。macOS は Apple の SDK が必要なため Nix 単体では配布できません。
+作成した Release から APK をダウンロードできます。Release は GitHub 上で配布します。GitHub Actions は設定せず、
 ビルドとアップロードはすべて利用者の PC から行います。
 
 ## アプリを使う
@@ -337,4 +336,4 @@ app/lib/
 docs/design.md      設計の基準
 ```
 
-貢献方法は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。ライセンスは [LICENSE](LICENSE) です。
+このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。ライセンスは [LICENSE](LICENSE) です。

@@ -1,6 +1,9 @@
 # Contributing
 
-Kaede Gallery への貢献ありがとうございます。設計の基準は [`docs/design.md`](docs/design.md) です。
+> [!NOTE]
+> このリポジトリは公開のみを目的としており、Issue・Pull Request・Discussion など外部からの意見や貢献は受け付けていません（Issue・Discussion は無効、Pull Request は collaborator のみ）。以下は開発者向けの手順です。
+
+設計の基準は [`docs/design.md`](docs/design.md) です。
 挙動・プライバシー・セキュリティ・フェーズ境界に関わる変更は、設計と矛盾しないか確認してください。
 
 ## 開発環境

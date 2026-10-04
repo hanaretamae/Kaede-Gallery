@@ -206,11 +206,39 @@ Widget _settingsGroup(
   Color? color,
 }) => Padding(
   padding: const EdgeInsets.only(bottom: 12),
-  child: M3EList(
-    itemCount: items.length,
-    itemBuilder: (context, index) => items[index],
-    onTap: (index) => items[index].onTap?.call(),
-    color: color ?? Theme.of(context).colorScheme.surfaceContainerHigh,
+  child: Builder(
+    builder: (context) {
+      // M3EListItem draws headlines with bodyLarge; bolden it for this list only.
+      final theme = M3ETheme.of(context);
+      final type = theme.typeScale;
+      return M3ETheme(
+        data: theme.copyWith(
+          typeScale: M3ETypeScale(
+            displayLarge: type.displayLarge,
+            displayMedium: type.displayMedium,
+            displaySmall: type.displaySmall,
+            headlineLarge: type.headlineLarge,
+            headlineMedium: type.headlineMedium,
+            headlineSmall: type.headlineSmall,
+            titleLarge: type.titleLarge,
+            titleMedium: type.titleMedium,
+            titleSmall: type.titleSmall,
+            bodyLarge: type.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+            bodyMedium: type.bodyMedium,
+            bodySmall: type.bodySmall,
+            labelLarge: type.labelLarge,
+            labelMedium: type.labelMedium,
+            labelSmall: type.labelSmall,
+          ),
+        ),
+        child: M3EList(
+          itemCount: items.length,
+          itemBuilder: (context, index) => items[index],
+          onTap: (index) => items[index].onTap?.call(),
+          color: color ?? Theme.of(context).colorScheme.surfaceContainerHigh,
+        ),
+      );
+    },
   ),
 );
 

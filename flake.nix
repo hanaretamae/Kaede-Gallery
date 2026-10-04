@@ -23,9 +23,10 @@
         };
     in
     {
-      packages.x86_64-linux.default =
+      packages = forAllSystems (system: {
+        default =
         let
-          pkgs = mkPkgs "x86_64-linux";
+          pkgs = mkPkgs system;
           cargoVendor = pkgs.rustPlatform.fetchCargoVendor {
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
@@ -112,9 +113,10 @@
             homepage = "https://github.com/hanaretamae/Kaede-Gallery";
             license = pkgs.lib.licenses.mit;
             mainProgram = "vault_gallery";
-            platforms = [ "x86_64-linux" ];
+            platforms = [ "x86_64-linux" "aarch64-linux" ];
           };
         });
+      });
 
       nixosModules.default = { pkgs, ... }: {
         environment.systemPackages = [ self.packages.${pkgs.stdenv.hostPlatform.system}.default ];

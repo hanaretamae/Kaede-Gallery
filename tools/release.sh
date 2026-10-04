@@ -2,13 +2,19 @@
 set -euo pipefail
 set +x
 
+# Re-enter the pinned development shell so one command is enough.
+if [[ -z ${ANDROID_HOME:-} && -z ${KAEDE_IN_NIX:-} ]]; then
+  command -v nix >/dev/null || { echo "error: Nix is required" >&2; exit 1; }
+  exec env KAEDE_IN_NIX=1 nix develop --command "$0" "$@"
+fi
+
 fail() {
   printf 'error: %s\n' "$1" >&2
   exit 1
 }
 
 if [[ $# -ne 1 || ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  fail "usage: tools/release-android.sh vMAJOR.MINOR.PATCH"
+  fail "usage: tools/release.sh vMAJOR.MINOR.PATCH"
 fi
 
 tag=$1
@@ -37,7 +43,7 @@ if [[ $tag_commit != "$head_commit" ]]; then
       CHANGELOG.md)
         fail "CHANGELOG.md must match the release tag"
         ;;
-      *.md|tools/release-android.sh)
+      *.md|tools/release.sh)
         ;;
       *)
         fail "only documentation changes may follow the release tag"
@@ -86,7 +92,9 @@ runtime_mode=$(stat -c '%a' -- "$XDG_RUNTIME_DIR") ||
 
 key_dir=
 notes_file=
+dist_cleanup=
 cleanup() {
+  [[ -z $dist_cleanup ]] || rm -rf -- "$dist_cleanup"
   [[ -z $notes_file ]] || rm -f -- "$notes_file"
   [[ -z $key_dir ]] || rm -rf -- "$key_dir"
   unset signing_password
@@ -132,47 +140,79 @@ ndk_bin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
   fail "Android NDK compiler was not found"
 rust_toolchain_bin=$(dirname "$(rustup which rustc)")
 export PATH="$rust_toolchain_bin:$PATH"
-export CC_aarch64_linux_android="$ndk_bin/aarch64-linux-android35-clang"
-export CXX_aarch64_linux_android="$ndk_bin/aarch64-linux-android35-clang++"
-export AR_aarch64_linux_android="$ndk_bin/llvm-ar"
-export RANLIB_aarch64_linux_android="$ndk_bin/llvm-ranlib"
-export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$CC_aarch64_linux_android"
-export CC_x86_64_linux_android="$ndk_bin/x86_64-linux-android35-clang"
-export CXX_x86_64_linux_android="$ndk_bin/x86_64-linux-android35-clang++"
-export AR_x86_64_linux_android="$ndk_bin/llvm-ar"
-export RANLIB_x86_64_linux_android="$ndk_bin/llvm-ranlib"
-export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$CC_x86_64_linux_android"
+for triple in aarch64 x86_64; do
+  upper=${triple^^}
+  export "CC_${triple}_linux_android=$ndk_bin/${triple}-linux-android35-clang"
+  export "CXX_${triple}_linux_android=$ndk_bin/${triple}-linux-android35-clang++"
+  export "AR_${triple}_linux_android=$ndk_bin/llvm-ar"
+  export "RANLIB_${triple}_linux_android=$ndk_bin/llvm-ranlib"
+  export "CARGO_TARGET_${upper}_LINUX_ANDROID_LINKER=$ndk_bin/${triple}-linux-android35-clang"
+done
 
-(
-  cd app
-  ANDROID_KEYSTORE_PATH="$keystore_path" \
-    ANDROID_KEYSTORE_PASSWORD="$signing_password" \
-    ANDROID_KEY_ALIAS=kaede-gallery \
-    ANDROID_KEY_PASSWORD="$signing_password" \
-  GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.daemon=false" \
-  flutter build apk --release --target-platform android-arm64,android-x64
-)
+
+dist_dir=$(mktemp -d "$XDG_RUNTIME_DIR/kaede-gallery-dist.XXXXXXXX") ||
+  fail "could not create a release output directory"
+dist_cleanup=$dist_dir
+version=${tag#v}
+apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+command -v apkanalyzer >/dev/null || fail "Android SDK apkanalyzer was not found"
+[[ -x $apksigner ]] || fail "apksigner was not found"
+
+build_apk() {
+  local name=$1 platforms=$2 apk
+  (
+    cd app
+    ANDROID_KEYSTORE_PATH="$keystore_path" \
+      ANDROID_KEYSTORE_PASSWORD="$signing_password" \
+      ANDROID_KEY_ALIAS=kaede-gallery \
+      ANDROID_KEY_PASSWORD="$signing_password" \
+    GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.daemon=false" \
+    flutter build apk --release --target-platform "$platforms"
+  )
+  apk="$repo_root/app/build/app/outputs/flutter-apk/app-release.apk"
+  [[ -f $apk ]] || fail "APK for $name was not produced"
+  "$apksigner" verify "$apk" || fail "APK signature verification failed for $name"
+  permissions=$(apkanalyzer manifest permissions "$apk") ||
+    fail "could not inspect the $name APK permissions"
+  if grep -Eq 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED)' \
+    <<< "$permissions"; then
+    fail "the $name APK requests a network or broad-storage permission"
+  fi
+  cp -- "$apk" "$dist_dir/kaede-gallery-$version-$name.apk"
+}
+
+# Separate per-ABI APKs plus one universal APK that contains both ABIs.
+build_apk android-arm64 android-arm64
+build_apk android-x86_64 android-x64
+build_apk android-universal android-arm64,android-x64
 unset signing_password
 rm -f -- "$keystore_path"
 rmdir -- "$key_dir"
 key_dir=
 
-apk="$repo_root/app/build/app/outputs/flutter-apk/app-release.apk"
-apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
-[[ -f $apk && -x $apksigner ]] || fail "APK or apksigner was not produced"
-"$apksigner" verify "$apk" || fail "APK signature verification failed"
-command -v apkanalyzer >/dev/null || fail "Android SDK apkanalyzer was not found"
-permissions=$(apkanalyzer manifest permissions "$apk") ||
-  fail "could not inspect the release APK permissions"
-if grep -Eq 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED)' \
-  <<< "$permissions"; then
-  fail "the release APK requests a network or broad-storage permission"
-fi
+# Self-contained Linux executables (no Nix needed on the target machine).
+# The non-native architecture needs binfmt emulation or a remote builder;
+# set SKIP_LINUX_ARCHES="aarch64-linux" to skip an architecture explicitly.
+command -v nix >/dev/null || fail "Nix is required to build the Linux bundles"
+for system in x86_64-linux aarch64-linux; do
+  [[ " ${SKIP_LINUX_ARCHES:-} " == *" $system "* ]] && continue
+  arch=${system%-linux}
+  linux_out="$dist_dir/linux-$arch"
+  nix bundle --system "$system" --out-link "$linux_out" ".#packages.$system.default" ||
+    fail "could not build the $system bundle (set SKIP_LINUX_ARCHES=$system to skip)"
+  [[ -f $linux_out ]] || fail "the $system bundle was not produced"
+  cp -- "$(readlink -f "$linux_out")" "$dist_dir/kaede-gallery-$version-linux-$arch"
+  rm -f -- "$linux_out"
+  chmod 755 "$dist_dir/kaede-gallery-$version-linux-$arch"
+done
 
-gh release create "$tag" "$apk" \
+(cd "$dist_dir" && sha256sum -- kaede-gallery-* > SHA256SUMS)
+
+gh release create "$tag" "$dist_dir"/kaede-gallery-* "$dist_dir/SHA256SUMS" \
   --verify-tag \
   --title "$tag" \
   --notes-file "$notes_file" \
   --repo "$repo"
 
-printf 'Released %s: %s\n' "$tag" "$apk"
+printf 'Released %s:\n' "$tag"
+ls -1 -- "$dist_dir"

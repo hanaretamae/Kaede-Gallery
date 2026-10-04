@@ -1,6 +1,8 @@
 package com.hanaretamae.vault_gallery
 
 import android.app.Activity
+import android.app.WallpaperManager
+import android.content.ClipData
 import android.content.ContentValues
 import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
@@ -224,6 +226,11 @@ class MainActivity : FlutterActivity() {
                 val intent = createMediaOpenIntent(vault, mediaUri, revealInFileManager, setAsWallpaper)
                 mainHandler.post {
                     try {
+                        if (setAsWallpaper) {
+                            startActivity(intent)
+                            result.success(true)
+                            return@post
+                        }
                         startActivity(
                             Intent.createChooser(
                                 intent,
@@ -892,13 +899,35 @@ class MainActivity : FlutterActivity() {
         if (setAsWallpaper) {
             val type = contentResolver.getType(target)
             require(type?.startsWith("image/") == true) { "Not an image" }
-            return Intent(Intent.ACTION_ATTACH_DATA).apply {
-                setDataAndType(target, type)
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-            }
+            return wallpaperIntent(target, type!!)
         }
         return Intent(Intent.ACTION_VIEW).apply {
             setDataAndType(target, mimeType)
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+
+    // The system crop-and-set screen receives the selected image directly;
+    // ATTACH_DATA is the fallback for devices without it.
+    private fun wallpaperIntent(target: Uri, type: String): Intent {
+        val clip = ClipData.newRawUri("", target)
+        val cropIntent = try {
+            WallpaperManager.getInstance(this).getCropAndSetWallpaperIntent(target)
+        } catch (_: Exception) {
+            null
+        }
+        val intent = if (cropIntent != null &&
+            cropIntent.resolveActivity(packageManager) != null
+        ) {
+            cropIntent
+        } else {
+            Intent(Intent.ACTION_ATTACH_DATA).apply {
+                setDataAndType(target, type)
+                putExtra("mimeType", type)
+            }
+        }
+        return intent.apply {
+            clipData = clip
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     }
