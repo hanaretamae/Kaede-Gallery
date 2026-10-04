@@ -1637,6 +1637,11 @@ void main() {
     expect(find.text('ギャラリー対象タグ'), findsOneWidget);
     expect(find.text('#source/art/'), findsOneWidget);
     expect(find.text('フィルターに含めるタグ'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('フィルターのカテゴリー'),
+      250,
+      scrollable: _contentScrollable(),
+    );
     expect(find.text('フィルターのカテゴリー'), findsOneWidget);
     await tester.scrollUntilVisible(
       find.text('非表示にするタグ'),

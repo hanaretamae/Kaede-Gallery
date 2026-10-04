@@ -193,8 +193,7 @@ Notes use YAML frontmatter containing a `tags` list and optional `url`,
 `published`, `created`, `updated`, and `cover`. UTF-8 BOM and LF/CRLF are
 accepted. Dates may remain original strings when not understood. Unknown keys
 are ignored. A note is eligible when at least one original tag matches a
-configured gallery-target prefix; the default is `source/`, preserving current
-behavior. Prefixes can be changed or cleared in note-structure settings.
+configured gallery-target prefix; the default is `source/art`. Prefixes can be changed or cleared in note-structure settings.
 Other parseable notes with valid tags are retained in the private index only as
 internal-link targets; they are excluded from gallery results, tag counts, and
 pagination totals.
@@ -294,12 +293,15 @@ only; they never filter the tag options shown in the filter panel. Both search
 fields support bounded typo-tolerant matching, and a non-empty tag search
 expands the matching categories while preserving their prior expanded/collapsed
 state.
-Initial category labels are configurable, and missing labels fall back to the
-tag path. The Flutter filter panel presents all `source/...` categories under
-one collapsible “ソース” heading; the original subcategories remain separate
-filter groups, preserving their OR/AND matching behavior. The supplied
-examples confirm `source/type` and `source/format` as
-category paths; they do not establish `source/meta`. Category-wide options and
+Filter categories are user-configurable rules (`tagCategories` in the private
+tag settings): a name plus an exact path (`source/art`) or a subtree path
+(`source/count/*`). The most specific matching rule wins, rules sharing a name
+form one category, and the defaults are ソース, 人数, アートスタイル, 性別, メタ,
+レーティング, タイプ and 作品 (`copyright/*`). Each wildcard rule can optionally
+split tags three or more levels below its root into per-parent groups (off by
+default). An optional その他 category collects tags matching no rule and is
+omitted when empty; it has the same split option. Categories without visible
+options are not shown. Category-wide options and
 virtual-content filters are planned for the UI/API phase. The interpretation
 of category-wide selection remains the design document's stated assumption:
 “has any tag in this category.”
@@ -399,10 +401,7 @@ The tag-filter panel has separate tag-option and note-name/path search fields.
 A tag chip cycles through OR include, AND include, exclude, and inactive.
 Gallery tiles show an icon-free one-based position in its own badge when
 enabled. Grouped note tiles show separate memo and related-item counts when
-present. Within the single source heading, display
-sections stop at the second path component (for example `source/test`); deeper
-tag paths remain visibly nested beneath that section without changing their
-filter matching semantics. Choices with no matches under active filters remain
+present. Choices with no matches under active filters remain
 visible but disabled. Expanded filter sections retain their state while the
 category data refreshes. Gallery and category results remain visible while
 filter-triggered reloads are pending, avoiding a loading-indicator flash.

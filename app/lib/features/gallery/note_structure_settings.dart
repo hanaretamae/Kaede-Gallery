@@ -74,6 +74,17 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                         _NoteBlockSettingsScreen(block: block),
                   ),
                 ),
+                onReset: () => _save(
+                  context,
+                  ref,
+                  settings.copyWith(
+                    noteStructure: structure.copyWith(
+                      blockOrder:
+                          GalleryNoteStructureSettings.defaultBlockOrder,
+                      hiddenBlocks: const [],
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 20),
               _settingsPanel(
@@ -122,6 +133,19 @@ class _NoteStructureSettingsScreen extends ConsumerWidget {
                       const SizedBox(height: 8),
                       const Text(
                         '最短はVault内の同名ノートから参照元に近いものを選びます。相対は現在のノート位置を基準にし、絶対はVaultのルートを基準にします。Vault外へ解決されるリンクは無視します。',
+                      ),
+                      _ResetDefaultsButton(
+                        onPressed: () => _save(
+                          context,
+                          ref,
+                          settings.copyWith(
+                            noteStructure: structure.copyWith(
+                              linkResolution:
+                                  const GalleryNoteStructureSettings()
+                                      .linkResolution,
+                            ),
+                          ),
+                        ),
                       ),
                     ],
                   ),
@@ -269,6 +293,14 @@ class _NoteBlockSettingsScreen extends ConsumerWidget {
                   onRemove: (heading) => updateHeadings(
                     headings.where((item) => item != heading).toList(),
                   ),
+                  onReset: () {
+                    const defaults = GalleryNoteStructureSettings();
+                    updateHeadings(switch (block) {
+                      GalleryNoteBlock.memo => defaults.memoHeadings,
+                      GalleryNoteBlock.related => defaults.relatedHeadings,
+                      _ => defaults.postTextEndHeadings,
+                    });
+                  },
                 ),
               ],
             ],
@@ -316,53 +348,61 @@ class _FrontmatterSettingsScreen extends ConsumerWidget {
           return ListView(
             padding: const EdgeInsets.all(20),
             children: [
-              for (final (title, keys, update) in [
+              for (final (title, keys, update, defaults) in [
                 (
                   'タグ',
                   structure.frontmatter.tagsKeys,
                   (List<String> values) =>
                       structure.frontmatter.copyWith(tagsKeys: values),
+                  const GalleryFrontmatterSettings().tagsKeys,
                 ),
                 (
                   'タイトル',
                   structure.frontmatter.titleKeys,
                   (List<String> values) =>
                       structure.frontmatter.copyWith(titleKeys: values),
+                  const GalleryFrontmatterSettings().titleKeys,
                 ),
                 (
                   '投稿URL',
                   structure.frontmatter.urlKeys,
                   (List<String> values) =>
                       structure.frontmatter.copyWith(urlKeys: values),
+                  const GalleryFrontmatterSettings().urlKeys,
                 ),
                 (
                   '公開日時',
                   structure.frontmatter.publishedKeys,
                   (List<String> values) =>
                       structure.frontmatter.copyWith(publishedKeys: values),
+                  const GalleryFrontmatterSettings().publishedKeys,
                 ),
                 (
                   '作成日時',
                   structure.frontmatter.createdKeys,
                   (List<String> values) =>
                       structure.frontmatter.copyWith(createdKeys: values),
+                  const GalleryFrontmatterSettings().createdKeys,
                 ),
                 (
                   '更新日時',
                   structure.frontmatter.updatedKeys,
                   (List<String> values) =>
                       structure.frontmatter.copyWith(updatedKeys: values),
+                  const GalleryFrontmatterSettings().updatedKeys,
                 ),
                 (
                   'カバー画像・動画',
                   structure.frontmatter.coverKeys,
                   (List<String> values) =>
                       structure.frontmatter.copyWith(coverKeys: values),
+                  const GalleryFrontmatterSettings().coverKeys,
                 ),
               ])
                 _FrontmatterKeyCard(
                   title: title,
                   keys: keys,
+                  defaults: defaults,
                   allowEmpty: title != 'タグ',
                   onChanged: (values) => _save(
                     context,
@@ -430,8 +470,10 @@ class _BlockOrderCard extends StatelessWidget {
     required this.onReorder,
     required this.onToggleVisibility,
     required this.onConfigure,
+    required this.onReset,
   });
 
+  final VoidCallback onReset;
   final List<GalleryNoteBlock> blockOrder;
   final List<GalleryNoteBlock> hiddenBlocks;
   final ValueChanged<List<GalleryNoteBlock>> onReorder;
@@ -542,9 +584,28 @@ class _BlockOrderCard extends StatelessWidget {
             ),
           ),
         ),
+        _ResetDefaultsButton(onPressed: onReset),
       ],
     );
   }
+}
+
+/// Small right-aligned action that restores one settings group to defaults.
+class _ResetDefaultsButton extends StatelessWidget {
+  const _ResetDefaultsButton({required this.onPressed});
+
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) => Align(
+    alignment: Alignment.centerRight,
+    child: M3EButton.icon(
+      style: M3EButtonStyle.text,
+      onPressed: onPressed,
+      icon: const Icon(Icons.restore),
+      label: const Text('初期設定に戻す'),
+    ),
+  );
 }
 
 /// Editor for the page size and whether the gallery shows a running loaded
@@ -642,6 +703,9 @@ class _PaginationSettingsCardState extends State<_PaginationSettingsCard> {
             ),
           ),
         ]),
+        _ResetDefaultsButton(
+          onPressed: () => widget.onChanged(const GalleryPaginationSettings()),
+        ),
       ],
     );
   }
@@ -654,8 +718,10 @@ class _HeadingRuleCard extends StatelessWidget {
     required this.headings,
     required this.onAdd,
     required this.onRemove,
+    required this.onReset,
   });
 
+  final VoidCallback onReset;
   final String title;
   final String description;
   final List<String> headings;
@@ -700,6 +766,7 @@ class _HeadingRuleCard extends StatelessWidget {
                 label: const Text('見出しを追加'),
               ),
             ),
+            _ResetDefaultsButton(onPressed: onReset),
           ],
         ),
       ),
@@ -712,6 +779,8 @@ class _GalleryTagPrefixCard extends StatelessWidget {
     required this.prefixes,
     required this.onChanged,
   });
+
+  static const _defaults = ['source/art'];
 
   final List<String> prefixes;
   final ValueChanged<List<String>> onChanged;
@@ -773,6 +842,7 @@ class _GalleryTagPrefixCard extends StatelessWidget {
               label: const Text('タグを追加'),
             ),
           ),
+          _ResetDefaultsButton(onPressed: () => onChanged(_defaults)),
         ],
       ),
     ),
@@ -784,8 +854,11 @@ class _FrontmatterKeyCard extends StatelessWidget {
     required this.title,
     required this.keys,
     required this.onChanged,
+    required this.defaults,
     this.allowEmpty = true,
   });
+
+  final List<String> defaults;
 
   final String title;
   final List<String> keys;
@@ -846,6 +919,11 @@ class _FrontmatterKeyCard extends StatelessWidget {
                 headline: 'キーを追加',
                 leading: const Icon(Icons.add),
                 onTap: () => _addKey(context),
+              ),
+              M3EListItem(
+                headline: '初期設定に戻す',
+                leading: const Icon(Icons.restore),
+                onTap: () => onChanged(defaults),
               ),
             ],
           ),

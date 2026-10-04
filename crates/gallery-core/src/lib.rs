@@ -2399,18 +2399,27 @@ impl CategoryPlan {
         connection: &Connection,
         filter: &str,
     ) -> Result<Option<String>, CoreError> {
-        let parent_path = |connection: &Connection| -> Result<Option<String>, CoreError> {
-            if statement_has_descendant(connection, filter)? {
-                Ok(Some(filter.to_owned()))
-            } else {
-                Ok(filter.rsplit_once('/').map(|(parent, _)| parent.to_owned()))
-            }
-        };
+        // A split group holds tags nested at least SPLIT_DEPTH levels below the
+        // category root, so a prefix filter counts one level deeper than itself.
+        let split_parent =
+            |connection: &Connection, root: &str| -> Result<Option<String>, CoreError> {
+                let relative = filter
+                    .strip_prefix(root)
+                    .map_or(filter, |rest| rest.trim_start_matches('/'));
+                let depth = relative.split('/').count();
+                if statement_has_descendant(connection, filter)? {
+                    Ok((depth + 1 >= SPLIT_DEPTH).then(|| filter.to_owned()))
+                } else if depth >= SPLIT_DEPTH {
+                    Ok(filter.rsplit_once('/').map(|(parent, _)| parent.to_owned()))
+                } else {
+                    Ok(None)
+                }
+            };
         let Some(index) = self.best_rule(filter, true) else {
             let Some((_, split_deep)) = &self.other else {
                 return Ok(None);
             };
-            if *split_deep && let Some(parent) = parent_path(connection)? {
+            if *split_deep && let Some(parent) = split_parent(connection, "")? {
                 return Ok(Some(parent));
             }
             return Ok(Some("@other".to_owned()));
@@ -2418,7 +2427,7 @@ impl CategoryPlan {
         let rule = &self.rules[index];
         if rule.wildcard
             && rule.split_deep
-            && let Some(parent) = parent_path(connection)?
+            && let Some(parent) = split_parent(connection, &rule.prefix)?
             && parent != rule.prefix
             && parent.starts_with(&format!("{}/", rule.prefix))
         {
@@ -2441,7 +2450,7 @@ impl CategoryPlan {
         } else {
             tag
         };
-        if rule.wildcard && rule.split_deep && relative.contains('/') {
+        if rule.wildcard && rule.split_deep && relative.split('/').count() >= SPLIT_DEPTH {
             let (parent, _) = tag.rsplit_once('/')?;
             let shown = parent
                 .strip_prefix(rule.prefix.as_str())
@@ -2477,8 +2486,14 @@ impl CategoryPlan {
     }
 }
 
+/// Tags nested this many levels below a category root move into split groups.
+const SPLIT_DEPTH: usize = 3;
+
 fn other_bucket(name: &str, split_deep: bool, tag: &str) -> CategoryBucket {
-    if split_deep && let Some((parent, _)) = tag.rsplit_once('/') {
+    if split_deep
+        && tag.split('/').count() >= SPLIT_DEPTH
+        && let Some((parent, _)) = tag.rsplit_once('/')
+    {
         return CategoryBucket {
             path: parent.to_owned(),
             display_name: parent.to_owned(),
@@ -3623,7 +3638,7 @@ mod tests {
         fs::create_dir_all(&root).expect("create vault");
         fs::write(
             root.join("one.md"),
-            "---\ntags: [source/art, source/service/pixiv, source/count/pair, loose/topic/deep]\n---\n# Fictional\n",
+            "---\ntags: [source/art, source/service/pixiv/one, source/pixiv, source/count/pair, loose/topic/deep]\n---\n# Fictional\n",
         )
         .expect("write note");
         let database = base.join("index.sqlite");
@@ -3641,7 +3656,13 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(
             titles,
-            ["コンテンツ", "ソース", "ソース / service", "人数", "雑多"]
+            [
+                "コンテンツ",
+                "ソース",
+                "ソース / service/pixiv",
+                "人数",
+                "雑多"
+            ]
         );
         let other = categories.last().expect("other category");
         assert_eq!(other.options[0].full_tag, "loose/topic/deep");

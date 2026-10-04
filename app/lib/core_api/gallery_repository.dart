@@ -71,28 +71,12 @@ class GalleryCategory {
     required this.displayName,
     required this.options,
     required this.count,
-    this.sections = const [],
   });
 
   final String path;
   final String displayName;
   final List<GalleryCategoryOption> options;
   final int? count;
-  final List<GalleryCategorySection> sections;
-}
-
-class GalleryCategorySection {
-  const GalleryCategorySection({
-    required this.path,
-    required this.displayName,
-    required this.count,
-    required this.options,
-  });
-
-  final String path;
-  final String displayName;
-  final int? count;
-  final List<GalleryCategoryOption> options;
 }
 
 class GalleryNote {

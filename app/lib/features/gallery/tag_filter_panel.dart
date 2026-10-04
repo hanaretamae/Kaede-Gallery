@@ -166,36 +166,14 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                   final options = category.options
                       .where(optionMatches)
                       .toList(growable: false);
-                  final sections = category.sections
-                      .map(
-                        (section) => GalleryCategorySection(
-                          path: section.path,
-                          displayName: section.displayName,
-                          count: section.count,
-                          options: section.options
-                              .where(optionMatches)
-                              .toList(growable: false),
-                        ),
-                      )
-                      .where(
-                        (section) =>
-                            tagSearch.isEmpty || section.options.isNotEmpty,
-                      )
-                      .toList(growable: false);
                   return GalleryCategory(
                     path: category.path,
                     displayName: category.displayName,
                     count: category.count,
                     options: options,
-                    sections: sections,
                   );
                 })
-                .where(
-                  (category) =>
-                      category.options.isNotEmpty ||
-                      category.sections.isNotEmpty ||
-                      (tagSearch.isEmpty && category.count != null),
-                )
+                .where((category) => category.options.isNotEmpty)
                 .toList(growable: false);
             final matchingTagPaths = matchingCategories
                 .map((category) => category.path)
@@ -506,18 +484,7 @@ class _CategoryCard extends ConsumerWidget {
                   ? Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        if (category.sections.isNotEmpty)
-                          for (final section in category.sections)
-                            _buildOptionSection(
-                              context,
-                              section.displayName,
-                              section.options,
-                              selectedTags: selected,
-                              allRequiredTags: allRequired,
-                              selectedVirtualFilters: selectedVirtual,
-                              count: section.count,
-                            )
-                        else if (options.isEmpty)
+                        if (options.isEmpty)
                           const Padding(
                             padding: EdgeInsets.symmetric(vertical: 8),
                             child: Text('該当する選択肢がありません'),

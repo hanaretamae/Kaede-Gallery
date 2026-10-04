@@ -97,6 +97,13 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                       .toList(growable: false),
                 ),
               ),
+              onReset: () => _save(
+                context,
+                ref,
+                settings.copyWith(
+                  includedPrefixes: GalleryTagSettings.defaultIncludedPrefixes,
+                ),
+              ),
             ),
             const SizedBox(height: 20),
             Text('フィルターのカテゴリー', style: Theme.of(context).textTheme.titleLarge),
@@ -148,6 +155,13 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                   hiddenPrefixes: settings.hiddenPrefixes
                       .where((item) => item != prefix)
                       .toList(growable: false),
+                ),
+              ),
+              onReset: () => _save(
+                context,
+                ref,
+                settings.copyWith(
+                  hiddenPrefixes: GalleryTagSettings.defaultHiddenPrefixes,
                 ),
               ),
             ),
@@ -236,6 +250,17 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                         ..add(added);
                   await _save(context, ref, settings.copyWith(colors: colors));
                 },
+              ),
+              M3EListItem(
+                headline: '初期設定に戻す',
+                leading: Icon(Icons.restore, color: scheme.primary),
+                onTap: () => _save(
+                  context,
+                  ref,
+                  settings.copyWith(
+                    colors: GalleryTagSettings.defaultTagColors,
+                  ),
+                ),
               ),
             ]),
           ],
@@ -512,8 +537,10 @@ class _TagPrefixList extends StatelessWidget {
     required this.emptyText,
     required this.onAdd,
     required this.onRemove,
+    required this.onReset,
   });
 
+  final VoidCallback onReset;
   final List<String> prefixes;
   final String emptyText;
   final VoidCallback onAdd;
@@ -540,6 +567,11 @@ class _TagPrefixList extends StatelessWidget {
         headline: 'パスを追加',
         leading: Icon(Icons.add, color: scheme.primary),
         onTap: onAdd,
+      ),
+      M3EListItem(
+        headline: '初期設定に戻す',
+        leading: Icon(Icons.restore, color: scheme.primary),
+        onTap: onReset,
       ),
     ]);
   }
