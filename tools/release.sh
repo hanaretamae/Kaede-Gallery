@@ -206,6 +206,8 @@ for system in x86_64-linux aarch64-linux; do
   chmod 755 "$dist_dir/kaede-gallery-$version-linux-$arch"
 done
 
+cp -- LICENSE "$dist_dir/kaede-gallery-LICENSE.txt"
+cp -- THIRD_PARTY_NOTICES.md "$dist_dir/kaede-gallery-THIRD_PARTY_NOTICES.md"
 (cd "$dist_dir" && sha256sum -- kaede-gallery-* > SHA256SUMS)
 
 gh release create "$tag" "$dist_dir"/kaede-gallery-* "$dist_dir/SHA256SUMS" \
