@@ -54,6 +54,13 @@ the other appearance preferences and never changes Vault contents. UI text is
 localized at the Flutter presentation layer; Rust parser/index contracts and
 stored user-provided note/category labels are not translated.
 
+Flutter localization uses `gen-l10n`. The English and Japanese source messages
+are `app/lib/l10n/app_en.arb` and `app/lib/l10n/app_ja.arb`; keep their message
+keys and named placeholders in sync. Run `flutter gen-l10n` from `app/` after
+editing either file. Generated Dart files in `app/lib/l10n/` must not be edited
+by hand. Widgets use `context.l10n`; `AppL10n.current` is only for code that
+cannot receive a `BuildContext`.
+
 Phase 4 delivered a privately sideloaded APK; this does not imply
 store-distribution readiness. Android Vault access targets an ordinary
 user-selected folder, such as one under
@@ -387,10 +394,12 @@ Material 3 surface containers so they contrast with their parent panel. A post
 body containing only empty blockquote markers is not displayed. The appearance
 settings independently select system/light/dark brightness, use of the OS
 Material You system color, and an optional pure-black dark surface style.
-On Linux, dynamic color prefers the standard XDG Desktop Portal
-`org.freedesktop.appearance/accent-color` setting, supporting portal-backed
-desktops such as KDE Plasma. GTK system accent colors are the fallback; if
-neither source is available, the app palette is used. Media
+Windows uses the system accent color through the Windows `dynamic_color`
+plugin. On Linux, dynamic color prefers the standard XDG Desktop Portal
+`org.freedesktop.appearance/accent-color` setting and reapplies the theme when
+the portal emits `SettingChanged`; portal-backed desktops such as KDE Plasma
+are supported. GTK system accent colors are the fallback; if neither source
+is available, the app palette is used. Media
 swipes, horizontal trackpad scrolling, and arrow keys
 change media with overlays shown or hidden. Pinch and zoom/pan do not toggle
 overlays. An explicit full-screen action toggles native display/window

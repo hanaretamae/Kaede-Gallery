@@ -1,17 +1,15 @@
 import 'package:flutter/widgets.dart';
 
+import 'l10n/app_localizations.dart';
+
 /// The user-selectable language. [system] follows the OS: Japanese when the
 /// system language is Japanese, English for every other language.
 enum AppLanguage { system, ja, en }
 
-/// Process-wide UI language used by [tr].
-///
-/// UI strings live next to the widgets that show them as Japanese/English
-/// pairs, so adding a language-specific string never touches a central file.
+/// Resolves the user-selected language and exposes localization to non-widget
+/// code that cannot receive a [BuildContext].
 abstract final class AppL10n {
   static AppLanguage _language = AppLanguage.system;
-
-  static AppLanguage get language => _language;
 
   static void apply(AppLanguage language) => _language = language;
 
@@ -24,19 +22,19 @@ abstract final class AppL10n {
   static bool get _systemIsJapanese =>
       WidgetsBinding.instance.platformDispatcher.locale.languageCode == 'ja';
 
-  static Locale get locale => Locale(isJapanese ? 'ja' : 'en');
+  static Locale? get locale => switch (_language) {
+    AppLanguage.system => null,
+    AppLanguage.ja => const Locale('ja'),
+    AppLanguage.en => const Locale('en'),
+  };
 
-  /// Marks every element dirty so strings read through [tr] are re-evaluated
-  /// without losing navigation or widget state.
-  static void rebuildAll() {
-    void visit(Element element) {
-      element.markNeedsBuild();
-      element.visitChildren(visit);
-    }
+  static Locale get resolvedLocale => Locale(isJapanese ? 'ja' : 'en');
 
-    WidgetsBinding.instance.rootElement?.visitChildren(visit);
-  }
+  static AppLocalizations get current => lookupAppLocalizations(resolvedLocale);
 }
 
-/// Returns [ja] when the app language is Japanese, otherwise [en].
-String tr(String ja, String en) => AppL10n.isJapanese ? ja : en;
+extension AppLocalizationsContext on BuildContext {
+  AppLocalizations get l10n =>
+      Localizations.of<AppLocalizations>(this, AppLocalizations) ??
+      AppL10n.current;
+}

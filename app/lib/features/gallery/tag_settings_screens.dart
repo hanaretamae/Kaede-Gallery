@@ -31,7 +31,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr('タグ設定を保存できませんでした。', 'Couldn\'t save the tag settings.'),
+          message: context.l10n.couldnSaveTheTagSettings,
         );
       }
     }
@@ -42,22 +42,19 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
     final settingsState = ref.watch(galleryTagSettingsProvider);
     return Scaffold(
       appBar: M3EAppBar.top(
-        title: galleryAppBarTitle(context, tr('タグ設定', 'Tag settings')),
+        title: galleryAppBarTitle(context, context.l10n.tagSettings),
         leading: _expressiveBackButton(context),
       ),
       body: settingsState.when(
         loading: () => const Center(child: M3EProgressIndicator.circular()),
-        error: (_, _) => Center(
-          child: Text(
-            tr('タグ設定を読み込めませんでした。', 'Couldn\'t load the tag settings.'),
-          ),
-        ),
+        error: (_, _) =>
+            Center(child: Text(context.l10n.couldnLoadTheTagSettings)),
         data: (settings) => ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             _settingsSectionHeading(
               context,
-              tr('ギャラリー対象タグ', 'Gallery target tags'),
+              context.l10n.galleryTargetTags,
               first: true,
             ),
             _GalleryTagPrefixCard(
@@ -75,15 +72,15 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
             ),
             _settingsSectionHeading(
               context,
-              tr('フィルターに含めるタグ', 'Tags included in filters'),
+              context.l10n.tagsIncludedInFilters,
             ),
             _TagPrefixList(
               prefixes: settings.includedPrefixes,
-              emptyText: tr('フィルター対象のタグはありません', 'There are no filter tags.'),
+              emptyText: context.l10n.thereAreNoFilterTags,
               onAdd: () async {
                 final prefix = await _askPrefix(
                   context,
-                  tr('フィルター対象のタグを追加', 'Add a filter tag'),
+                  context.l10n.addAFilterTag,
                 );
                 if (!context.mounted) return;
                 if (prefix == null || prefix.isEmpty) return;
@@ -113,10 +110,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            _settingsSectionHeading(
-              context,
-              tr('フィルターのカテゴリー', 'Filter categories'),
-            ),
+            _settingsSectionHeading(context, context.l10n.filterCategories),
             _TagCategoryRuleList(
               settings: settings.categories,
               onChanged: (categories) => _save(
@@ -125,14 +119,14 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 settings.copyWith(categories: categories),
               ),
             ),
-            _settingsSectionHeading(context, tr('非表示にするタグ', 'Hidden tags')),
+            _settingsSectionHeading(context, context.l10n.hiddenTags),
             _TagPrefixList(
               prefixes: settings.hiddenPrefixes,
-              emptyText: tr('非表示タグはありません', 'There are no hidden tags.'),
+              emptyText: context.l10n.thereAreNoHiddenTags,
               onAdd: () async {
                 final prefix = await _askPrefix(
                   context,
-                  tr('非表示タグを追加', 'Add a hidden tag'),
+                  context.l10n.addAHiddenTag,
                 );
                 if (!context.mounted) return;
                 if (prefix == null || prefix.isEmpty) return;
@@ -162,7 +156,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            _settingsSectionHeading(context, tr('タグの色', 'Tag colors')),
+            _settingsSectionHeading(context, context.l10n.tagColors),
             _settingsGroup(context, [
               for (final rule in settings.colors)
                 M3EListItem(
@@ -170,9 +164,12 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                   supportingText:
                       '#${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
                   leading: Semantics(
-                    label: tr(
-                      '色 #${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
-                      'Color #${rule.color.toRadixString(16).padLeft(8, '0').substring(2).toUpperCase()}',
+                    label: context.l10n.color(
+                      rule.color
+                          .toRadixString(16)
+                          .padLeft(8, '0')
+                          .substring(2)
+                          .toUpperCase(),
                     ),
                     child: SizedBox.square(
                       dimension: 28,
@@ -189,7 +186,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                     children: [
                       M3EIconButton(
                         variant: M3EIconButtonVariant.standard,
-                        tooltip: tr('色を編集', 'Edit color'),
+                        tooltip: context.l10n.editColor,
                         icon: const Icon(Icons.edit_outlined),
                         onPressed: () async {
                           final updated = await _askColor(
@@ -212,7 +209,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                       ),
                       M3EIconButton(
                         variant: M3EIconButtonVariant.standard,
-                        tooltip: tr('色設定を削除', 'Delete color rule'),
+                        tooltip: context.l10n.deleteColorRule,
                         icon: const Icon(Icons.delete_outline),
                         onPressed: () => _save(
                           context,
@@ -228,7 +225,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                   ),
                 ),
               M3EListItem(
-                headline: tr('色設定を追加', 'Add color rule'),
+                headline: context.l10n.addColorRule,
                 leading: Icon(Icons.add),
                 onTap: () async {
                   final added = await _askColor(context);
@@ -243,7 +240,7 @@ class _TagRulesSettingsScreen extends ConsumerWidget {
                 },
               ),
               M3EListItem(
-                headline: tr('初期設定に戻す', 'Reset to defaults'),
+                headline: context.l10n.resetToDefaults,
                 leading: Icon(Icons.restore),
                 onTap: () => _save(
                   context,
@@ -281,10 +278,7 @@ class _TagCategoryRuleList extends StatelessWidget {
 
   void _notifyDuplicate(BuildContext context) => M3ESnackbar.show(
     context,
-    message: tr(
-      '同じパスのカテゴリーがすでにあります。',
-      'A category with the same path already exists.',
-    ),
+    message: context.l10n.aCategoryWithTheSamePathAlreadyExists,
   );
 
   void _replaceRules(List<GalleryTagCategoryRule> rules) =>
@@ -307,15 +301,12 @@ class _TagCategoryRuleList extends StatelessWidget {
       children: [
         _settingsGroup(context, [
           if (rules.isEmpty)
-            M3EListItem(headline: tr('カテゴリーはありません', 'There are no categories')),
+            M3EListItem(headline: context.l10n.thereAreNoCategories),
           for (final (index, rule) in rules.indexed)
             M3EListItem(
               headline: rule.name,
               supportingText: rule.splitDeep
-                  ? tr(
-                      '${rule.path} ・ 3層目以降を分割',
-                      '${rule.path} · split deeper levels',
-                    )
+                  ? context.l10n.splitDeeperLevels(rule.path)
                   : rule.path,
               onTap: () async {
                 final updated = await _ask(context, initial: rule);
@@ -331,13 +322,13 @@ class _TagCategoryRuleList extends StatelessWidget {
                 children: [
                   M3EIconButton(
                     variant: M3EIconButtonVariant.standard,
-                    tooltip: tr('上へ', 'Move up'),
+                    tooltip: context.l10n.moveUp_467fe2,
                     icon: const Icon(Icons.arrow_upward),
                     onPressed: index == 0 ? null : () => _move(index, -1),
                   ),
                   M3EIconButton(
                     variant: M3EIconButtonVariant.standard,
-                    tooltip: tr('下へ', 'Move down'),
+                    tooltip: context.l10n.moveDown_5f88c6,
                     icon: const Icon(Icons.arrow_downward),
                     onPressed: index == rules.length - 1
                         ? null
@@ -345,7 +336,7 @@ class _TagCategoryRuleList extends StatelessWidget {
                   ),
                   M3EIconButton(
                     variant: M3EIconButtonVariant.standard,
-                    tooltip: tr('削除', 'Delete'),
+                    tooltip: context.l10n.delete,
                     icon: const Icon(Icons.delete_outline),
                     onPressed: () => _replaceRules([...rules]..removeAt(index)),
                   ),
@@ -354,7 +345,7 @@ class _TagCategoryRuleList extends StatelessWidget {
             ),
           if (rules.length < GalleryTagCategorySettings.maxCategories)
             M3EListItem(
-              headline: tr('カテゴリーを追加', 'Add category'),
+              headline: context.l10n.addCategory,
               leading: Icon(Icons.add),
               onTap: () async {
                 final added = await _ask(context);
@@ -367,7 +358,7 @@ class _TagCategoryRuleList extends StatelessWidget {
               },
             ),
           M3EListItem(
-            headline: tr('初期設定に戻す', 'Reset to defaults'),
+            headline: context.l10n.resetToDefaults,
             leading: Icon(Icons.restore),
             onTap: () => onChanged(
               settings.copyWith(
@@ -377,28 +368,28 @@ class _TagCategoryRuleList extends StatelessWidget {
           ),
         ]),
         const SizedBox(height: 12),
-        _settingsSectionHeading(context, tr('その他カテゴリー', 'Other category')),
+        _settingsSectionHeading(context, context.l10n.otherCategory),
         _settingsGroup(context, [
           _expressiveSwitchTile(
-            title: tr('その他カテゴリーを表示', 'Show other category'),
+            title: context.l10n.showOtherCategory,
             value: other.enabled,
             onChanged: (value) => onChanged(
               settings.copyWith(other: other.copyWith(enabled: value)),
             ),
           ),
           M3EListItem(
-            headline: tr('カテゴリー名', 'Category name'),
+            headline: context.l10n.categoryName,
             supportingText: other.name,
             leading: Icon(Icons.edit_outlined),
             onTap: () async {
               final name = await M3EDialog.show<String>(
                 context,
                 dialog: _TagPrefixDialog(
-                  title: tr('その他カテゴリーの名前', 'Other category name'),
-                  label: tr('カテゴリー名', 'Category name'),
-                  hint: tr('その他', 'Other'),
+                  title: context.l10n.otherCategoryName,
+                  label: context.l10n.categoryName,
+                  hint: context.l10n.other,
                   normalizeTagPrefix: false,
-                  confirmLabel: tr('保存', 'Save'),
+                  confirmLabel: context.l10n.save,
                 ),
               );
               if (!context.mounted || name == null) return;
@@ -406,21 +397,15 @@ class _TagCategoryRuleList extends StatelessWidget {
             },
           ),
           _expressiveSwitchTile(
-            title: tr(
-              '3層目以降のタグを自動で分ける',
-              'Automatically split tags after the third level',
-            ),
-            subtitle: tr(
-              '親タグごとに別のカテゴリーとして表示します。',
-              'Show them as separate categories for each parent tag.',
-            ),
+            title: context.l10n.automaticallySplitTagsAfterTheThirdLevel,
+            subtitle: context.l10n.showThemAsSeparateCategoriesForEachParentTag,
             value: other.splitDeep,
             onChanged: (value) => onChanged(
               settings.copyWith(other: other.copyWith(splitDeep: value)),
             ),
           ),
           M3EListItem(
-            headline: tr('初期設定に戻す', 'Reset to defaults'),
+            headline: context.l10n.resetToDefaults,
             leading: Icon(Icons.restore),
             onTap: () => onChanged(
               settings.copyWith(other: const GalleryOtherCategorySettings()),
@@ -472,10 +457,8 @@ class _TagCategoryRuleDialogState extends State<_TagCategoryRuleDialog> {
         utf8.encode(name).length > 128 ||
         !GalleryTagCategoryRule.isValidCategoryPath(path)) {
       setState(
-        () => validationError = tr(
-          '名前と、source/art または source/count/* 形式のパスを入力してください。',
-          'Enter a name and a path in source/art or source/count/* format.',
-        ),
+        () => validationError =
+            context.l10n.enterANameAndAPathInSourceArtOrSourceCountFormat,
       );
       return;
     }
@@ -493,22 +476,22 @@ class _TagCategoryRuleDialogState extends State<_TagCategoryRuleDialog> {
     final isWildcard = pathController.text.trim().endsWith('*');
     return M3EDialog(
       title: widget.initial == null
-          ? tr('カテゴリーを追加', 'Add category')
-          : tr('カテゴリーを編集', 'Edit category'),
+          ? context.l10n.addCategory
+          : context.l10n.editCategory,
       content: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
           M3ETextField(
             controller: nameController,
             autofocus: true,
-            label: tr('カテゴリー名', 'Category name'),
-            placeholder: tr('人数', 'People'),
+            label: context.l10n.categoryName,
+            placeholder: context.l10n.people,
             variant: M3ETextFieldVariant.outlined,
           ),
           const SizedBox(height: 12),
           M3ETextField(
             controller: pathController,
-            label: tr('タグパス', 'Tag path'),
+            label: context.l10n.tagPath,
             placeholder: 'source/count/*',
             errorText: validationError,
             variant: M3ETextFieldVariant.outlined,
@@ -519,10 +502,7 @@ class _TagCategoryRuleDialogState extends State<_TagCategoryRuleDialog> {
             children: [
               Expanded(
                 child: Text(
-                  tr(
-                    '3層目以降のタグを自動で分ける',
-                    'Automatically split tags after the third level',
-                  ),
+                  context.l10n.automaticallySplitTagsAfterTheThirdLevel,
                 ),
               ),
               M3ESwitch(
@@ -530,10 +510,8 @@ class _TagCategoryRuleDialogState extends State<_TagCategoryRuleDialog> {
                 onChanged: isWildcard
                     ? (value) => setState(() => splitDeep = value)
                     : null,
-                semanticLabel: tr(
-                  '3層目以降のタグを自動で分ける',
-                  'Automatically split tags after the third level',
-                ),
+                semanticLabel:
+                    context.l10n.automaticallySplitTagsAfterTheThirdLevel,
               ),
             ],
           ),
@@ -542,9 +520,9 @@ class _TagCategoryRuleDialogState extends State<_TagCategoryRuleDialog> {
       actions: [
         M3EButton.text(
           onPressed: () => Navigator.of(context).pop(),
-          child: Text(tr('キャンセル', 'Cancel')),
+          child: Text(context.l10n.cancel),
         ),
-        M3EButton.filled(onPressed: _submit, child: Text(tr('保存', 'Save'))),
+        M3EButton.filled(onPressed: _submit, child: Text(context.l10n.save)),
       ],
     );
   }
@@ -573,21 +551,21 @@ class _TagPrefixList extends StatelessWidget {
       else
         for (final prefix in prefixes)
           M3EListItem(
-            headline: prefix == '*' ? tr('すべてのタグ (*)', 'All tags (*)') : prefix,
+            headline: prefix == '*' ? context.l10n.allTags : prefix,
             trailing: M3EIconButton(
               variant: M3EIconButtonVariant.standard,
-              tooltip: tr('削除', 'Delete'),
+              tooltip: context.l10n.delete,
               icon: const Icon(Icons.delete_outline),
               onPressed: () => onRemove(prefix),
             ),
           ),
       M3EListItem(
-        headline: tr('パスを追加', 'Add path'),
+        headline: context.l10n.addPath,
         leading: Icon(Icons.add),
         onTap: onAdd,
       ),
       M3EListItem(
-        headline: tr('初期設定に戻す', 'Reset to defaults'),
+        headline: context.l10n.resetToDefaults,
         leading: Icon(Icons.restore),
         onTap: onReset,
       ),
@@ -635,7 +613,7 @@ class _TagPrefixDialogState extends State<_TagPrefixDialog> {
     content: M3ETextField(
       controller: controller,
       autofocus: true,
-      label: widget.label == 'タグパス' ? tr('タグパス', 'Tag path') : widget.label,
+      label: widget.label == 'タグパス' ? context.l10n.tagPath : widget.label,
       placeholder: widget.hint,
       variant: M3ETextFieldVariant.outlined,
       onChanged: (_) => setState(() {}),
@@ -648,14 +626,14 @@ class _TagPrefixDialogState extends State<_TagPrefixDialog> {
     actions: [
       M3EButton.text(
         onPressed: () => Navigator.of(context).pop(),
-        child: Text(tr('キャンセル', 'Cancel')),
+        child: Text(context.l10n.cancel),
       ),
       M3EButton.filled(
         onPressed: _normalizedPrefix.isEmpty
             ? null
             : () => Navigator.of(context).pop(_normalizedPrefix),
         child: Text(
-          widget.confirmLabel == '追加' ? tr('追加', 'Add') : widget.confirmLabel,
+          widget.confirmLabel == '追加' ? context.l10n.add : widget.confirmLabel,
         ),
       ),
     ],
@@ -710,10 +688,8 @@ class _TagColorRuleDialogState extends State<_TagColorRuleDialog> {
     final colorText = colorController.text.trim();
     if (prefix.isEmpty || !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(colorText)) {
       setState(
-        () => validationError = tr(
-          'タグパスと #RRGGBB 形式の色を入力してください。',
-          'Enter a tag path and a color in #RRGGBB format.',
-        ),
+        () =>
+            validationError = context.l10n.enterATagPathAndAColorInRRGGBBFormat,
       );
       return;
     }
@@ -728,15 +704,15 @@ class _TagColorRuleDialogState extends State<_TagColorRuleDialog> {
   @override
   Widget build(BuildContext context) => M3EDialog(
     title: widget.initial == null
-        ? tr('タグ色を追加', 'Add tag color')
-        : tr('タグ色を編集', 'Edit tag color'),
+        ? context.l10n.addTagColor
+        : context.l10n.editTagColor,
     content: Column(
       mainAxisSize: MainAxisSize.min,
       children: [
         M3ETextField(
           controller: prefixController,
           autofocus: true,
-          label: tr('タグパス', 'Tag path'),
+          label: context.l10n.tagPath,
           placeholder: 'source/type',
           variant: M3ETextFieldVariant.outlined,
         ),
@@ -744,7 +720,7 @@ class _TagColorRuleDialogState extends State<_TagColorRuleDialog> {
         M3ETextField(
           controller: colorController,
           textCapitalization: TextCapitalization.characters,
-          label: tr('色', 'Color'),
+          label: context.l10n.color_eac664,
           placeholder: '#RRGGBB',
           errorText: validationError,
           variant: M3ETextFieldVariant.outlined,
@@ -754,9 +730,9 @@ class _TagColorRuleDialogState extends State<_TagColorRuleDialog> {
     actions: [
       M3EButton.text(
         onPressed: () => Navigator.of(context).pop(),
-        child: Text(tr('キャンセル', 'Cancel')),
+        child: Text(context.l10n.cancel),
       ),
-      M3EButton.filled(onPressed: _submit, child: Text(tr('保存', 'Save'))),
+      M3EButton.filled(onPressed: _submit, child: Text(context.l10n.save)),
     ],
   );
 }

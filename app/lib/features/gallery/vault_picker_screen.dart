@@ -78,10 +78,7 @@ class _VaultPickerContent extends StatelessWidget {
                   ),
                   const mui.SizedBox(height: 8),
                   mui.Text(
-                    tr(
-                      'Obsidian Vault のメディアをオフラインで閲覧できます。',
-                      'Browse media from your Obsidian Vault offline.',
-                    ),
+                    context.l10n.browseMediaFromYourObsidianVaultOffline,
                     textAlign: mui.TextAlign.center,
                     style: expressiveTheme.typography.baseline.bodyLarge
                         .copyWith(
@@ -92,8 +89,8 @@ class _VaultPickerContent extends StatelessWidget {
                   M3EButton.icon(
                     onPressed: onChooseVault,
                     icon: const mui.Icon(mui.Icons.folder_open),
-                    label: mui.Text(tr('Vault を選択', 'Choose Vault')),
-                    semanticLabel: tr('Vault を選択', 'Choose Vault'),
+                    label: mui.Text(context.l10n.chooseVault),
+                    semanticLabel: context.l10n.chooseVault,
                   ),
                 ],
               ),
@@ -108,8 +105,8 @@ class _VaultPickerContent extends StatelessWidget {
               onPressed: onShowNoteExample,
               style: M3EButtonStyle.tonal,
               icon: const mui.Icon(mui.Icons.description_outlined),
-              label: mui.Text(tr('ノート形式の例を見る', 'View note format example')),
-              semanticLabel: tr('ノート形式の例を見る', 'View note format example'),
+              label: mui.Text(context.l10n.viewNoteFormatExample),
+              semanticLabel: context.l10n.viewNoteFormatExample,
             ),
           ),
         ),

@@ -414,9 +414,7 @@ class NativeVaultPlatform implements VaultPlatform {
   @override
   Future<String?> chooseVault() => Platform.isAndroid
       ? safAccess.chooseVault()
-      : getDirectoryPath(
-          confirmButtonText: tr('この Vault を選択', 'Select this vault'),
-        );
+      : getDirectoryPath(confirmButtonText: AppL10n.current.selectThisVault);
 
   @override
   Future<GalleryPaths> galleryPaths() async {

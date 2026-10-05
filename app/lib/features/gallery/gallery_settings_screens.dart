@@ -20,21 +20,23 @@ class _GallerySettingsScreen extends ConsumerWidget {
         const ['source/'];
     return Scaffold(
       appBar: M3EAppBar.top(
-        title: galleryAppBarTitle(context, tr('設定', 'Settings')),
+        title: galleryAppBarTitle(context, context.l10n.settings),
         leading: _expressiveBackButton(context),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
-          _settingsSectionHeading(context, tr('外観', 'Appearance'), first: true),
+          _settingsSectionHeading(
+            context,
+            context.l10n.appearance,
+            first: true,
+          ),
           const _AppearanceSettings(),
           _settingsGroup(context, [
             M3EListItem(
-              headline: tr('ページングと一覧表示', 'Paging and list display'),
-              supportingText: tr(
-                '一覧の読み込み単位や件数、タイルの表示を設定します',
-                'Configure list loading size, item counts, and tile display.',
-              ),
+              headline: context.l10n.pagingAndListDisplay,
+              supportingText:
+                  context.l10n.configureListLoadingSizeItemCountsAndTileDisplay,
               leading: _settingsIcon(
                 context,
                 Icons.view_agenda_outlined,
@@ -47,28 +49,28 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
           ]),
-          _settingsSectionHeading(context, tr('保管庫', 'Vault')),
+          _settingsSectionHeading(context, context.l10n.vault),
           _settingsGroup(context, [
             M3EListItem(
-              headline: tr('選択中の Vault', 'Selected Vault'),
+              headline: context.l10n.selectedVault,
               supportingText: vaultDisplayName(session.vaultPath),
               leading: Icon(Icons.folder_outlined),
               trailing: M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: tr('Vault を切り替え', 'Switch Vault'),
+                tooltip: context.l10n.switchVault,
                 icon: const Icon(Icons.folder_open),
                 onPressed: () =>
                     ref.read(vaultSessionProvider.notifier).chooseVault(),
               ),
             ),
             M3EListItem(
-              headline: tr('確認できなかった項目', 'Items that could not be checked'),
+              headline: context.l10n.itemsThatCouldNotBeChecked,
               supportingText: warnings == 0
-                  ? tr('ありません', 'None')
-                  : tr(
-                      '$warnings 件。内容を確認できないため、ギャラリー対象かは判定できません。',
-                      '$warnings items. Their contents could not be checked, so we cannot determine whether they belong in the gallery.',
-                    ),
+                  ? context.l10n.none
+                  : context.l10n
+                        .itemsTheirContentsCouldNotBeCheckedSoWeCannotDet(
+                          warnings,
+                        ),
               leading: Icon(
                 warnings > 0
                     ? Icons.warning_amber_rounded
@@ -82,15 +84,12 @@ class _GallerySettingsScreen extends ConsumerWidget {
                 children: [
                   M3EIconButton(
                     variant: M3EIconButtonVariant.standard,
-                    tooltip: tr('確認できなかった項目の詳細', 'Details of unchecked items'),
+                    tooltip: context.l10n.detailsOfUncheckedItems,
                     icon: const Icon(Icons.info_outline),
                     onPressed: () => M3EDialog.show<void>(
                       context,
                       dialog: M3EDialog(
-                        title: tr(
-                          '確認できなかった項目の詳細',
-                          'Details of unchecked items',
-                        ),
+                        title: context.l10n.detailsOfUncheckedItems,
                         content: SingleChildScrollView(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -98,68 +97,46 @@ class _GallerySettingsScreen extends ConsumerWidget {
                             children: [
                               Text(
                                 warnings == 0
-                                    ? tr(
-                                        '今回の走査では確認できなかった項目はありません。',
-                                        'This scan found no unchecked items.',
-                                      )
-                                    : tr(
-                                        '今回の走査では $warnings 件を確認できませんでした。',
-                                        'This scan could not check $warnings items.',
+                                    ? context.l10n.thisScanFoundNoUncheckedItems
+                                    : context.l10n.thisScanCouldNotCheckItems(
+                                        warnings,
                                       ),
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                tr(
-                                  '確認できない理由の例',
-                                  'Examples of why items could not be checked',
-                                ),
+                                context
+                                    .l10n
+                                    .examplesOfWhyItemsCouldNotBeChecked,
                                 style: TextStyle(fontWeight: FontWeight.w600),
                               ),
                               const SizedBox(height: 6),
                               Text(
-                                tr(
-                                  '・ファイルやフォルダーを読み取れない\n'
-                                      '・ノートの文字コードが UTF-8 ではない\n'
-                                      '・YAML の書式を解析できない\n'
-                                      '・ノートのサイズやタグ数が上限を超えている',
-                                  '• Files or folders cannot be read\n'
-                                      '• The note encoding is not UTF-8\n'
-                                      '• The YAML format cannot be parsed\n'
-                                      '• The note size or tag count exceeds the limit',
-                                ),
+                                context
+                                    .l10n
+                                    .filesOrFoldersCannotBeReadTheNoteEncodingIsNotUT,
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                tr(
-                                  'これらはギャラリー対象外と確定した項目ではありません。'
-                                      'ノート内のタグを確認できないため、対象かどうかを判定できず、'
-                                      '一覧にも追加していません。',
-                                  'These items are not confirmed to be outside the gallery. '
-                                      'Because we could not inspect tags inside the notes, we could not determine whether they qualify, '
-                                      'so they were not added to the list.',
-                                ),
+                                context
+                                    .l10n
+                                    .theseItemsAreNotConfirmedToBeOutsideTheGalleryBe,
                               ),
                               const SizedBox(height: 8),
                               Text(
                                 galleryTagPrefixes.isEmpty
-                                    ? tr(
-                                        'ギャラリー対象タグが未設定のため、正常に読み取れたノートも対象外です。',
-                                        'No gallery target tags are configured, so even notes that were read successfully are excluded.',
-                                      )
-                                    : tr(
-                                        '正常に読み取れたノートのうち、'
-                                            '${galleryTagPrefixes.join('・')} タグがないものは対象外です。',
-                                        'Among notes that were read successfully, those without the ${galleryTagPrefixes.join('・')} tag are excluded.',
-                                      ),
+                                    ? context
+                                          .l10n
+                                          .noGalleryTargetTagsAreConfiguredSoEvenNotesThatW
+                                    : context.l10n
+                                          .amongNotesThatWereReadSuccessfullyThoseWithoutTh(
+                                            galleryTagPrefixes.join('・'),
+                                          ),
                               ),
                               const SizedBox(height: 16),
                               Text(
-                                tr(
-                                  '具体的な項目名やノートの内容はこの画面に表示しません。'
-                                      'アクセス権やファイルの状態を確認してから再走査してください。',
-                                  'Specific item names and note contents are not shown on this screen. '
-                                      'Check access permissions and file status, then rescan.',
-                                ),
+                                context
+                                    .l10n
+                                    .specificItemNamesAndNoteContentsAreNotShownOnThi,
                               ),
                             ],
                           ),
@@ -167,7 +144,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
                         actions: [
                           M3EButton.text(
                             onPressed: () => Navigator.of(context).pop(),
-                            child: Text(tr('閉じる', 'Close')),
+                            child: Text(context.l10n.close),
                           ),
                         ],
                       ),
@@ -175,7 +152,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
                   ),
                   M3EIconButton(
                     variant: M3EIconButtonVariant.standard,
-                    tooltip: tr('再走査', 'Rescan'),
+                    tooltip: context.l10n.rescan,
                     icon: const Icon(Icons.refresh),
                     onPressed: () =>
                         ref.read(vaultSessionProvider.notifier).rescan(),
@@ -184,14 +161,12 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
           ]),
-          _settingsSectionHeading(context, tr('ノート', 'Notes')),
+          _settingsSectionHeading(context, context.l10n.notes),
           _settingsGroup(context, [
             M3EListItem(
-              headline: tr('ノート構造と表示', 'Note structure and display'),
-              supportingText: tr(
-                'ノートの項目順や見出しの読み取り、一覧表示を設定します',
-                'Configure note item order, heading parsing, and list display.',
-              ),
+              headline: context.l10n.noteStructureAndDisplay,
+              supportingText:
+                  context.l10n.configureNoteItemOrderHeadingParsingAndListDispl,
               leading: _settingsIcon(
                 context,
                 Icons.account_tree_outlined,
@@ -204,11 +179,9 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
             M3EListItem(
-              headline: tr('タグ設定', 'Tag settings'),
-              supportingText: tr(
-                'ギャラリー対象タグ、絞り込み、表示色を設定します',
-                'Configure gallery target tags, filters, and display colors.',
-              ),
+              headline: context.l10n.tagSettings,
+              supportingText:
+                  context.l10n.configureGalleryTargetTagsFiltersAndDisplayColor,
               leading: _settingsIcon(context, Icons.label_outline, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -217,10 +190,10 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
           ]),
-          _settingsSectionHeading(context, tr('このアプリについて', 'About this app')),
+          _settingsSectionHeading(context, context.l10n.aboutThisApp),
           _settingsGroup(context, [
             M3EListItem(
-              headline: tr('情報とライセンス', 'Information and licenses'),
+              headline: context.l10n.informationAndLicenses,
               leading: _settingsIcon(context, Icons.info_outline, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -229,7 +202,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
             M3EListItem(
-              headline: tr('インポート・エクスポート・リセット', 'Import, export, and reset'),
+              headline: context.l10n.importExportAndReset,
               leading: _settingsIcon(context, Icons.storage_outlined, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -238,7 +211,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
               ),
             ),
             M3EListItem(
-              headline: tr('ヘルプと使い方', 'Help and how to use'),
+              headline: context.l10n.helpAndHowToUse,
               leading: _settingsIcon(context, Icons.help_outline, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
@@ -327,7 +300,7 @@ class _PaginationSettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr('ページング設定を保存できませんでした。', 'Could not save paging settings.'),
+          message: context.l10n.couldNotSavePagingSettings,
         );
       }
     }
@@ -338,23 +311,19 @@ class _PaginationSettingsScreen extends ConsumerWidget {
     final state = ref.watch(galleryTagSettingsProvider);
     return Scaffold(
       appBar: M3EAppBar.top(
-        title: galleryAppBarTitle(
-          context,
-          tr('ページングと一覧表示', 'Paging and list display'),
-        ),
+        title: galleryAppBarTitle(context, context.l10n.pagingAndListDisplay),
         leading: _expressiveBackButton(context),
       ),
       body: state.when(
         loading: () => const Center(child: M3EProgressIndicator.circular()),
-        error: (_, _) => Center(
-          child: Text(tr('一覧設定を読み込めませんでした。', 'Could not load list settings.')),
-        ),
+        error: (_, _) =>
+            Center(child: Text(context.l10n.couldNotLoadListSettings)),
         data: (settings) => ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
           children: [
             _settingsSectionHeading(
               context,
-              tr('一覧表示', 'List display'),
+              context.l10n.listDisplay,
               first: true,
             ),
             _PaginationSettingsCard(
@@ -379,7 +348,7 @@ class _GalleryHelpScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: M3EAppBar.top(
-      title: galleryAppBarTitle(context, tr('ヘルプと使い方', 'Help and how to use')),
+      title: galleryAppBarTitle(context, context.l10n.helpAndHowToUse),
       leading: _expressiveBackButton(context),
     ),
     body: ListView(
@@ -388,27 +357,18 @@ class _GalleryHelpScreen extends StatelessWidget {
         _settingsGroup(context, [
           _helpItem(
             icon: Icons.link,
-            title: tr('関連ノート', 'Related notes'),
-            body: tr(
-              '関連見出し内の Markdown link / image link と Obsidian wikilink / embed は、Vault内のノートを指していればタップして詳細を開けます。',
-              'Markdown links / image links and Obsidian wikilinks / embeds inside related headings can be tapped to open details when they point to notes in the Vault.',
-            ),
+            title: context.l10n.relatedNotes,
+            body: context.l10n.markdownLinksImageLinksAndObsidianWikilinksEmbed,
           ),
           _helpItem(
             icon: Icons.tune,
-            title: tr('ノート構造', 'Note structure'),
-            body: tr(
-              '項目順の説明アイコンで読み取り方法を確認できます。見出しやFrontmatterキーなど変更できる設定は、各項目の設定ボタンにまとめています。',
-              "Use the info icons in item order to check how each section is read. Settings that can be changed, such as headings and Frontmatter keys, are grouped under each section's settings button.",
-            ),
+            title: context.l10n.noteStructure,
+            body: context.l10n.useTheInfoIconsInItemOrderToCheckHowEachSectionI,
           ),
           _helpItem(
             icon: Icons.search,
-            title: tr('検索と絞り込み', 'Search and filtering'),
-            body: tr(
-              'ノート検索は名前・パスに加えて #タグ、-#タグ、&#タグに対応します。下のタグ検索は絞り込み候補の表示だけを絞ります。',
-              'Note search supports names and paths, plus #tag, -#tag, and &#tag. The tag search below only narrows the displayed filter candidates.',
-            ),
+            title: context.l10n.searchAndFiltering,
+            body: context.l10n.noteSearchSupportsNamesAndPathsPlusTagTagAndTagT,
           ),
         ]),
       ],
@@ -435,17 +395,17 @@ class _AboutScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: M3EAppBar.top(
-        title: galleryAppBarTitle(context, tr('このアプリについて', 'About this app')),
+        title: galleryAppBarTitle(context, context.l10n.aboutThisApp),
         leading: _expressiveBackButton(context),
       ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
         children: [
           _AboutHero(version: _version),
-          _settingsSectionHeading(context, tr('情報', 'Information')),
+          _settingsSectionHeading(context, context.l10n.information),
           _settingsGroup(context, [
             M3EListItem(
-              headline: tr('オープンソースライセンス', 'Open-source licenses'),
+              headline: context.l10n.openSourceLicenses,
               leading: const Icon(Icons.article_outlined),
               onTap: () => showLicensePage(
                 context: context,
@@ -454,7 +414,7 @@ class _AboutScreen extends StatelessWidget {
               ),
             ),
             M3EListItem(
-              headline: tr('GitHub リポジトリ', 'GitHub repository'),
+              headline: context.l10n.githubRepository,
               supportingText: _repositoryUrl,
               leading: Icon(Icons.open_in_new),
               onTap: () => _openExternalUri(context, Uri.parse(_repositoryUrl)),
@@ -489,7 +449,7 @@ class _DataSettingsScreen extends ConsumerWidget {
         if (saved && context.mounted) {
           M3ESnackbar.show(
             context,
-            message: tr('設定をJSONで保存しました。', 'Settings were saved as JSON.'),
+            message: context.l10n.settingsWereSavedAsJSON,
           );
         }
         return;
@@ -506,10 +466,8 @@ class _DataSettingsScreen extends ConsumerWidget {
         if (context.mounted) {
           M3ESnackbar.show(
             context,
-            message: tr(
-              'Vault 内には保存できません。別の保存先を選択してください。',
-              'Cannot save inside the Vault. Choose a different destination.',
-            ),
+            message:
+                context.l10n.cannotSaveInsideTheVaultChooseADifferentDestinat,
           );
         }
         return;
@@ -518,27 +476,22 @@ class _DataSettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr('設定をJSONで保存しました。', 'Settings were saved as JSON.'),
+          message: context.l10n.settingsWereSavedAsJSON,
         );
       }
     } on FileSystemException {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            '設定をJSONに保存できませんでした。',
-            'Could not save settings to JSON.',
-          ),
+          message: context.l10n.couldNotSaveSettingsToJSON,
         );
       }
     } on FormatException {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            '設定を読み取れないため、JSONに保存できませんでした。',
-            'Could not save to JSON because the settings could not be read.',
-          ),
+          message:
+              context.l10n.couldNotSaveToJSONBecauseTheSettingsCouldNotBeRe,
         );
       }
     } on PlatformException catch (error) {
@@ -546,14 +499,8 @@ class _DataSettingsScreen extends ConsumerWidget {
         M3ESnackbar.show(
           context,
           message: error.code == 'VAULT_READ_ONLY'
-              ? tr(
-                  'Vault 内には保存できません。別の保存先を選択してください。',
-                  'Cannot save inside the Vault. Choose a different destination.',
-                )
-              : tr(
-                  '設定ファイルの保存先を開けませんでした。',
-                  'Could not open the destination for the settings file.',
-                ),
+              ? context.l10n.cannotSaveInsideTheVaultChooseADifferentDestinat
+              : context.l10n.couldNotOpenTheDestinationForTheSettingsFile,
         );
       }
     }
@@ -592,16 +539,13 @@ class _DataSettingsScreen extends ConsumerWidget {
       if (metadata.type != FileSystemEntityType.file ||
           metadata.size > 1024 * 1024) {
         throw FormatException(
-          tr(
-            '設定JSONが大きすぎるか、通常ファイルではありません。',
-            'The settings JSON is too large or is not a regular file.',
-          ),
+          AppL10n.current.theSettingsJSONIsTooLargeOrIsNotARegularFile,
         );
       }
       final decoded = jsonDecode(await file.readAsString());
       if (decoded is! Map<String, dynamic> || decoded['version'] != 1) {
         throw FormatException(
-          tr('未対応の設定JSONです。', 'This settings JSON format is not supported.'),
+          AppL10n.current.thisSettingsJSONFormatIsNotSupported,
         );
       }
       final appearanceValue = decoded['appearance'];
@@ -609,10 +553,7 @@ class _DataSettingsScreen extends ConsumerWidget {
       if (appearanceValue is! Map<String, dynamic> ||
           tagsValue is! Map<String, dynamic>) {
         throw FormatException(
-          tr(
-            '設定JSONに必要な項目がありません。',
-            'The settings JSON is missing required fields.',
-          ),
+          AppL10n.current.theSettingsJSONIsMissingRequiredFields,
         );
       }
       final appearance = GalleryAppearance.fromJson(appearanceValue);
@@ -623,19 +564,13 @@ class _DataSettingsScreen extends ConsumerWidget {
           .updateAppearance(appearance);
       await ref.read(vaultSessionProvider.notifier).rescan();
       if (context.mounted) {
-        M3ESnackbar.show(
-          context,
-          message: tr('設定をインポートしました。', 'Settings were imported.'),
-        );
+        M3ESnackbar.show(context, message: context.l10n.settingsWereImported);
       }
     } on FileSystemException {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            '設定ファイルを読み書きできませんでした。',
-            'Could not read or write the settings file.',
-          ),
+          message: context.l10n.couldNotReadOrWriteTheSettingsFile,
         );
       }
     } on FormatException catch (error) {
@@ -646,14 +581,14 @@ class _DataSettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr('設定ファイルを開けませんでした。', 'Could not open the settings file.'),
+          message: context.l10n.couldNotOpenTheSettingsFile,
         );
       }
     } on StateError {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr('設定が初期化されていません。', 'Settings have not been initialized.'),
+          message: context.l10n.settingsHaveNotBeenInitialized,
         );
       }
     }
@@ -663,21 +598,18 @@ class _DataSettingsScreen extends ConsumerWidget {
     final reset = await M3EDialog.show<bool>(
       context,
       dialog: M3EDialog(
-        title: tr('設定をリセット', 'Reset settings'),
+        title: context.l10n.resetSettings,
         content: Text(
-          tr(
-            '外観・タグ・ノート構造の設定をすべて既定値に戻します。Vault内のノートは変更しません。',
-            'Restore all appearance, tag, and note structure settings to their defaults. Notes inside the Vault will not be changed.',
-          ),
+          context.l10n.restoreAllAppearanceTagAndNoteStructureSettingsT,
         ),
         actions: [
           M3EButton.text(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('キャンセル', 'Cancel')),
+            child: Text(context.l10n.cancel),
           ),
           M3EButton.filled(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('既定値に戻す', 'Restore defaults')),
+            child: Text(context.l10n.restoreDefaults),
           ),
         ],
       ),
@@ -694,18 +626,12 @@ class _DataSettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            'すべての設定を既定値に戻しました。',
-            'All settings were restored to their defaults.',
-          ),
+          message: context.l10n.allSettingsWereRestoredToTheirDefaults,
         );
       }
     } on FileSystemException {
       if (context.mounted) {
-        M3ESnackbar.show(
-          context,
-          message: tr('設定をリセットできませんでした。', 'Could not reset settings.'),
-        );
+        M3ESnackbar.show(context, message: context.l10n.couldNotResetSettings);
       }
     }
   }
@@ -716,31 +642,25 @@ class _DataSettingsScreen extends ConsumerWidget {
     VaultSession session,
   ) async {
     final isSafVault = session.vaultPath.startsWith('content://');
-    final vaultAccessText = isSafVault
-        ? tr('と読み取りアクセス権', ' and read permission')
-        : '';
+    final vaultAccessText = isSafVault ? context.l10n.andReadPermission : '';
     final confirmed = await M3EDialog.show<bool>(
       context,
       dialog: M3EDialog(
-        title: tr('この Vault を忘れる', 'Forget this Vault'),
+        title: context.l10n.forgetThisVault,
         content: Text(
-          tr(
-            '${vaultDisplayName(session.vaultPath)} のアプリ内インデックス、キャッシュ、選択情報'
-                '$vaultAccessTextを削除します。'
-                'Vault 内のファイルと外観・タグなどのアプリ設定は変更しません。',
-            '${vaultDisplayName(session.vaultPath)}\'s in-app index, cache, and selection data'
-                '$vaultAccessText will be removed.'
-                ' Files inside the Vault and app settings such as appearance and tags will not be changed.',
+          context.l10n.inAppIndexCacheAndSelectionDataWillBeRemovedFile(
+            vaultDisplayName(session.vaultPath),
+            vaultAccessText,
           ),
         ),
         actions: [
           M3EButton.text(
             onPressed: () => Navigator.of(context).pop(false),
-            child: Text(tr('キャンセル', 'Cancel')),
+            child: Text(context.l10n.cancel),
           ),
           M3EButton.filled(
             onPressed: () => Navigator.of(context).pop(true),
-            child: Text(tr('忘れる', 'Forget')),
+            child: Text(context.l10n.forget),
           ),
         ],
       ),
@@ -755,20 +675,14 @@ class _DataSettingsScreen extends ConsumerWidget {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            'Vault のアプリ内データを削除できませんでした。もう一度お試しください。',
-            "Could not delete the Vault's in-app data. Please try again.",
-          ),
+          message: context.l10n.couldNotDeleteTheVaultSInAppDataPleaseTryAgain,
         );
       }
     } on StateError {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            'Vault のアプリ内データを削除できませんでした。もう一度お試しください。',
-            "Could not delete the Vault's in-app data. Please try again.",
-          ),
+          message: context.l10n.couldNotDeleteTheVaultSInAppDataPleaseTryAgain,
         );
       }
     }
@@ -779,7 +693,7 @@ class _DataSettingsScreen extends ConsumerWidget {
     final session = ref.watch(vaultSessionProvider).asData?.value;
     return Scaffold(
       appBar: M3EAppBar.top(
-        title: galleryAppBarTitle(context, tr('アプリ', 'App')),
+        title: galleryAppBarTitle(context, context.l10n.app),
         leading: _expressiveBackButton(context),
       ),
       body: ListView(
@@ -787,39 +701,30 @@ class _DataSettingsScreen extends ConsumerWidget {
         children: [
           _settingsGroup(context, [
             M3EListItem(
-              headline: tr('設定をJSONでエクスポート', 'Export settings as JSON'),
-              supportingText: tr(
-                '外観とタグ設定を1つのJSONファイルに保存します',
-                'Save appearance and tag settings to one JSON file.',
-              ),
+              headline: context.l10n.exportSettingsAsJSON,
+              supportingText:
+                  context.l10n.saveAppearanceAndTagSettingsToOneJSONFile,
               leading: Icon(Icons.save_alt),
               onTap: () => _exportSettings(context, ref),
             ),
             M3EListItem(
-              headline: tr('設定をJSONからインポート', 'Import settings from JSON'),
-              supportingText: tr(
-                '以前にエクスポートした設定を読み込みます',
-                'Load settings that were exported earlier.',
-              ),
+              headline: context.l10n.importSettingsFromJSON,
+              supportingText: context.l10n.loadSettingsThatWereExportedEarlier,
               leading: Icon(Icons.file_open_outlined),
               onTap: () => _importSettings(context, ref),
             ),
             M3EListItem(
-              headline: tr('設定をリセット', 'Reset settings'),
-              supportingText: tr(
-                '外観・ノート設定を既定値に戻します',
-                'Restore appearance and note settings to their defaults.',
-              ),
+              headline: context.l10n.resetSettings,
+              supportingText:
+                  context.l10n.restoreAppearanceAndNoteSettingsToTheirDefaults,
               leading: const Icon(Icons.settings_backup_restore_outlined),
               onTap: () => _resetSettings(context, ref),
             ),
             if (session != null)
               M3EListItem(
-                headline: tr('この Vault を忘れる', 'Forget this Vault'),
-                supportingText: tr(
-                  'Vault の選択情報、インデックスとキャッシュを削除します',
-                  'Delete the Vault selection, index, and cache.',
-                ),
+                headline: context.l10n.forgetThisVault,
+                supportingText:
+                    context.l10n.deleteTheVaultSelectionIndexAndCache,
                 leading: Icon(Icons.delete_outline),
                 onTap: () => _forgetVault(context, ref, session),
               ),
@@ -860,10 +765,7 @@ class _AboutHero extends StatelessWidget {
                     'assets/branding/kaede-gallery-icon.png',
                     width: 88,
                     height: 88,
-                    semanticLabel: tr(
-                      'Kaede Gallery のアイコン',
-                      'Kaede Gallery icon',
-                    ),
+                    semanticLabel: context.l10n.kaedeGalleryIcon,
                   ),
                 ),
                 const SizedBox(height: 20),
@@ -886,17 +788,14 @@ class _AboutHero extends StatelessWidget {
                       vertical: 6,
                     ),
                     child: Text(
-                      tr('バージョン $version', 'Version $version'),
+                      context.l10n.version(version),
                       style: text.labelLarge?.copyWith(color: scheme.onPrimary),
                     ),
                   ),
                 ),
                 const SizedBox(height: 18),
                 Text(
-                  tr(
-                    'Obsidian Vault 内のノートとメディアを閲覧するオフラインギャラリーです。',
-                    'An offline gallery for browsing notes and media inside your Obsidian Vault.',
-                  ),
+                  context.l10n.anOfflineGalleryForBrowsingNotesAndMediaInsideYo,
                   textAlign: TextAlign.center,
                   style: text.bodyLarge?.copyWith(
                     color: scheme.onPrimaryContainer,

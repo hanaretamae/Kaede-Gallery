@@ -1,16 +1,51 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:dbus/dbus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-final linuxPortalAccentColorProvider = FutureProvider<Color?>((ref) async {
-  if (!Platform.isLinux) return null;
-  return readLinuxPortalAccentColor();
-});
+final linuxPortalAccentColorProvider = StreamProvider<Color?>(
+  (ref) => watchLinuxPortalAccentColor(),
+);
+
+Stream<Color?> watchLinuxPortalAccentColor() {
+  if (!Platform.isLinux) return Stream.value(null);
+  return Stream.multi((controller) {
+    final client = DBusClient.session(introspectable: false);
+    final signals = DBusSignalStream(
+      client,
+      sender: 'org.freedesktop.portal.Desktop',
+      path: DBusObjectPath('/org/freedesktop/portal/desktop'),
+      interface: 'org.freedesktop.portal.Settings',
+      name: 'SettingChanged',
+    );
+    final accents = watchPortalAccentColorChanges(
+      signals,
+      () => _readPortalAccentColor(client),
+    );
+    final subscription = accents.listen(
+      controller.add,
+      onError: controller.addError,
+      onDone: controller.close,
+    );
+    controller.onCancel = () async {
+      await subscription.cancel();
+      await client.close();
+    };
+  }, isBroadcast: false);
+}
 
 Future<Color?> readLinuxPortalAccentColor() async {
   final client = DBusClient.session(introspectable: false);
+  try {
+    return await _readPortalAccentColor(client);
+  } finally {
+    await client.close();
+  }
+}
+
+Future<Color?> _readPortalAccentColor(DBusClient client) async {
   try {
     final response = await _readPortalSetting(client, 'ReadOne');
     return response == null ? null : decodePortalAccentColor(response);
@@ -27,10 +62,52 @@ Future<Color?> readLinuxPortalAccentColor() async {
     return null;
   } on SocketException {
     return null;
-  } finally {
-    await client.close();
   }
 }
+
+@visibleForTesting
+Stream<Color?> watchPortalAccentColorChanges(
+  Stream<DBusSignal> signals,
+  Future<Color?> Function() readColor,
+) => Stream.multi((controller) {
+  var canceled = false;
+  var pending = Future<void>.value();
+
+  void queueRead() {
+    pending = pending.then((_) async {
+      try {
+        final color = await readColor();
+        if (!canceled && !controller.isClosed) controller.add(color);
+      } catch (error, stackTrace) {
+        if (!canceled && !controller.isClosed) {
+          controller.addError(error, stackTrace);
+        }
+      }
+    });
+  }
+
+  final subscription = signals.listen(
+    (signal) {
+      if (_isAccentColorSettingChanged(signal)) queueRead();
+    },
+    onError: controller.addError,
+    onDone: controller.close,
+  );
+  controller.onCancel = () async {
+    canceled = true;
+    await subscription.cancel();
+  };
+  queueRead();
+}, isBroadcast: false);
+
+bool _isAccentColorSettingChanged(DBusSignal signal) =>
+    signal.interface == 'org.freedesktop.portal.Settings' &&
+    signal.name == 'SettingChanged' &&
+    signal.values.length == 3 &&
+    signal.values[0] is DBusString &&
+    signal.values[0].asString() == 'org.freedesktop.appearance' &&
+    signal.values[1] is DBusString &&
+    signal.values[1].asString() == 'accent-color';
 
 Future<DBusValue?> _readPortalSetting(DBusClient client, String method) async {
   final response = await client.callMethod(

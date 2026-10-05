@@ -115,22 +115,18 @@ class GalleryTagSettings {
         !hidden.every((value) => value is String) ||
         colors is! List ||
         !colors.every((value) => value is Map<String, dynamic>)) {
-      throw FormatException(tr('タグ設定が不正です。', 'Invalid gallery tag settings.'));
+      throw FormatException(AppL10n.current.invalidGalleryTagSettings);
     }
     if (noteStructure != null && noteStructure is! Map<String, dynamic>) {
       throw FormatException(
-        tr('ノート構造設定が不正です。', 'Invalid gallery note structure settings.'),
+        AppL10n.current.invalidGalleryNoteStructureSettings,
       );
     }
     if (pagination != null && pagination is! Map<String, dynamic>) {
-      throw FormatException(
-        tr('ページネーション設定が不正です。', 'Invalid gallery pagination settings.'),
-      );
+      throw FormatException(AppL10n.current.invalidGalleryPaginationSettings);
     }
     if (tagCategories != null && tagCategories is! Map<String, dynamic>) {
-      throw FormatException(
-        tr('タグカテゴリー設定が不正です。', 'Invalid gallery tag category settings.'),
-      );
+      throw FormatException(AppL10n.current.invalidGalleryTagCategorySettings);
     }
     return GalleryTagSettings(
       categories: tagCategories == null
@@ -197,9 +193,7 @@ class GalleryTagCategoryRule {
         utf8.encode(name).length > 128 ||
         path is! String ||
         !isValidCategoryPath(path)) {
-      throw FormatException(
-        tr('タグカテゴリーのルールが不正です。', 'Invalid tag category rule.'),
-      );
+      throw FormatException(AppL10n.current.invalidTagCategoryRule);
     }
     return GalleryTagCategoryRule(
       name,
@@ -227,7 +221,7 @@ class GalleryOtherCategorySettings {
     this.splitDeep = false,
   }) : _name = name;
 
-  static String get defaultName => tr('その他', 'Other');
+  static String get defaultName => AppL10n.current.other;
 
   final bool enabled;
   final String? _name;
@@ -256,9 +250,7 @@ class GalleryOtherCategorySettings {
     if (name is! String ||
         name.trim().isEmpty ||
         utf8.encode(name).length > 128) {
-      throw FormatException(
-        tr('その他カテゴリー名が不正です。', 'Invalid other category name.'),
-      );
+      throw FormatException(AppL10n.current.invalidOtherCategoryName);
     }
     return GalleryOtherCategorySettings(
       enabled: _readBool(json, 'enabled', defaultValue: true),
@@ -332,14 +324,10 @@ class GalleryTagCategorySettings {
         (categories is! List ||
             categories.length > maxCategories ||
             !categories.every((value) => value is Map<String, dynamic>))) {
-      throw FormatException(
-        tr('タグカテゴリー一覧が不正です。', 'Invalid tag category list.'),
-      );
+      throw FormatException(AppL10n.current.invalidTagCategoryList);
     }
     if (other != null && other is! Map<String, dynamic>) {
-      throw FormatException(
-        tr('その他カテゴリー設定が不正です。', 'Invalid other category settings.'),
-      );
+      throw FormatException(AppL10n.current.invalidOtherCategorySettings);
     }
     return GalleryTagCategorySettings(
       categories: categories == null
@@ -464,10 +452,7 @@ class GalleryNoteStructureSettings {
                 utf8.encode(heading).length <= maxBytes,
           )) {
         throw FormatException(
-          tr(
-            'ノート構造の見出し一覧が不正です: $key。',
-            'Invalid note structure heading list: $key.',
-          ),
+          AppL10n.current.invalidNoteStructureHeadingList(key),
         );
       }
       return List.unmodifiable(value.cast<String>());
@@ -475,23 +460,17 @@ class GalleryNoteStructureSettings {
 
     final frontmatter = json['frontmatter'];
     if (frontmatter != null && frontmatter is! Map<String, dynamic>) {
-      throw FormatException(
-        tr('フロントマターのキー設定が不正です。', 'Invalid frontmatter key settings.'),
-      );
+      throw FormatException(AppL10n.current.invalidFrontmatterKeySettings);
     }
     final linkResolutionValue = json['linkResolution'] ?? 'relativePath';
     if (linkResolutionValue is! String) {
-      throw FormatException(
-        tr('リンク解決設定が不正です。', 'Invalid link resolution setting.'),
-      );
+      throw FormatException(AppL10n.current.invalidLinkResolutionSetting);
     }
     final linkResolution = GalleryLinkResolution.values
         .where((mode) => mode.name == linkResolutionValue)
         .firstOrNull;
     if (linkResolution == null) {
-      throw FormatException(
-        tr('不明なリンク解決設定です。', 'Unknown link resolution setting.'),
-      );
+      throw FormatException(AppL10n.current.unknownLinkResolutionSetting);
     }
 
     return GalleryNoteStructureSettings(
@@ -529,9 +508,7 @@ bool _readBool(
   final value = json[key];
   if (value == null) return defaultValue;
   if (value is! bool) {
-    throw FormatException(
-      tr('真偽値設定が不正です: $key。', 'Invalid boolean setting: $key.'),
-    );
+    throw FormatException(AppL10n.current.invalidBooleanSetting(key));
   }
   return value;
 }
@@ -541,27 +518,21 @@ List<GalleryNoteBlock> _readBlockOrder(dynamic value) {
     return GalleryNoteStructureSettings.defaultBlockOrder;
   }
   if (value is! List) {
-    throw FormatException(tr('ノートブロック順序が不正です。', 'Invalid note block order.'));
+    throw FormatException(AppL10n.current.invalidNoteBlockOrder);
   }
   final blocks = <GalleryNoteBlock>[];
   for (final entry in value) {
     if (entry is! String) {
-      throw FormatException(
-        tr('ノートブロック順序の項目が不正です。', 'Invalid note block order entry.'),
-      );
+      throw FormatException(AppL10n.current.invalidNoteBlockOrderEntry);
     }
     final block = GalleryNoteBlock.values
         .where((candidate) => candidate.name == entry)
         .firstOrNull;
     if (block == null) {
-      throw FormatException(
-        tr('不明なノートブロックです: $entry。', 'Unknown note block: $entry.'),
-      );
+      throw FormatException(AppL10n.current.unknownNoteBlock(entry));
     }
     if (blocks.contains(block)) {
-      throw FormatException(
-        tr('重複したノートブロックです: $entry。', 'Duplicate note block: $entry.'),
-      );
+      throw FormatException(AppL10n.current.duplicateNoteBlock(entry));
     }
     blocks.add(block);
   }
@@ -599,29 +570,21 @@ List<GalleryNoteBlock> _readBlockOrder(dynamic value) {
 List<GalleryNoteBlock> _readHiddenBlocks(dynamic value) {
   if (value == null) return const [];
   if (value is! List) {
-    throw FormatException(
-      tr('非表示ノートブロック設定が不正です。', 'Invalid hidden note blocks.'),
-    );
+    throw FormatException(AppL10n.current.invalidHiddenNoteBlocks);
   }
   final blocks = <GalleryNoteBlock>[];
   for (final entry in value) {
     if (entry is! String) {
-      throw FormatException(
-        tr('非表示ノートブロックの項目が不正です。', 'Invalid hidden note block entry.'),
-      );
+      throw FormatException(AppL10n.current.invalidHiddenNoteBlockEntry);
     }
     final block = GalleryNoteBlock.values
         .where((candidate) => candidate.name == entry)
         .firstOrNull;
     if (block == null || block == GalleryNoteBlock.postTextEnd) {
-      throw FormatException(
-        tr('不明な表示対象ノートブロックです: $entry。', 'Unknown visible note block: $entry.'),
-      );
+      throw FormatException(AppL10n.current.unknownVisibleNoteBlock(entry));
     }
     if (blocks.contains(block)) {
-      throw FormatException(
-        tr('重複した非表示ノートブロックです: $entry。', 'Duplicate hidden note block: $entry.'),
-      );
+      throw FormatException(AppL10n.current.duplicateHiddenNoteBlock(entry));
     }
     blocks.add(block);
   }
@@ -637,12 +600,12 @@ enum GalleryNoteBlock { author, media, postText, memo, related, postTextEnd }
 
 extension GalleryNoteBlockLabel on GalleryNoteBlock {
   String get label => switch (this) {
-    GalleryNoteBlock.author => tr('投稿者', 'Author'),
-    GalleryNoteBlock.media => tr('メディア', 'Media'),
-    GalleryNoteBlock.postText => tr('投稿文', 'Post text'),
-    GalleryNoteBlock.memo => tr('覚書', 'Memo'),
-    GalleryNoteBlock.related => tr('関連', 'Related'),
-    GalleryNoteBlock.postTextEnd => tr('投稿文の終端', 'Post text end'),
+    GalleryNoteBlock.author => AppL10n.current.author,
+    GalleryNoteBlock.media => AppL10n.current.media,
+    GalleryNoteBlock.postText => AppL10n.current.postText,
+    GalleryNoteBlock.memo => AppL10n.current.memo,
+    GalleryNoteBlock.related => AppL10n.current.related,
+    GalleryNoteBlock.postTextEnd => AppL10n.current.postTextEnd,
   };
 
   IconData get icon => switch (this) {
@@ -706,24 +669,18 @@ class GalleryPaginationSettings {
         json['showItemNumberOnTiles'] ?? json['showMediaCountOnTiles'] ?? false;
     final showMissingMediaIcon = json['showMissingMediaIcon'] ?? false;
     if (pageSize is! int || pageSize < minPageSize || pageSize > maxPageSize) {
-      throw FormatException(
-        tr('ギャラリーページサイズが不正です。', 'Invalid gallery pagination page size.'),
-      );
+      throw FormatException(AppL10n.current.invalidGalleryPaginationPageSize);
     }
     if (showItemCount is! bool) {
       throw FormatException(
-        tr('アイテム数表示設定が不正です。', 'Invalid gallery pagination item count flag.'),
+        AppL10n.current.invalidGalleryPaginationItemCountFlag,
       );
     }
     if (showItemNumberOnTiles is! bool) {
-      throw FormatException(
-        tr('アイテム番号表示設定が不正です。', 'Invalid gallery item number flag.'),
-      );
+      throw FormatException(AppL10n.current.invalidGalleryItemNumberFlag);
     }
     if (showMissingMediaIcon is! bool) {
-      throw FormatException(
-        tr('メディアなしアイコン表示設定が不正です。', 'Invalid missing media icon flag.'),
-      );
+      throw FormatException(AppL10n.current.invalidMissingMediaIconFlag);
     }
     return GalleryPaginationSettings(
       pageSize: pageSize,
@@ -792,9 +749,7 @@ class GalleryFrontmatterSettings {
                 entry.trim().isNotEmpty &&
                 utf8.encode(entry).length <= 128,
           )) {
-        throw FormatException(
-          tr('フロントマターのキー一覧が不正です: $key。', 'Invalid frontmatter keys: $key.'),
-        );
+        throw FormatException(AppL10n.current.invalidFrontmatterKeys(key));
       }
       return List.unmodifiable(value.cast<String>());
     }
@@ -802,10 +757,7 @@ class GalleryFrontmatterSettings {
     final tagsKeys = readKeys('tagsKeys', const ['tags']);
     if (tagsKeys.isEmpty) {
       throw FormatException(
-        tr(
-          'フロントマターのタグキーは1件以上必要です。',
-          'At least one frontmatter tag key is required.',
-        ),
+        AppL10n.current.atLeastOneFrontmatterTagKeyIsRequired,
       );
     }
     return GalleryFrontmatterSettings(
@@ -838,9 +790,7 @@ class TagColorRule {
         prefix.isEmpty ||
         color is! String ||
         !RegExp(r'^#[0-9a-fA-F]{6}$').hasMatch(color)) {
-      throw FormatException(
-        tr('タグ色ルールが不正です。', 'Invalid gallery tag color rule.'),
-      );
+      throw FormatException(AppL10n.current.invalidGalleryTagColorRule);
     }
     return TagColorRule(
       prefix,
@@ -865,7 +815,7 @@ class GalleryTagSettingsController extends AsyncNotifier<GalleryTagSettings> {
     if (!await file.exists()) return const GalleryTagSettings();
     final decoded = jsonDecode(await file.readAsString());
     if (decoded is! Map<String, dynamic>) {
-      throw FormatException(tr('タグ設定が不正です。', 'Invalid gallery tag settings.'));
+      throw FormatException(AppL10n.current.invalidGalleryTagSettings);
     }
     return GalleryTagSettings.fromJson(decoded);
   }
@@ -873,9 +823,7 @@ class GalleryTagSettingsController extends AsyncNotifier<GalleryTagSettings> {
   Future<void> saveSettings(GalleryTagSettings settings) async {
     final file = _settingsFile;
     if (file == null) {
-      throw StateError(
-        tr('タグ設定が初期化されていません。', 'Gallery tag settings are not initialized.'),
-      );
+      throw StateError(AppL10n.current.galleryTagSettingsAreNotInitialized);
     }
     await file.parent.create(recursive: true);
     await file.writeAsString(jsonEncode(settings.toJson()), flush: true);
@@ -885,9 +833,7 @@ class GalleryTagSettingsController extends AsyncNotifier<GalleryTagSettings> {
   Future<void> deleteSettings() async {
     final file = _settingsFile;
     if (file == null) {
-      throw StateError(
-        tr('タグ設定が初期化されていません。', 'Gallery tag settings are not initialized.'),
-      );
+      throw StateError(AppL10n.current.galleryTagSettingsAreNotInitialized);
     }
     if (await file.exists()) await file.delete();
     state = const AsyncData(GalleryTagSettings());

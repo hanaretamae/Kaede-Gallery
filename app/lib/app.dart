@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dynamic_color/dynamic_color.dart' as dynamic_color;
 
@@ -7,6 +6,7 @@ import 'app_theme.dart';
 import 'core_api/gallery_appearance.dart';
 import 'core_api/linux_system_appearance.dart';
 import 'l10n.dart';
+import 'l10n/app_localizations.dart';
 import 'features/gallery/gallery_screen.dart';
 
 class VaultGalleryApp extends ConsumerWidget {
@@ -19,16 +19,6 @@ class VaultGalleryApp extends ConsumerWidget {
         ref.watch(galleryAppearanceProvider).asData?.value ??
         const GalleryAppearance();
     AppL10n.apply(appearance.language);
-    ref.listen(
-      galleryAppearanceProvider.select((v) => v.asData?.value.language),
-      (previous, next) {
-        if (previous != next) {
-          WidgetsBinding.instance.addPostFrameCallback(
-            (_) => AppL10n.rebuildAll(),
-          );
-        }
-      },
-    );
     final portalAccent = appearance.useSystemColor
         ? ref.watch(linuxPortalAccentColorProvider).asData?.value
         : null;
@@ -56,8 +46,8 @@ class VaultGalleryApp extends ConsumerWidget {
         return MaterialApp(
           title: 'Kaede Gallery',
           locale: AppL10n.locale,
-          supportedLocales: const [Locale('ja'), Locale('en')],
-          localizationsDelegates: GlobalMaterialLocalizations.delegates,
+          supportedLocales: AppLocalizations.supportedLocales,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
           themeMode: switch (appearance.brightness) {
             GalleryBrightnessMode.system => ThemeMode.system,
             GalleryBrightnessMode.light => ThemeMode.light,

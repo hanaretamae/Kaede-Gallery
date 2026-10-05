@@ -14,7 +14,7 @@ final Map<String, Future<Uint8List?>> _safThumbnailLoads = {};
 /// category and option names stay unchanged.
 String _localizeRustCategoryDisplayName(String path, String displayName) {
   if (path == '@content' && displayName == 'コンテンツ') {
-    return tr('コンテンツ', 'Content');
+    return AppL10n.current.content;
   }
   return displayName;
 }
@@ -26,19 +26,19 @@ String _localizeRustCategoryOptionName({
   required String? virtualFilter,
 }) {
   if (virtualFilter == 'multiple_media' && name == '複数画像') {
-    return tr('複数画像', 'Multiple images');
+    return AppL10n.current.multipleImages;
   }
   if (virtualFilter == 'has_memo' && name == '覚書あり') {
-    return tr('覚書あり', 'Has memo');
+    return AppL10n.current.hasMemo;
   }
   if (virtualFilter == 'has_video' && name == '動画あり') {
-    return tr('動画あり', 'Has video');
+    return AppL10n.current.hasVideo;
   }
   if (virtualFilter == 'has_related' && name == '関連あり') {
-    return tr('関連あり', 'Has related');
+    return AppL10n.current.hasRelated;
   }
   if (fullTag == categoryPath && name == 'すべて') {
-    return tr('すべて', 'All');
+    return AppL10n.current.all;
   }
   return name;
 }
@@ -406,10 +406,7 @@ class RustGalleryRepository implements GalleryRepository {
       final content = await safAccess.readFile(vaultPath, path);
       if (content == null) {
         throw StateError(
-          tr(
-            'ノートを読み込めません。アクセス権を確認してください。',
-            'Unable to read the note. Please check access permissions.',
-          ),
+          AppL10n.current.unableToReadTheNotePleaseCheckAccessPermissions,
         );
       }
       detail = await rust.getNoteDetailSaf(

@@ -16,10 +16,7 @@ class _AppearanceSettings extends ConsumerWidget {
       if (context.mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            '外観設定を保存できませんでした。',
-            'Could not save the appearance settings.',
-          ),
+          message: context.l10n.couldNotSaveTheAppearanceSettings,
         );
       }
     }
@@ -48,7 +45,7 @@ class _AppearanceSettings extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                     child: Text(
-                      tr('テーマ', 'Theme'),
+                      context.l10n.theme,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -57,7 +54,7 @@ class _AppearanceSettings extends ConsumerWidget {
                     child: ExpressiveMaterialScope(
                       theme: Theme.of(context),
                       child: M3EButtonGroup(
-                        semanticLabel: tr('画面テーマ', 'Screen theme'),
+                        semanticLabel: context.l10n.screenTheme,
                         type: M3EButtonGroupType.connected,
                         style: M3EButtonStyle.tonal,
                         decoration: galleryChoiceButtonDecoration(colorScheme),
@@ -78,15 +75,15 @@ class _AppearanceSettings extends ConsumerWidget {
                         actions: [
                           M3EButtonGroupAction(
                             icon: const Icon(Icons.brightness_auto),
-                            label: Text(tr('システム', 'System')),
+                            label: Text(context.l10n.system),
                           ),
                           M3EButtonGroupAction(
                             icon: const Icon(Icons.light_mode_outlined),
-                            label: Text(tr('ライト', 'Light')),
+                            label: Text(context.l10n.light),
                           ),
                           M3EButtonGroupAction(
                             icon: const Icon(Icons.dark_mode_outlined),
-                            label: Text(tr('ダーク', 'Dark')),
+                            label: Text(context.l10n.dark),
                           ),
                         ],
                       ),
@@ -112,7 +109,7 @@ class _AppearanceSettings extends ConsumerWidget {
                   Padding(
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                     child: Text(
-                      tr('言語', 'Language'),
+                      context.l10n.language,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
                   ),
@@ -121,7 +118,7 @@ class _AppearanceSettings extends ConsumerWidget {
                     child: ExpressiveMaterialScope(
                       theme: Theme.of(context),
                       child: M3EButtonGroup(
-                        semanticLabel: tr('表示言語', 'Display language'),
+                        semanticLabel: context.l10n.displayLanguage,
                         type: M3EButtonGroupType.connected,
                         style: M3EButtonStyle.tonal,
                         decoration: galleryChoiceButtonDecoration(colorScheme),
@@ -142,15 +139,15 @@ class _AppearanceSettings extends ConsumerWidget {
                         actions: [
                           M3EButtonGroupAction(
                             icon: const Icon(Icons.translate),
-                            label: Text(tr('システム', 'System')),
+                            label: Text(context.l10n.system),
                           ),
-                          const M3EButtonGroupAction(
-                            icon: Icon(Icons.language),
-                            label: Text('日本語'),
+                          M3EButtonGroupAction(
+                            icon: const Icon(Icons.language),
+                            label: Text(context.l10n.languageJapanese),
                           ),
-                          const M3EButtonGroupAction(
-                            icon: Icon(Icons.language),
-                            label: Text('English'),
+                          M3EButtonGroupAction(
+                            icon: const Icon(Icons.language),
+                            label: Text(context.l10n.languageEnglish),
                           ),
                         ],
                       ),
@@ -163,25 +160,23 @@ class _AppearanceSettings extends ConsumerWidget {
         ),
         _settingsGroup(context, [
           _expressiveSwitchTile(
-            title: tr('システムカラー（Material You）', 'System color (Material You)'),
-            subtitle: tr('システムのアクセントカラーを使用します', 'Use the system accent color'),
+            title: context.l10n.systemColorMaterialYou,
+            subtitle: context.l10n.useTheSystemAccentColor,
             value: appearance.useSystemColor,
             onChanged: (value) =>
                 _save(context, ref, appearance.copyWith(useSystemColor: value)),
           ),
           if (appearance.brightness != GalleryBrightnessMode.light)
             _expressiveSwitchTile(
-              title: tr('ピュアブラック', 'Pure black'),
-              subtitle: tr(
-                'ダークテーマの背景面を黒にします。システムカラーはアクセントとして併用できます',
-                'Use a black background in the dark theme. The system color can still be used as an accent.',
-              ),
+              title: context.l10n.pureBlack,
+              subtitle:
+                  context.l10n.useABlackBackgroundInTheDarkThemeTheSystemColorC,
               value: appearance.pureBlack,
               onChanged: (value) =>
                   _save(context, ref, appearance.copyWith(pureBlack: value)),
             ),
           M3EListItem(
-            headline: tr('初期設定に戻す', 'Reset to defaults'),
+            headline: context.l10n.resetToDefaults,
             leading: const Icon(Icons.restore),
             onTap: () => _save(
               context,
@@ -211,7 +206,7 @@ class _DisplayModeButton extends ConsumerWidget {
       },
       anchorBuilder: (context, open) => M3EIconButton(
         variant: M3EIconButtonVariant.standard,
-        tooltip: tr('表示方法', 'Display mode'),
+        tooltip: context.l10n.displayMode,
         onPressed: open,
         icon: Icon(
           mode == GalleryDisplayMode.byNote
@@ -222,12 +217,12 @@ class _DisplayModeButton extends ConsumerWidget {
       children: [
         M3EMenuSelectable(
           value: GalleryDisplayMode.byNote,
-          label: tr('ノートごとにまとめる', 'Group by note'),
+          label: context.l10n.groupByNote,
           selected: mode == GalleryDisplayMode.byNote,
         ),
         M3EMenuSelectable(
           value: GalleryDisplayMode.allMedia,
-          label: tr('すべてのメディアを表示', 'Show all media'),
+          label: context.l10n.showAllMedia,
           selected: mode == GalleryDisplayMode.allMedia,
         ),
       ],

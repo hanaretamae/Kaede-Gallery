@@ -22,13 +22,10 @@ class _NoteGrid extends ConsumerWidget {
     final dataOffset = ref.watch(galleryNotesDataOffsetProvider);
     return gallery.when(
       loading: () => const Center(child: M3EProgressIndicator.circular()),
-      error: (_, _) =>
-          Center(child: Text(tr('一覧を読み込めませんでした。', 'Couldn\'t load the list.'))),
+      error: (_, _) => Center(child: Text(context.l10n.couldnLoadTheList)),
       data: (notes) {
         if (notes.isEmpty) {
-          return Center(
-            child: Text(tr('該当するノートはありません。', 'No matching notes.')),
-          );
+          return Center(child: Text(context.l10n.noMatchingNotes));
         }
         return _ThumbnailGrid(
           key: ValueKey(
@@ -118,13 +115,10 @@ class _MediaGrid extends ConsumerWidget {
     final dataOffset = ref.watch(galleryMediaDataOffsetProvider);
     return media.when(
       loading: () => const Center(child: M3EProgressIndicator.circular()),
-      error: (_, _) =>
-          Center(child: Text(tr('一覧を読み込めませんでした。', 'Couldn\'t load the list.'))),
+      error: (_, _) => Center(child: Text(context.l10n.couldnLoadTheList)),
       data: (items) {
         if (items.isEmpty) {
-          return Center(
-            child: Text(tr('該当するメディアはありません。', 'No matching media.')),
-          );
+          return Center(child: Text(context.l10n.noMatchingMedia));
         }
         return _ThumbnailGrid(
           key: ValueKey(
@@ -640,7 +634,7 @@ class _GalleryTile extends ConsumerWidget {
           ),
         ),
       ),
-      semanticLabel: tr('ノートを開く', 'Open note'),
+      semanticLabel: context.l10n.openNote,
       semanticLink: true,
       showFocusFill: false,
       child: Stack(
@@ -706,7 +700,7 @@ class _TileCount extends StatelessWidget {
       padding: const EdgeInsets.only(top: 10, right: 10),
       child: M3EBadge(
         count: count,
-        semanticLabel: tr('$count 件', '$count items'),
+        semanticLabel: context.l10n.items(count),
         backgroundColor: scheme.primaryContainer,
         foregroundColor: scheme.onPrimaryContainer,
         alignment: M3EBadgeAlignment.topRight,
@@ -733,7 +727,7 @@ class _TileVideoBadge extends StatelessWidget {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
       key: const ValueKey('gallery-video-indicator'),
-      label: tr('動画', 'Video'),
+      label: context.l10n.video,
       image: true,
       container: true,
       excludeSemantics: true,
@@ -768,7 +762,7 @@ class _TileOrdinalBadge extends StatelessWidget {
       left: 8,
       child: Semantics(
         key: ValueKey('gallery-item-number-$itemNumber'),
-        label: tr('項目 $itemNumber', 'Item $itemNumber'),
+        label: context.l10n.item(itemNumber),
         child: Container(
           width: 24,
           height: 24,
@@ -818,7 +812,7 @@ class _MediaTile extends ConsumerWidget {
           ),
         ),
       ),
-      semanticLabel: tr('メディアを開く', 'Open media'),
+      semanticLabel: context.l10n.openMedia,
       semanticLink: true,
       showFocusFill: false,
       child: Stack(

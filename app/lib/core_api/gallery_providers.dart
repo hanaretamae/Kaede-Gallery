@@ -170,13 +170,7 @@ class VaultController extends AsyncNotifier<VaultSession?> {
         await ref.read(vaultPlatformProvider).safAccess.loadVault() !=
             vaultPath) {
       throw StateError(
-        tr(
-          tr(
-            '選択したフォルダへのアクセス権がありません。Vault を選び直してください。',
-            'Access to the selected folder is unavailable. Choose the Vault again.',
-          ),
-          'Access to the selected folder is unavailable. Please choose the vault again.',
-        ),
+        AppL10n.current.accessToTheSelectedFolderIsUnavailablePleaseChoo,
       );
     }
     if (vaultPath.startsWith('content://')) {
@@ -236,7 +230,7 @@ class VaultController extends AsyncNotifier<VaultSession?> {
   Future<void> forgetVault() async {
     final session = state.value;
     if (session == null) {
-      throw StateError(tr('選択中の Vault がありません。', 'No vault is selected.'));
+      throw StateError(AppL10n.current.noVaultIsSelected);
     }
     state = const AsyncLoading();
     final repository = ref.read(galleryRepositoryProvider);

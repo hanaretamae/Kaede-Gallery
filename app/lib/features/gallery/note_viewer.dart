@@ -26,22 +26,13 @@ class _NoteViewerScreen extends ConsumerWidget {
       ),
       error: (_, _) => Scaffold(
         appBar: M3EAppBar.top(leading: _expressiveBackButton(context)),
-        body: Center(
-          child: Text(
-            tr('ノートの詳細を読み込めませんでした。', 'Couldn\'t load the note details.'),
-          ),
-        ),
+        body: Center(child: Text(context.l10n.couldnLoadTheNoteDetails)),
       ),
       data: (note) => note == null
           ? Scaffold(
               appBar: M3EAppBar.top(leading: _expressiveBackButton(context)),
               body: Center(
-                child: Text(
-                  tr(
-                    'ノートが見つかりません。再走査してください。',
-                    'The note was not found. Please rescan.',
-                  ),
-                ),
+                child: Text(context.l10n.theNoteWasNotFoundPleaseRescan),
               ),
             )
           : _NoteViewerContent(
@@ -206,10 +197,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
       }
     } on PlatformException {
       if (mounted) {
-        M3ESnackbar.show(
-          context,
-          message: tr('全画面表示を切り替えられませんでした。', 'Couldn\'t toggle fullscreen.'),
-        );
+        M3ESnackbar.show(context, message: context.l10n.couldnToggleFullscreen);
       }
     }
   }
@@ -229,10 +217,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
       if (mounted) {
         M3ESnackbar.show(
           context,
-          message: tr(
-            '詳細表示に切り替えられませんでした。',
-            'Couldn\'t switch to the details view.',
-          ),
+          message: context.l10n.couldnSwitchToTheDetailsView,
         );
       }
     }
@@ -416,10 +401,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
                             }),
                             itemBuilder: (context, index) => note.media.isEmpty
                                 ? _ViewerMessage(
-                                    tr(
-                                      'このノートに表示できるメディアはありません。',
-                                      'There is no media to show in this note.',
-                                    ),
+                                    context.l10n.thereIsNoMediaToShowInThisNote,
                                   )
                                 : _ViewerMedia(
                                     media: note.media[index],
@@ -515,10 +497,7 @@ class _NoteViewerContentState extends ConsumerState<_NoteViewerContent>
                               if (context.mounted) {
                                 M3ESnackbar.show(
                                   context,
-                                  message: tr(
-                                    'URL をコピーしました。',
-                                    'Copied the URL.',
-                                  ),
+                                  message: context.l10n.copiedTheURL,
                                 );
                               }
                             },
@@ -611,7 +590,7 @@ class _ViewerTopOverlay extends StatelessWidget {
         key: const ValueKey('viewer-top-overlay-opacity'),
         opacity: visibilityAnimation,
         child: M3EAppBar.top(
-          semanticLabel: tr('ノート詳細操作', 'Note details actions'),
+          semanticLabel: context.l10n.noteDetailsActions,
           backgroundColor: Theme.of(context).colorScheme.surface,
           foregroundColor: Theme.of(context).colorScheme.onSurface,
           elevation: 2,
@@ -619,7 +598,7 @@ class _ViewerTopOverlay extends StatelessWidget {
           subtitleText: author,
           leading: M3EIconButton(
             variant: M3EIconButtonVariant.standard,
-            tooltip: tr('閉じる', 'Close'),
+            tooltip: context.l10n.close,
             onPressed: onClose,
             icon: const Icon(Icons.arrow_back),
           ),
@@ -627,36 +606,36 @@ class _ViewerTopOverlay extends StatelessWidget {
             M3EIconButton(
               variant: M3EIconButtonVariant.standard,
               tooltip: fullscreen
-                  ? tr('全画面表示を終了', 'Exit fullscreen')
-                  : tr('全画面表示', 'Enter fullscreen'),
+                  ? context.l10n.exitFullscreen
+                  : context.l10n.enterFullscreen,
               onPressed: onToggleFullscreen,
               icon: Icon(fullscreen ? Icons.fullscreen_exit : Icons.fullscreen),
             ),
             if (profileUrl != null)
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: tr('投稿者のプロフィールを開く', 'Open author profile'),
+                tooltip: context.l10n.openAuthorProfile,
                 onPressed: onOpenProfile,
                 icon: const Icon(Icons.person_outline),
               ),
             if (_isWebUri(postUrl))
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: tr('元のページを開く', 'Open original page'),
+                tooltip: context.l10n.openOriginalPage,
                 onPressed: onOpenPost,
                 icon: const Icon(Icons.link),
               ),
             if (_isWebUri(postUrl))
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: tr('ページ URL をコピー', 'Copy page URL'),
+                tooltip: context.l10n.copyPageURL,
                 onPressed: onCopyPostUrl,
                 icon: const Icon(Icons.copy),
               ),
             if (mediaPath != null)
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: tr('メディアを開く', 'Open media'),
+                tooltip: context.l10n.openMedia,
                 onPressed: () => _showMediaOpenActions(
                   context,
                   mediaPath!,
@@ -668,7 +647,7 @@ class _ViewerTopOverlay extends StatelessWidget {
             if (onOpenObsidian != null)
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: tr('Obsidian でノートを開く', 'Open note in Obsidian'),
+                tooltip: context.l10n.openNoteInObsidian,
                 onPressed: onOpenObsidian,
                 icon: const Icon(Icons.open_in_new),
               ),
@@ -688,28 +667,25 @@ Future<void> _showMediaOpenActions(
   final canSetWallpaper = _canSetWallpaper(mediaPath);
   final action = await M3EBottomSheet.showAdaptive<_MediaOpenAction>(
     context,
-    title: tr('メディアを開く', 'Open media'),
+    title: context.l10n.openMedia,
     builder: (context) => SafeArea(
       child: Padding(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
         child: _settingsGroup(context, [
           M3EListItem(
-            headline: tr(
-              '画像・動画を開くアプリを選択',
-              'Choose an app to open the image or video',
-            ),
+            headline: context.l10n.chooseAnAppToOpenTheImageOrVideo,
             leading: const Icon(Icons.open_in_new),
             onTap: () => Navigator.of(context).pop(_MediaOpenAction.chooseApp),
           ),
           if (canSetWallpaper)
             M3EListItem(
-              headline: tr('画像を壁紙にする', 'Set image as wallpaper'),
+              headline: context.l10n.setImageAsWallpaper,
               leading: const Icon(Icons.wallpaper),
               onTap: () =>
                   Navigator.of(context).pop(_MediaOpenAction.setWallpaper),
             ),
           M3EListItem(
-            headline: tr('ファイルマネージャーでファイルを表示', 'Show file in file manager'),
+            headline: context.l10n.showFileInFileManager,
             leading: const Icon(Icons.folder_open),
             onTap: () =>
                 Navigator.of(context).pop(_MediaOpenAction.revealInFileManager),
@@ -735,11 +711,8 @@ Future<void> _showMediaOpenActions(
       M3ESnackbar.show(
         context,
         message: error.code == 'SAF_UNSUPPORTED'
-            ? tr(
-                '選択したアプリでファイルを表示できませんでした。',
-                'The selected app could not show the file.',
-              )
-            : tr('メディアを開けませんでした。', 'Couldn\'t open the media.'),
+            ? context.l10n.theSelectedAppCouldNotShowTheFile
+            : context.l10n.couldnOpenTheMedia,
       );
     }
     return;
@@ -750,8 +723,8 @@ Future<void> _showMediaOpenActions(
     M3ESnackbar.show(
       context,
       message: ok
-          ? tr('壁紙に設定しました。', 'Set as wallpaper.')
-          : tr('壁紙に設定できませんでした。', 'Couldn\'t set as wallpaper.'),
+          ? context.l10n.setAsWallpaper
+          : context.l10n.couldnSetAsWallpaper,
     );
     return;
   }
@@ -762,28 +735,19 @@ Future<void> _showMediaOpenActions(
       if (!context.mounted) return;
       M3ESnackbar.show(
         context,
-        message: tr(
-          'ファイルマネージャーでファイルを表示できませんでした。',
-          'Couldn\'t show the file in the file manager.',
-        ),
+        message: context.l10n.couldnShowTheFileInTheFileManager,
       );
     } on DBusReplySignatureException {
       if (!context.mounted) return;
       M3ESnackbar.show(
         context,
-        message: tr(
-          'ファイルマネージャーでファイルを表示できませんでした。',
-          'Couldn\'t show the file in the file manager.',
-        ),
+        message: context.l10n.couldnShowTheFileInTheFileManager,
       );
     } on SocketException {
       if (!context.mounted) return;
       M3ESnackbar.show(
         context,
-        message: tr(
-          'ファイルマネージャーを起動できませんでした。',
-          'Couldn\'t launch the file manager.',
-        ),
+        message: context.l10n.couldnLaunchTheFileManager,
       );
     }
     return;
@@ -886,12 +850,7 @@ class _ViewerMedia extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     if (!media.exists) {
-      return _ViewerMessage(
-        tr(
-          'メディアファイルが見つかりません。再走査してください。',
-          'The media file was not found. Please rescan.',
-        ),
-      );
+      return _ViewerMessage(context.l10n.theMediaFileWasNotFoundPleaseRescan);
     }
     final thumbnail = media.isVideo
         ? null
@@ -905,15 +864,11 @@ class _ViewerMedia extends ConsumerWidget {
           ? const Center(child: M3EProgressIndicator.circular())
           : Image.memory(preview, fit: BoxFit.contain, gaplessPlayback: true),
       error: (_, _) => preview == null
-          ? _ViewerMessage(
-              tr('Vault のメディアを開けませんでした。', 'Couldn\'t open the Vault media.'),
-            )
+          ? _ViewerMessage(context.l10n.couldnOpenTheVaultMedia)
           : Image.memory(preview, fit: BoxFit.contain, gaplessPlayback: true),
       data: (path) {
         if (path == null) {
-          return _ViewerMessage(
-            tr('メディアファイルにアクセスできません。', 'Can\'t access the media file.'),
-          );
+          return _ViewerMessage(context.l10n.canAccessTheMediaFile);
         }
         if (media.isVideo) {
           return active
@@ -998,9 +953,7 @@ class _ViewerImageState extends ConsumerState<_ViewerImage> {
       final bytes = ref.watch(gallerySafImageBytesProvider(widget.path));
       final image = bytes.when(
         loading: () => const Center(child: M3EProgressIndicator.circular()),
-        error: (_, _) => _ViewerMessage(
-          tr('画像を表示できませんでした。', 'Couldn\'t display the image.'),
-        ),
+        error: (_, _) => _ViewerMessage(context.l10n.couldnDisplayTheImage),
         data: (value) => _imageWithFullImage(MemoryImage(value)),
       );
       return _buildImageViewer(image);
@@ -1046,8 +999,7 @@ class _ViewerImageState extends ConsumerState<_ViewerImage> {
           ),
         ),
       ),
-      if (fullImageFailed)
-        _ViewerMessage(tr('画像を表示できませんでした。', 'Couldn\'t display the image.')),
+      if (fullImageFailed) _ViewerMessage(context.l10n.couldnDisplayTheImage),
     ],
   );
 
@@ -1195,7 +1147,7 @@ class _LocalVideoPlayerState extends State<_LocalVideoPlayer> {
 
   @override
   Widget build(BuildContext context) => playbackFailed
-      ? _ViewerMessage(tr('この動画を再生できませんでした。', 'Couldn\'t play this video.'))
+      ? _ViewerMessage(context.l10n.couldnPlayThisVideo)
       : Stack(
           fit: StackFit.expand,
           children: [
@@ -1323,9 +1275,7 @@ class _AndroidVideoPlayerState extends State<_AndroidVideoPlayer> {
   @override
   Widget build(BuildContext context) {
     if (playbackFailed) {
-      return _ViewerMessage(
-        tr('この動画を再生できませんでした。', 'Couldn\'t play this video.'),
-      );
+      return _ViewerMessage(context.l10n.couldnPlayThisVideo);
     }
     final value = controller.value;
     return Stack(
@@ -1424,7 +1374,7 @@ class _VideoControlBar extends StatelessWidget {
             child: M3ESlider(
               value: currentSeconds,
               max: maxSeconds,
-              semanticLabel: tr('動画の再生位置', 'Video playback position'),
+              semanticLabel: context.l10n.videoPlaybackPosition,
               label: _formatDuration(
                 Duration(milliseconds: currentSeconds.round()),
               ),
@@ -1439,7 +1389,7 @@ class _VideoControlBar extends StatelessWidget {
             children: [
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: playing ? tr('一時停止', 'Pause') : tr('再生', 'Play'),
+                tooltip: playing ? context.l10n.pause : context.l10n.play,
                 onPressed: onPlayPause,
                 icon: Icon(
                   playing ? Icons.pause : Icons.play_arrow,
@@ -1478,8 +1428,8 @@ class _VideoControlBar extends StatelessWidget {
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
                 tooltip: looping
-                    ? tr('ループをオフ', 'Turn looping off')
-                    : tr('1本をループ', 'Loop current video'),
+                    ? context.l10n.turnLoopingOff
+                    : context.l10n.loopCurrentVideo,
                 onPressed: () => onLoopChanged(!looping),
                 icon: Icon(
                   Icons.repeat_one,
@@ -1488,7 +1438,7 @@ class _VideoControlBar extends StatelessWidget {
               ),
               M3EIconButton(
                 variant: M3EIconButtonVariant.standard,
-                tooltip: muted ? tr('ミュートを解除', 'Unmute') : tr('ミュート', 'Mute'),
+                tooltip: muted ? context.l10n.unmute : context.l10n.mute,
                 onPressed: () => onMuteChanged(!muted),
                 icon: Icon(
                   muted ? Icons.volume_off : Icons.volume_up,
@@ -1572,7 +1522,7 @@ class _NoteDetailsPanel extends ConsumerWidget {
           if (note.tags.isNotEmpty) ...[
             const SizedBox(height: 12),
             Text(
-              tr('タグ', 'Tags'),
+              context.l10n.tags,
               style: Theme.of(context).textTheme.titleSmall,
             ),
             const SizedBox(height: 6),
@@ -1605,7 +1555,7 @@ class _NoteDetailsPanel extends ConsumerWidget {
                   GalleryNoteBlock.memo =>
                     note.memoLines.isNotEmpty
                         ? _DetailLines(
-                            title: tr('覚書', 'Notes'),
+                            title: context.l10n.notes_ab7203,
                             lines: note.memoLines,
                             commentStyle: true,
                           )
@@ -1613,7 +1563,7 @@ class _NoteDetailsPanel extends ConsumerWidget {
                   GalleryNoteBlock.related =>
                     note.relatedLines.isNotEmpty
                         ? _DetailLines(
-                            title: tr('関連', 'Related'),
+                            title: context.l10n.related,
                             lines: note.relatedLines,
                           )
                         : null,
@@ -1636,7 +1586,7 @@ class _AuthorDetail extends StatelessWidget {
   Widget build(BuildContext context) => Padding(
     padding: const EdgeInsets.only(top: 16),
     child: M3EListItem(
-      headline: tr('投稿者', 'Author'),
+      headline: context.l10n.author,
       supportingText: author,
       leading: const Icon(Icons.person_outline),
       trailing: _isWebUri(url) ? const Icon(Icons.open_in_new) : null,
@@ -1658,9 +1608,9 @@ class _FrontmatterDates extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     final dates = [
-      if (published != null) (tr('公開日', 'Published'), published!),
-      if (created != null) (tr('作成日', 'Created'), created!),
-      if (updated != null) (tr('更新日', 'Updated'), updated!),
+      if (published != null) (context.l10n.published, published!),
+      if (created != null) (context.l10n.created, created!),
+      if (updated != null) (context.l10n.updated, updated!),
     ];
     return Padding(
       padding: const EdgeInsets.only(top: 12),
@@ -1834,7 +1784,7 @@ class _DetailLines extends StatelessWidget {
                                           Icons.open_in_new,
                                           size: 16,
                                         ),
-                                        label: Text(tr('リンクを開く', 'Open link')),
+                                        label: Text(context.l10n.openLink),
                                       ),
                                 ],
                               ),
@@ -1863,7 +1813,7 @@ class _ViewerTagChip extends ConsumerWidget {
     return settings.when(
       loading: () => const SizedBox.shrink(),
       error: (_, _) => M3ETooltip(
-        message: tr('タグ設定を読み込めませんでした。', 'Couldn\'t load the tag settings.'),
+        message: context.l10n.couldnLoadTheTagSettings,
         child: Icon(Icons.warning_amber_rounded),
       ),
       data: (value) {
@@ -1942,24 +1892,16 @@ String _fictionalNoteExample(GalleryTagSettings settings) {
   final structure = settings.noteStructure;
   final tags = _fictionalNoteTags(settings);
   final blocks = <GalleryNoteBlock, String>{
-    GalleryNoteBlock.author: tr(
-      '[架空の投稿者](https://example.invalid/authors/fictional)',
-      '[Fictional Author](https://example.invalid/authors/fictional)',
-    ),
+    GalleryNoteBlock.author:
+        AppL10n.current.fictionalAuthorHttpsExampleInvalidAuthorsFiction,
     GalleryNoteBlock.media: '![](<../../media/fictional-rainy-window.webp>)',
-    GalleryNoteBlock.postText: tr(
-      'https://example.invalid/posts/aoikasumi-0001\n\n> 雨上がりの窓辺で、架空の青い鳥をスケッチしました。',
-      'https://example.invalid/posts/aoikasumi-0001\n\n> I sketched a fictional blue bird by the window after the rain.',
-    ),
-    GalleryNoteBlock.postTextEnd: tr('# 文書', '# Document'),
-    GalleryNoteBlock.related: tr(
-      '## 関連\n\n- [色の記録](./fictional-color-study.md)',
-      '## Related\n\n- [Color Study](./fictional-color-study.md)',
-    ),
-    GalleryNoteBlock.memo: tr(
-      '## 覚書\n\n- 窓の反射を少し弱める\n  - 青の彩度は控えめにする\n- 次は夕方の光を試す',
-      '## Notes\n\n- Soften the window reflections a little\n  - Keep the blue saturation restrained\n- Next, try evening light',
-    ),
+    GalleryNoteBlock.postText:
+        AppL10n.current.httpsExampleInvalidPostsAoikasumi0001NISketchedA,
+    GalleryNoteBlock.postTextEnd: AppL10n.current.document,
+    GalleryNoteBlock.related:
+        AppL10n.current.relatedNColorStudyFictionalColorStudyMd,
+    GalleryNoteBlock.memo:
+        AppL10n.current.notesNSoftenTheWindowReflectionsALittleKeepTheBl,
   };
   final body = structure.blockOrder
       .where(
@@ -1982,7 +1924,7 @@ updated: 2026-09-18T15:10:00
 cover: ../../media/fictional-rainy-window.webp
 ---
 
-${tr('# 雨上がりの観測', '# Observations After the Rain')}
+${AppL10n.current.observationsAfterTheRain}
 
 $body
 ''';
@@ -2078,10 +2020,7 @@ Future<void> _openExternalUri(BuildContext context, Uri uri) async {
   if (!launched && context.mounted) {
     M3ESnackbar.show(
       context,
-      message: tr(
-        '外部アプリで開けませんでした。対応アプリを確認してください。',
-        'Couldn\'t open it in an external app. Check for a compatible app.',
-      ),
+      message: context.l10n.couldnOpenItInAnExternalAppCheckForACompatibleAp,
     );
   }
 }

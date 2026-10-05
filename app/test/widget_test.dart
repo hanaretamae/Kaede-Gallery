@@ -14,6 +14,7 @@ import 'package:video_player/video_player.dart';
 import 'package:vault_gallery/app_theme.dart';
 import 'package:vault_gallery/app.dart';
 import 'package:vault_gallery/l10n.dart';
+import 'package:vault_gallery/l10n/app_localizations.dart';
 import 'package:vault_gallery/core_api/gallery_appearance.dart';
 import 'package:vault_gallery/core_api/linux_system_appearance.dart';
 import 'package:vault_gallery/core_api/gallery_providers.dart';
@@ -66,8 +67,15 @@ Future<void> _scrollNoteStructureUntilVisible(
 void main() {
   final binding = TestWidgetsFlutterBinding.ensureInitialized();
   languageTests();
-  setUp(() => binding.platformDispatcher.localeTestValue = const Locale('ja'));
-  tearDown(binding.platformDispatcher.clearLocaleTestValue);
+  setUp(() {
+    const locale = Locale('ja', 'JP');
+    binding.platformDispatcher.localeTestValue = locale;
+    binding.platformDispatcher.localesTestValue = const [locale];
+  });
+  tearDown(() {
+    binding.platformDispatcher.clearLocaleTestValue();
+    binding.platformDispatcher.clearLocalesTestValue();
+  });
 
   test('SAF Vault names use the selected document tree folder', () {
     expect(
@@ -823,6 +831,61 @@ void main() {
       isNull,
     );
   });
+
+  test(
+    're-reads the system accent color when the portal setting changes',
+    () async {
+      final signals = StreamController<DBusSignal>();
+      var readCount = 0;
+      final colors = StreamIterator(
+        watchPortalAccentColorChanges(signals.stream, () async {
+          readCount++;
+          return readCount == 1 ? Colors.red : Colors.blue;
+        }),
+      );
+      addTearDown(() async {
+        await colors.cancel();
+        await signals.close();
+      });
+
+      expect(await colors.moveNext(), isTrue);
+      expect(colors.current, Colors.red);
+
+      signals.add(
+        DBusSignal(
+          sender: ':1.2',
+          path: DBusObjectPath('/org/freedesktop/portal/desktop'),
+          interface: 'org.freedesktop.portal.Settings',
+          name: 'SettingChanged',
+          values: [
+            const DBusString('org.freedesktop.appearance'),
+            const DBusString('color-scheme'),
+            DBusVariant(DBusUint32(1)),
+          ],
+        ),
+      );
+      expect(readCount, 1);
+
+      signals.add(
+        DBusSignal(
+          sender: ':1.2',
+          path: DBusObjectPath('/org/freedesktop/portal/desktop'),
+          interface: 'org.freedesktop.portal.Settings',
+          name: 'SettingChanged',
+          values: [
+            const DBusString('org.freedesktop.appearance'),
+            const DBusString('accent-color'),
+            DBusVariant(
+              DBusStruct([DBusDouble(0.1), DBusDouble(0.2), DBusDouble(0.3)]),
+            ),
+          ],
+        ),
+      );
+      expect(await colors.moveNext(), isTrue);
+      expect(colors.current, Colors.blue);
+      expect(readCount, 2);
+    },
+  );
 
   testWidgets('asks for a vault when no location has been saved', (
     tester,
@@ -3100,34 +3163,58 @@ void languageTests() {
     tester,
   ) async {
     AppL10n.apply(AppLanguage.ja);
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Builder(
-          builder: (_) => Scaffold(body: Text(tr('日本語', 'English'))),
-        ),
+    Widget app() => MaterialApp(
+      locale: AppL10n.locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      home: Builder(
+        builder: (context) =>
+            Scaffold(body: Text(context.l10n.languageJapanese)),
       ),
     );
+    await tester.pumpWidget(app());
     expect(find.text('日本語'), findsOneWidget);
 
     AppL10n.apply(AppLanguage.en);
-    AppL10n.rebuildAll();
-    await tester.pump();
-    expect(find.text('English'), findsOneWidget);
+    await tester.pumpWidget(app());
+    expect(find.text('Japanese'), findsOneWidget);
 
     AppL10n.apply(AppLanguage.system);
   });
 
-  test('system language follows the OS: Japanese or English fallback', () {
+  testWidgets('system language follows the OS: Japanese or English fallback', (
+    tester,
+  ) async {
     final binding = TestWidgetsFlutterBinding.ensureInitialized();
-    addTearDown(binding.platformDispatcher.clearLocaleTestValue);
     AppL10n.apply(AppLanguage.system);
-    binding.platformDispatcher.localeTestValue = const Locale('fr');
-    expect(tr('あ', 'a'), 'a');
-    binding.platformDispatcher.localeTestValue = const Locale('ja', 'JP');
-    expect(tr('あ', 'a'), 'あ');
-    AppL10n.apply(AppLanguage.en);
-    expect(tr('あ', 'a'), 'a');
-    AppL10n.apply(AppLanguage.system);
+    addTearDown(() {
+      binding.platformDispatcher.clearLocaleTestValue();
+      binding.platformDispatcher.clearLocalesTestValue();
+      AppL10n.apply(AppLanguage.system);
+    });
+    Widget app() => MaterialApp(
+      locale: AppL10n.locale,
+      supportedLocales: AppLocalizations.supportedLocales,
+      localizationsDelegates: AppLocalizations.localizationsDelegates,
+      home: Builder(
+        builder: (context) =>
+            Scaffold(body: Text(context.l10n.languageJapanese)),
+      ),
+    );
+
+    const french = Locale('fr');
+    binding.platformDispatcher.localeTestValue = french;
+    binding.platformDispatcher.localesTestValue = const [french];
+    expect(AppL10n.isJapanese, isFalse);
+    await tester.pumpWidget(app());
+    expect(find.text('Japanese'), findsOneWidget);
+
+    const japanese = Locale('ja', 'JP');
+    binding.platformDispatcher.localeTestValue = japanese;
+    binding.platformDispatcher.localesTestValue = const [japanese];
+    expect(AppL10n.isJapanese, isTrue);
+    await tester.pumpWidget(app());
+    expect(find.text('日本語'), findsOneWidget);
   });
 
   test('new filter category defaults follow the selected language', () {

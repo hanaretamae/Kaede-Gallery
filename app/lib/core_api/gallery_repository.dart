@@ -11,8 +11,8 @@ enum GallerySortField {
   final String apiValue;
 
   String get label => switch (this) {
-    GallerySortField.created => tr('作成日', 'Created'),
-    GallerySortField.published => tr('公開日', 'Published'),
+    GallerySortField.created => AppL10n.current.created,
+    GallerySortField.published => AppL10n.current.published,
   };
 }
 
@@ -25,8 +25,8 @@ enum GallerySortDirection {
   final String apiValue;
 
   String get label => switch (this) {
-    GallerySortDirection.ascending => tr('昇順', 'Ascending'),
-    GallerySortDirection.descending => tr('降順', 'Descending'),
+    GallerySortDirection.ascending => AppL10n.current.ascending,
+    GallerySortDirection.descending => AppL10n.current.descending,
   };
 }
 
@@ -199,10 +199,10 @@ enum GalleryVirtualFilter {
   final String key;
 
   String get label => switch (this) {
-    GalleryVirtualFilter.multipleMedia => tr('複数画像', 'Multiple images'),
-    GalleryVirtualFilter.hasMemo => tr('覚書あり', 'Has memo'),
-    GalleryVirtualFilter.hasVideo => tr('動画あり', 'Has video'),
-    GalleryVirtualFilter.hasRelated => tr('関連あり', 'Has related'),
+    GalleryVirtualFilter.multipleMedia => AppL10n.current.multipleImages,
+    GalleryVirtualFilter.hasMemo => AppL10n.current.hasMemo,
+    GalleryVirtualFilter.hasVideo => AppL10n.current.hasVideo,
+    GalleryVirtualFilter.hasRelated => AppL10n.current.hasRelated,
   };
 
   static GalleryVirtualFilter fromKey(String key) =>

@@ -153,19 +153,11 @@ class _VaultErrorScreen extends StatelessWidget {
         children: [
           const Icon(Icons.error_outline, size: 40),
           const SizedBox(height: 12),
-          Text(
-            tr(
-              tr(
-                'Vault を開けませんでした。場所とアクセス権を確認してください。',
-                'Could not open the Vault. Check its location and access permissions.',
-              ),
-              'Couldn\'t open the Vault. Check its location and permissions.',
-            ),
-          ),
+          Text(context.l10n.couldnOpenTheVaultCheckItsLocationAndPermissions),
           const SizedBox(height: 12),
           M3EButton.filled(
             onPressed: onChooseVault,
-            child: Text(tr('別の Vault を選択', 'Choose another Vault')),
+            child: Text(context.l10n.chooseAnotherVault),
           ),
         ],
       ),
@@ -199,16 +191,17 @@ class _GalleryLayout extends ConsumerWidget {
     final countState = ref.watch(galleryFilteredItemCountProvider);
     final totalCount = countState.asData?.value;
     final rangeLabel = countState.hasError
-        ? tr('件数を取得できませんでした', 'Couldn\'t get the item count')
+        ? context.l10n.couldnGetTheItemCount
         : totalCount == null
-        ? tr('件数を計算中', 'Counting items')
+        ? context.l10n.countingItems
         : loadedCount == null
-        ? tr('$totalCount 件', '$totalCount items')
+        ? context.l10n.items_98c0e6(totalCount)
         : loadedCount == 0
-        ? tr('$totalCount 件中 0 件', '0 of $totalCount items')
-        : tr(
-            '$totalCount 件中 ${startIndex + 1} - ${(startIndex + pageSize).clamp(0, totalCount)} 件',
-            '${startIndex + 1}–${(startIndex + pageSize).clamp(0, totalCount)} of $totalCount items',
+        ? context.l10n.message0OfItems(totalCount)
+        : context.l10n.ofItems(
+            startIndex + 1,
+            (startIndex + pageSize).clamp(0, totalCount),
+            totalCount,
           );
     return Scaffold(
       appBar: M3EAppBar.top(
@@ -217,12 +210,12 @@ class _GalleryLayout extends ConsumerWidget {
         actions: [
           M3EIconButton(
             variant: M3EIconButtonVariant.standard,
-            tooltip: tr('タグで絞り込む', 'Filter by tags'),
+            tooltip: context.l10n.filterByTags,
             onPressed: () => M3EBottomSheet.show<void>(
               context,
               initialValue: M3EBottomSheetValue.fullScreen,
               expandToFullScreen: true,
-              fullScreenTitle: tr('タグで絞り込む', 'Filter by tags'),
+              fullScreenTitle: context.l10n.filterByTags,
               // Closing through the dismiss guard bypasses the sheet's
               // predictive-back transform, which left the sheet misdrawn.
               onDismissRequest: () async => true,
@@ -233,10 +226,7 @@ class _GalleryLayout extends ConsumerWidget {
                 ? const Icon(Icons.tune)
                 : M3EBadge(
                     count: filterCount,
-                    semanticLabel: tr(
-                      '$filterCount 件の絞り込み',
-                      '$filterCount active filters',
-                    ),
+                    semanticLabel: context.l10n.activeFilters(filterCount),
                     child: const Icon(Icons.tune),
                   ),
           ),
@@ -244,18 +234,16 @@ class _GalleryLayout extends ConsumerWidget {
             variant: M3EIconButtonVariant.standard,
             tooltip: totalCount == null
                 ? countState.hasError
-                      ? tr(
-                          '件数を取得できませんが、指定した位置へ移動できます',
-                          'The item count is unavailable, but you can jump to a position',
-                        )
-                      : tr(
-                          '件数を計算中ですが、指定した位置へ移動できます',
-                          'The item count is still loading, but you can jump to a position',
-                        )
+                      ? context
+                            .l10n
+                            .theItemCountIsUnavailableButYouCanJumpToAPositio
+                      : context
+                            .l10n
+                            .theItemCountIsStillLoadingButYouCanJumpToAPositi
                 : totalCount == 0
-                ? tr('表示できる項目がありません', 'There are no items to show')
-                : tr('指定した位置へ移動', 'Jump to position'),
-            semanticLabel: tr('指定した位置へ移動', 'Jump to position'),
+                ? context.l10n.thereAreNoItemsToShow
+                : context.l10n.jumpToPosition_a998c4,
+            semanticLabel: context.l10n.jumpToPosition_a998c4,
             onPressed: totalCount == 0
                 ? null
                 : () => _showGalleryStartIndexDialog(context, ref, totalCount),
@@ -279,13 +267,13 @@ class _GalleryLayout extends ConsumerWidget {
           const _DisplayModeButton(),
           M3EIconButton(
             variant: M3EIconButtonVariant.standard,
-            tooltip: tr('Vault の変更を再読み込み', 'Reload Vault changes'),
+            tooltip: context.l10n.reloadVaultChanges,
             onPressed: () => ref.read(vaultSessionProvider.notifier).rescan(),
             icon: const Icon(Icons.refresh),
           ),
           M3EIconButton(
             variant: M3EIconButtonVariant.standard,
-            tooltip: tr('設定', 'Settings'),
+            tooltip: context.l10n.settings,
             onPressed: () => Navigator.of(context).push(
               MaterialPageRoute<void>(
                 builder: (context) =>
