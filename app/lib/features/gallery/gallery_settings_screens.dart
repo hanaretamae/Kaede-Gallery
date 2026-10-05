@@ -223,7 +223,7 @@ Widget _settingsGroup(
             titleLarge: type.titleLarge,
             titleMedium: type.titleMedium,
             titleSmall: type.titleSmall,
-            bodyLarge: type.bodyLarge.copyWith(fontWeight: FontWeight.w600),
+            bodyLarge: type.bodyLarge.copyWith(fontWeight: FontWeight.bold),
             bodyMedium: type.bodyMedium,
             bodySmall: type.bodySmall,
             labelLarge: type.labelLarge,

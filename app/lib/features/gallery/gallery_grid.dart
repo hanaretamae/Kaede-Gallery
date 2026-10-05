@@ -886,7 +886,7 @@ class _GalleryTileThumbnail extends ConsumerWidget {
       final cacheWidth =
           (constraints.maxWidth * MediaQuery.devicePixelRatioOf(context))
               .ceil()
-              .clamp(160, 2048)
+              .clamp(160, 1024)
               .toInt();
       Widget image(Uint8List bytes) => Image.memory(
         bytes,

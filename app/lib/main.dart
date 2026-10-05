@@ -16,8 +16,8 @@ Future<void> main() async {
     await windowManager.ensureInitialized();
   }
   PaintingBinding.instance.imageCache
-    ..maximumSize = 400
-    ..maximumSizeBytes = 64 * 1024 * 1024;
+    ..maximumSize = 200
+    ..maximumSizeBytes = 32 * 1024 * 1024;
   await RustLib.init(externalLibrary: rustLibraryForCurrentPlatform());
   runApp(const ProviderScope(child: VaultGalleryApp()));
 }

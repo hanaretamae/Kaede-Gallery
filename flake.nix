@@ -11,7 +11,7 @@
         "aarch64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
-      version = "1.5.2";
+      version = "1.5.3";
       mkPkgs =
         system:
         import nixpkgs {
@@ -80,6 +80,7 @@
             libGL
             libass
             libjpeg
+            libplacebo
             mpv
           ];
           FLUTTER_SUPPRESS_ANALYTICS = "true";
@@ -166,6 +167,7 @@
                 flutter
                 ffmpeg
                 libass
+                libplacebo
                 mpv
                 libjpeg
                 pkg-config
