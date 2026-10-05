@@ -1,48 +1,47 @@
-# サードパーティ通知
+# Third-party notices
 
-Kaede Gallery 本体は [MIT License](LICENSE) です。配布物には次のネイティブ
-ライブラリが同梱されます。Dart / Flutter パッケージのライセンスはアプリ内
-「オープンソースライセンス」画面に表示されます。Rust 依存は MIT / Apache-2.0 /
-Unicode-3.0 / Zlib のみで、`cargo deny check licenses` で検証しています。
+Kaede Gallery itself is licensed under the [MIT License](LICENSE). The distributed applications bundle the
+native libraries listed below. Dart and Flutter package licenses are displayed in the in-app
+**Open-source licenses** screen. Rust dependencies are limited to MIT, Apache-2.0, Unicode-3.0, and Zlib and
+are checked with `cargo deny check licenses`. See [the Japanese version](THIRD_PARTY_NOTICES.ja.md).
 
-## 動画再生・サムネイル用ライブラリ
+## Video playback and thumbnail libraries
 
-| 対象 | ライブラリ | ライセンス | 入手元 |
-|------|-----------|-----------|--------|
-| Android APK | libmpv・FFmpeg（media-kit/libmpv-android-video-build v1.1.7 の `default` ビルド。mpv は `-Dgpl=false`） | LGPL-2.1-or-later | https://github.com/media-kit/libmpv-android-video-build/releases/tag/v1.1.7 |
-| Windows ZIP | libmpv・FFmpeg（media-kit/libmpv-win32-video-build 2023-09-24。下記参照） | LGPL-3.0-or-later | https://github.com/media-kit/libmpv-win32-video-build |
-| Linux バンドル | mpv 0.41.0・FFmpeg 9.0.1・libass・libplacebo（nixpkgs の `flake.lock` で固定） | FFmpeg は `--enable-gpl --enable-version3` でビルドされており GPL-3.0-or-later | https://github.com/NixOS/nixpkgs （`flake.lock` の rev） |
+| Target | Libraries | License | Source |
+| --- | --- | --- | --- |
+| Android APK | libmpv and FFmpeg (`media-kit/libmpv-android-video-build` v1.1.7 `default` build; mpv uses `-Dgpl=false`) | LGPL-2.1-or-later | https://github.com/media-kit/libmpv-android-video-build/releases/tag/v1.1.7 |
+| Windows ZIP | libmpv and FFmpeg (`media-kit/libmpv-win32-video-build`, 2023-09-24; see below) | LGPL-3.0-or-later | https://github.com/media-kit/libmpv-win32-video-build |
+| Linux bundle | mpv 0.41.0, FFmpeg 9.0.1, libass, and libplacebo (pinned by `flake.lock`) | FFmpeg is built with `--enable-gpl --enable-version3`; GPL-3.0-or-later | https://github.com/NixOS/nixpkgs (revision pinned in `flake.lock`) |
 
-- Android では上記ライブラリは共有ライブラリ（`.so`）として同梱されており、
-  同じ ABI の互換ビルドに差し替えられます。
-- **Linux バンドル（`kaede-gallery-*-linux-*`）は GPL-3.0-or-later のライブラリを
-  含むため、バンドル全体を GPL-3.0-or-later の条件で配布します**（全文:
-  https://www.gnu.org/licenses/gpl-3.0.txt）。MIT の本体コードは GPL-3.0 と互換です。
-  本体の完全なソースは本リポジトリ（該当リリースのタグ）で公開しており、
-  同梱ライブラリのソースは上記 nixpkgs の固定リビジョンから入手できます。
-  Android APK と、MIT のソースコード自体には GPL は及びません。
+- Android includes these libraries as shared objects (`.so`), replaceable with compatible builds for the same ABI.
+- **The Linux bundles (`kaede-gallery-*-linux-*`) include GPL-3.0-or-later libraries and are distributed under
+  GPL-3.0-or-later terms** (full text: https://www.gnu.org/licenses/gpl-3.0.txt). The MIT-licensed application
+  code is compatible with GPL-3.0. The complete application source is available in this repository at the
+  corresponding release tag; sources for bundled libraries are available from the pinned nixpkgs revision.
+  The GPL does not extend to the Android APK or to the MIT-licensed source code itself.
 
-## Dart / Flutter パッケージ
+## Dart and Flutter packages
 
-依存パッケージのライセンスを確認した結果、GPL / AGPL 系はありません。大半は
-BSD-3-Clause・MIT・Apache-2.0 です。例外として `dbus` は MPL-2.0 です
-（ファイル単位のコピーレフトで、本プロジェクトは未改変のまま利用しています）。
-全文はアプリ内「オープンソースライセンス」画面で確認できます。
-- 各ライブラリの著作権表示とライセンス全文は、各プロジェクトの配布物を参照してください。
-  - mpv: https://github.com/mpv-player/mpv （GPL-2.0-or-later / LGPL-2.1-or-later）
-  - FFmpeg: https://ffmpeg.org/legal.html
-  - libass: https://github.com/libass/libass （ISC）
-  - libplacebo: https://code.videolan.org/videolan/libplacebo （LGPL-2.1-or-later）
+The dependency audit found no GPL/AGPL-family packages. Most use BSD-3-Clause, MIT, or Apache-2.0. The
+exception is `dbus` under MPL-2.0 (file-level copyleft); this project uses it unmodified. Full license texts
+are available in the in-app **Open-source licenses** screen.
+
+Refer to each project for copyright notices and full license texts:
+
+- mpv: https://github.com/mpv-player/mpv (GPL-2.0-or-later / LGPL-2.1-or-later)
+- FFmpeg: https://ffmpeg.org/legal.html
+- libass: https://github.com/libass/libass (ISC)
+- libplacebo: https://code.videolan.org/videolan/libplacebo (LGPL-2.1-or-later)
 
 ## Windows
 
-Windows の ZIP には、`media_kit_libs_windows_video` が取得する libmpv（media-kit/libmpv-win32-video-build
-2023-09-24 の `video` ビルド）と ANGLE（OpenGL ES 実装、BSD-3-Clause）が含まれます。libmpv は
-`--disable-gpl --enable-version3` でビルドされており、FFmpeg 部分は LGPL-3.0-or-later です
-（同梱の DLL で確認）。ソースは https://github.com/media-kit/libmpv-win32-video-build と
-https://github.com/mpv-player/mpv から入手できます。libmpv は動的ライブラリ（`libmpv-2.dll`）として
-同梱され、差し替えられます。このライブラリは x86_64 のみで、arm64 版は実験的です。
+The Windows ZIP includes libmpv obtained by `media_kit_libs_windows_video` (the `video` build from
+`media-kit/libmpv-win32-video-build`, 2023-09-24) and ANGLE (an OpenGL ES implementation, BSD-3-Clause).
+libmpv is built with `--disable-gpl --enable-version3`; the FFmpeg components use LGPL-3.0-or-later, as
+verified from the bundled DLLs. Sources are available from https://github.com/media-kit/libmpv-win32-video-build
+and https://github.com/mpv-player/mpv. libmpv is included as the replaceable dynamic library `libmpv-2.dll`.
+It is x86_64 only; the Windows ARM64 build is experimental.
 
 ## macOS
 
-macOS は未対応で、配布物はありません。
+macOS is unsupported and no macOS artifacts are distributed.

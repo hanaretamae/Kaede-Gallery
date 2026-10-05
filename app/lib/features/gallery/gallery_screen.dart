@@ -155,7 +155,10 @@ class _VaultErrorScreen extends StatelessWidget {
           const SizedBox(height: 12),
           Text(
             tr(
-              'Vault を開けませんでした。場所とアクセス権を確認してください。',
+              tr(
+                'Vault を開けませんでした。場所とアクセス権を確認してください。',
+                'Could not open the Vault. Check its location and access permissions.',
+              ),
               'Couldn\'t open the Vault. Check its location and permissions.',
             ),
           ),
@@ -205,7 +208,7 @@ class _GalleryLayout extends ConsumerWidget {
         ? tr('$totalCount 件中 0 件', '0 of $totalCount items')
         : tr(
             '$totalCount 件中 ${startIndex + 1} - ${(startIndex + pageSize).clamp(0, totalCount)} 件',
-            '${startIndex + 1} - ${(startIndex + pageSize).clamp(0, totalCount)} of $totalCount items',
+            '${startIndex + 1}–${(startIndex + pageSize).clamp(0, totalCount)} of $totalCount items',
           );
     return Scaffold(
       appBar: M3EAppBar.top(

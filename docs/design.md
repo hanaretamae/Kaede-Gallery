@@ -44,6 +44,16 @@ implementations; only their lifecycle and data contracts are shared.
 
 Complete and verify one phase before starting another.
 
+## Application language
+
+The Flutter UI supports Japanese and English. System language is the default:
+Japanese is selected only when the system locale is Japanese; all other system
+locales use English. Users can override this with System, Japanese, or English
+in Appearance settings. The selection is persisted in private app data with
+the other appearance preferences and never changes Vault contents. UI text is
+localized at the Flutter presentation layer; Rust parser/index contracts and
+stored user-provided note/category labels are not translated.
+
 Phase 4 delivered a privately sideloaded APK; this does not imply
 store-distribution readiness. Android Vault access targets an ordinary
 user-selected folder, such as one under

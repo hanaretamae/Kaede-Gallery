@@ -3096,6 +3096,27 @@ class _FakeRepository implements GalleryRepository {
 }
 
 void languageTests() {
+  testWidgets('updates mounted translated widgets after a language change', (
+    tester,
+  ) async {
+    AppL10n.apply(AppLanguage.ja);
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (_) => Scaffold(body: Text(tr('日本語', 'English'))),
+        ),
+      ),
+    );
+    expect(find.text('日本語'), findsOneWidget);
+
+    AppL10n.apply(AppLanguage.en);
+    AppL10n.rebuildAll();
+    await tester.pump();
+    expect(find.text('English'), findsOneWidget);
+
+    AppL10n.apply(AppLanguage.system);
+  });
+
   test('system language follows the OS: Japanese or English fallback', () {
     final binding = TestWidgetsFlutterBinding.ensureInitialized();
     addTearDown(binding.platformDispatcher.clearLocaleTestValue);
@@ -3106,6 +3127,16 @@ void languageTests() {
     expect(tr('あ', 'a'), 'あ');
     AppL10n.apply(AppLanguage.en);
     expect(tr('あ', 'a'), 'a');
+    AppL10n.apply(AppLanguage.system);
+  });
+
+  test('new filter category defaults follow the selected language', () {
+    AppL10n.apply(AppLanguage.en);
+    expect(GalleryTagCategorySettings.defaultCategories.first.name, 'Source');
+    expect(GalleryOtherCategorySettings.defaultName, 'Other');
+    AppL10n.apply(AppLanguage.ja);
+    expect(GalleryTagCategorySettings.defaultCategories.first.name, 'ソース');
+    expect(GalleryOtherCategorySettings.defaultName, 'その他');
     AppL10n.apply(AppLanguage.system);
   });
 

@@ -336,7 +336,7 @@ Rust/Flutter のテスト、署名 APK（arm64・x86_64・universal）と Linux 
 
 Windows 版は Windows 上でしかビルドできないため、手動実行（`workflow_dispatch`）専用の GitHub Actions
 （`.github/workflows/windows.yml`、標準ランナーのみ・公開リポジトリでは無料）でビルドします。
-Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.5.3` のように入力すると、
+Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.6.0` のように入力すると、
 x64 の ZIP を Release に追加して `SHA256SUMS` を更新します。ZIP を展開して `vault_gallery.exe` を起動します。
 arm64 の ZIP は実験的で、同梱の libmpv が x86_64 のみのため動画再生が動かない可能性があります。
 Windows on Arm では x64 版もエミュレーションで動作します。arm64 を添付するには `publish_arm64` を有効にします。
@@ -370,4 +370,4 @@ app/lib/
 docs/design.md      設計の基準
 ```
 
-このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。同梱する mpv・FFmpeg などのライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください（Linux バンドルは FFmpeg 由来で GPL-3.0-or-later として配布します。Android APK は LGPL の同梱ライブラリのみです）。
+このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。同梱する mpv・FFmpeg などのライセンスは [THIRD_PARTY_NOTICES.ja.md](THIRD_PARTY_NOTICES.ja.md) を参照してください（Linux バンドルは FFmpeg 由来で GPL-3.0-or-later として配布します。Android APK は LGPL の同梱ライブラリのみです）。

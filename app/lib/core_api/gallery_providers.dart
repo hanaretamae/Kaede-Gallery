@@ -171,7 +171,10 @@ class VaultController extends AsyncNotifier<VaultSession?> {
             vaultPath) {
       throw StateError(
         tr(
-          '選択したフォルダへのアクセス権がありません。Vault を選び直してください。',
+          tr(
+            '選択したフォルダへのアクセス権がありません。Vault を選び直してください。',
+            'Access to the selected folder is unavailable. Choose the Vault again.',
+          ),
           'Access to the selected folder is unavailable. Please choose the vault again.',
         ),
       );

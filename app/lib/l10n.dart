@@ -1,4 +1,3 @@
-
 import 'package:flutter/widgets.dart';
 
 /// The user-selectable language. [system] follows the OS: Japanese when the
