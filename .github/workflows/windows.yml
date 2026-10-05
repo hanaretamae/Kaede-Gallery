@@ -32,10 +32,14 @@ jobs:
           - name: windows-x64
             runner: windows-latest
             flutter_arch: x64
+            flutter_sdk_arch: x64
             experimental: false
           - name: windows-arm64
             runner: windows-11-arm
             flutter_arch: arm64
+            # Flutter does not publish an ARM64 Windows-hosted SDK yet; run
+            # the x64 SDK under emulation and select the ARM64 target.
+            flutter_sdk_arch: x64
             experimental: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -47,7 +51,7 @@ jobs:
         with:
           channel: stable
           flutter-version: "3.47.4"
-          architecture: ${{ matrix.flutter_arch }}
+          architecture: ${{ matrix.flutter_sdk_arch }}
           cache: true
 
       - name: Install Rust
@@ -62,15 +66,22 @@ jobs:
           }
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
+          $target = if ('${{ matrix.flutter_arch }}' -eq 'arm64') { 'aarch64-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
+          rustup target add $target
+          $rustc = (rustup which rustc).Trim()
+          if (-not (Test-Path $rustc)) { throw "rustc was not found at $rustc" }
+          "RUSTC=$rustc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           rustc --version
 
       - name: Build
         working-directory: app
         shell: pwsh
+        env:
+          FLUTTER_HOST_ARCH: ${{ matrix.flutter_arch }}
         run: |
           flutter config --no-analytics
           flutter pub get --enforce-lockfile
-          flutter build windows --release
+          flutter build windows --release --verbose
 
       - name: Verify bundle
         shell: pwsh
