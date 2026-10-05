@@ -109,6 +109,18 @@ awk -v version="${tag#v}" '
 ' CHANGELOG.md > "$notes_file"
 [[ -s $notes_file ]] || fail "CHANGELOG.md has no release notes for $tag"
 
+if command -v nix >/dev/null; then
+  nix_config=$(nix config show 2>/dev/null || true)
+  native_system=$(awk '$1 == "system" { print $3 }' <<< "$nix_config")
+  extra_systems=$(awk '$1 == "extra-platforms" { $1 = $2 = ""; print }' <<< "$nix_config")
+  has_builders=$(awk '$1 == "builders" && NF > 2 { print "yes" }' <<< "$nix_config")
+  for system in x86_64-linux aarch64-linux; do
+    [[ " ${SKIP_LINUX_ARCHES:-} " == *" $system "* ]] && continue
+    [[ $system == "$native_system" || " $extra_systems " == *" $system "* || -n $has_builders ]] ||
+      fail "no way to build $system (needs binfmt emulation or a remote builder); set SKIP_LINUX_ARCHES=$system to skip"
+  done
+fi
+
 dart tools/generate_saf_limits.dart --check
 rustup target add aarch64-linux-android x86_64-linux-android
 cargo test --locked --workspace
