@@ -3,6 +3,8 @@ import 'package:material_ui/material_ui.dart' as mui;
 import 'package:flutter/widgets.dart'
     show BuildContext, StatelessWidget, VoidCallback, Widget;
 
+import '../../l10n.dart';
+
 class VaultPickerScreen extends StatelessWidget {
   const VaultPickerScreen({
     required this.onChooseVault,
@@ -76,7 +78,10 @@ class _VaultPickerContent extends StatelessWidget {
                   ),
                   const mui.SizedBox(height: 8),
                   mui.Text(
-                    'Obsidian Vault のメディアをオフラインで閲覧できます。',
+                    tr(
+                      'Obsidian Vault のメディアをオフラインで閲覧できます。',
+                      'Browse media from your Obsidian Vault offline.',
+                    ),
                     textAlign: mui.TextAlign.center,
                     style: expressiveTheme.typography.baseline.bodyLarge
                         .copyWith(
@@ -87,8 +92,8 @@ class _VaultPickerContent extends StatelessWidget {
                   M3EButton.icon(
                     onPressed: onChooseVault,
                     icon: const mui.Icon(mui.Icons.folder_open),
-                    label: const mui.Text('Vault を選択'),
-                    semanticLabel: 'Vault を選択',
+                    label: mui.Text(tr('Vault を選択', 'Choose Vault')),
+                    semanticLabel: tr('Vault を選択', 'Choose Vault'),
                   ),
                 ],
               ),
@@ -103,8 +108,8 @@ class _VaultPickerContent extends StatelessWidget {
               onPressed: onShowNoteExample,
               style: M3EButtonStyle.tonal,
               icon: const mui.Icon(mui.Icons.description_outlined),
-              label: const mui.Text('ノート形式の例を見る'),
-              semanticLabel: 'ノート形式の例を見る',
+              label: mui.Text(tr('ノート形式の例を見る', 'View note format example')),
+              semanticLabel: tr('ノート形式の例を見る', 'View note format example'),
             ),
           ),
         ),

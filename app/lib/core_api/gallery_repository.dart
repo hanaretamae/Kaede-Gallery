@@ -1,23 +1,33 @@
 import 'dart:typed_data';
 
-enum GallerySortField {
-  created('created', '作成日'),
-  published('published', '公開日');
+import '../l10n.dart';
 
-  const GallerySortField(this.apiValue, this.label);
+enum GallerySortField {
+  created('created'),
+  published('published');
+
+  const GallerySortField(this.apiValue);
 
   final String apiValue;
-  final String label;
+
+  String get label => switch (this) {
+    GallerySortField.created => tr('作成日', 'Created'),
+    GallerySortField.published => tr('公開日', 'Published'),
+  };
 }
 
 enum GallerySortDirection {
-  ascending('ascending', '昇順'),
-  descending('descending', '降順');
+  ascending('ascending'),
+  descending('descending');
 
-  const GallerySortDirection(this.apiValue, this.label);
+  const GallerySortDirection(this.apiValue);
 
   final String apiValue;
-  final String label;
+
+  String get label => switch (this) {
+    GallerySortDirection.ascending => tr('昇順', 'Ascending'),
+    GallerySortDirection.descending => tr('降順', 'Descending'),
+  };
 }
 
 class GallerySort {
@@ -179,15 +189,21 @@ class GalleryScanReport {
 }
 
 enum GalleryVirtualFilter {
-  multipleMedia('multiple_media', '複数画像'),
-  hasMemo('has_memo', '覚書あり'),
-  hasVideo('has_video', '動画あり'),
-  hasRelated('has_related', '関連あり');
+  multipleMedia('multiple_media'),
+  hasMemo('has_memo'),
+  hasVideo('has_video'),
+  hasRelated('has_related');
 
-  const GalleryVirtualFilter(this.key, this.label);
+  const GalleryVirtualFilter(this.key);
 
   final String key;
-  final String label;
+
+  String get label => switch (this) {
+    GalleryVirtualFilter.multipleMedia => tr('複数画像', 'Multiple images'),
+    GalleryVirtualFilter.hasMemo => tr('覚書あり', 'Has memo'),
+    GalleryVirtualFilter.hasVideo => tr('動画あり', 'Has video'),
+    GalleryVirtualFilter.hasRelated => tr('関連あり', 'Has related'),
+  };
 
   static GalleryVirtualFilter fromKey(String key) =>
       values.firstWhere((filter) => filter.key == key);

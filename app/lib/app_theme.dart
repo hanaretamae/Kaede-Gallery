@@ -291,12 +291,12 @@ m3e.M3EThemeData _buildExpressiveTheme(ThemeData theme) {
         scrim: flutterScheme.scrim,
         surfaceTint: flutterScheme.surfaceTint,
       );
-  final base = m3e.M3EThemeData.fromMaterial(
-    mui.ThemeData.from(colorScheme: scheme),
-  ).copyWith(
-    fontFamily: gallerySystemFontFamily,
-    fontFamilyFallback: gallerySystemFontFallback,
-  );
+  final base =
+      m3e.M3EThemeData.fromMaterial(mui.ThemeData.from(colorScheme: scheme))
+          .copyWith(
+            fontFamily: gallerySystemFontFamily,
+            fontFamilyFallback: gallerySystemFontFallback,
+          );
   return base.copyWith(
     listTheme: base.listTheme.copyWith(
       item: base.listTheme.item.copyWith(minHeight: 72),

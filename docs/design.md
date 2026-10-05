@@ -220,7 +220,9 @@ The media order is `cover` followed by Markdown body embeds in source order,
 without duplicates. Support image and video extensions, URL-decoded paths,
 and missing media. Media paths are relative to
 the note and must resolve inside the Vault. Body sections named `関連` and
-`覚書` are extracted by heading name at any heading level. Their content is
+`覚書` (default aliases also include `Related`, `Memo`, `Notes`, `Document`; the
+UI language is Japanese or English, English unless the system language is
+Japanese, and is user-selectable) are extracted by heading name at any heading level. Their content is
 not restricted to list items: plain text, quoted text, and code-block contents
 are retained. Related links can open any parseable indexed note inside the
 Vault, including notes not eligible for the gallery. The UI displays extracted

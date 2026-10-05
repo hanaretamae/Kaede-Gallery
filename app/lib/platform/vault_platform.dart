@@ -6,6 +6,7 @@ import 'package:flutter/services.dart';
 import 'package:path/path.dart' as path;
 import 'package:path_provider/path_provider.dart';
 
+import '../l10n.dart';
 import 'saf_limits.g.dart';
 
 final _blockedVaultCacheOperations = <String>{};
@@ -413,7 +414,9 @@ class NativeVaultPlatform implements VaultPlatform {
   @override
   Future<String?> chooseVault() => Platform.isAndroid
       ? safAccess.chooseVault()
-      : getDirectoryPath(confirmButtonText: 'この Vault を選択');
+      : getDirectoryPath(
+          confirmButtonText: tr('この Vault を選択', 'Select this vault'),
+        );
 
   @override
   Future<GalleryPaths> galleryPaths() async {

@@ -9,9 +9,9 @@ pub const MAX_FRONTMATTER_BYTES: usize = 256 * 1024;
 pub const MAX_TAGS: usize = 256;
 pub const MAX_YAML_DEPTH: usize = 64;
 pub const MAX_SETTINGS_BYTES: usize = 64 * 1024;
-const DEFAULT_MEMO_HEADINGS: [&str; 2] = ["覚書", "メモ"];
-const DEFAULT_RELATED_HEADINGS: [&str; 1] = ["関連"];
-const DEFAULT_POST_TEXT_END_HEADINGS: [&str; 1] = ["文書"];
+const DEFAULT_MEMO_HEADINGS: [&str; 4] = ["覚書", "メモ", "Memo", "Notes"];
+const DEFAULT_RELATED_HEADINGS: [&str; 2] = ["関連", "Related"];
+const DEFAULT_POST_TEXT_END_HEADINGS: [&str; 2] = ["文書", "Document"];
 
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(default, rename_all = "camelCase")]

@@ -13,6 +13,7 @@ import 'package:material_ui/material_ui.dart' as mui;
 import 'package:video_player/video_player.dart';
 import 'package:vault_gallery/app_theme.dart';
 import 'package:vault_gallery/app.dart';
+import 'package:vault_gallery/l10n.dart';
 import 'package:vault_gallery/core_api/gallery_appearance.dart';
 import 'package:vault_gallery/core_api/linux_system_appearance.dart';
 import 'package:vault_gallery/core_api/gallery_providers.dart';
@@ -63,6 +64,11 @@ Future<void> _scrollNoteStructureUntilVisible(
 }
 
 void main() {
+  final binding = TestWidgetsFlutterBinding.ensureInitialized();
+  languageTests();
+  setUp(() => binding.platformDispatcher.localeTestValue = const Locale('ja'));
+  tearDown(binding.platformDispatcher.clearLocaleTestValue);
+
   test('SAF Vault names use the selected document tree folder', () {
     expect(
       vaultDisplayName(
@@ -447,7 +453,7 @@ void main() {
     expect(restored.includedPrefixes, custom.includedPrefixes);
     expect(restored.hiddenPrefixes, custom.hiddenPrefixes);
     expect(restored.colors.map((rule) => rule.color), [0xFF112233, 0xFF445566]);
-    expect(restored.noteStructure.memoHeadings, ['覚書', 'メモ']);
+    expect(restored.noteStructure.memoHeadings, ['覚書', 'メモ', 'Memo', 'Notes']);
     expect(const GalleryNoteStructureSettings().blockOrder, const [
       GalleryNoteBlock.author,
       GalleryNoteBlock.media,
@@ -476,7 +482,7 @@ void main() {
       'memoBulletsRequired': true,
       'relatedBulletsRequired': true,
     });
-    expect(legacyStructure.memoHeadings, ['覚書', 'メモ']);
+    expect(legacyStructure.memoHeadings, ['覚書', 'メモ', 'Memo', 'Notes']);
     expect(legacyStructure.toJson().containsKey('memoHeadingLevel'), isFalse);
     final orderedStructure = restored.noteStructure.copyWith(
       blockOrder: const [
@@ -1391,6 +1397,9 @@ void main() {
   testWidgets('keeps scan warnings in settings instead of the gallery', (
     tester,
   ) async {
+    tester.view.physicalSize = const Size(800, 1600);
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
     tester.platformDispatcher.platformBrightnessTestValue = Brightness.light;
     addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
     final repository = _FakeRepository(
@@ -1427,7 +1436,7 @@ void main() {
     expect(find.text('ピュアブラック'), findsOneWidget);
     expect(find.textContaining('アクセントとして併用できます'), findsOneWidget);
     final currentScheme = Theme.of(
-      tester.element(find.byType(m3e.M3EButtonGroup)),
+      tester.element(find.byType(m3e.M3EButtonGroup).first),
     ).colorScheme;
     for (final label in ['ページングと一覧表示', '選択中の Vault', '確認できなかった項目']) {
       final card = find
@@ -1436,9 +1445,9 @@ void main() {
           .map((element) => (element.widget as m3e.M3ECard).color);
       expect(card, contains(currentScheme.surfaceContainerHigh), reason: label);
     }
-    expect(find.byType(m3e.M3EButtonGroup), findsOneWidget);
+    expect(find.byType(m3e.M3EButtonGroup), findsNWidgets(2));
     expect(find.byType(m3e.M3ESwitch), findsNWidgets(2));
-    final groupFinder = find.byType(m3e.M3EButtonGroup);
+    final groupFinder = find.byType(m3e.M3EButtonGroup).first;
     expect(
       tester.widget<m3e.M3EButtonGroup>(groupFinder).style,
       m3e.M3EButtonStyle.tonal,
@@ -1460,8 +1469,9 @@ void main() {
     final activeChoice = choiceButtons.firstWhere(
       (button) => button.isSelected == true,
     );
-    final scheme = Theme.of(tester.element(find.byType(m3e.M3EButtonGroup)))
-        .colorScheme;
+    final scheme = Theme.of(
+      tester.element(find.byType(m3e.M3EButtonGroup).first),
+    ).colorScheme;
     final settingsSurface = scheme.surfaceContainerLow;
     double contrastRatio(Color foreground, Color background) {
       final luminances = [
@@ -1476,7 +1486,7 @@ void main() {
       scheme.primary,
     );
     void expectActiveChoiceTracksTheme(Brightness brightness) {
-      final activeGroup = find.byType(m3e.M3EButtonGroup);
+      final activeGroup = find.byType(m3e.M3EButtonGroup).first;
       final currentTheme = Theme.of(tester.element(activeGroup));
       final activeButton = tester
           .widgetList<m3e.M3EButton>(find.byType(m3e.M3EButton))
@@ -3083,4 +3093,30 @@ class _FakeRepository implements GalleryRepository {
       ],
     );
   }
+}
+
+void languageTests() {
+  test('system language follows the OS: Japanese or English fallback', () {
+    final binding = TestWidgetsFlutterBinding.ensureInitialized();
+    addTearDown(binding.platformDispatcher.clearLocaleTestValue);
+    AppL10n.apply(AppLanguage.system);
+    binding.platformDispatcher.localeTestValue = const Locale('fr');
+    expect(tr('あ', 'a'), 'a');
+    binding.platformDispatcher.localeTestValue = const Locale('ja', 'JP');
+    expect(tr('あ', 'a'), 'あ');
+    AppL10n.apply(AppLanguage.en);
+    expect(tr('あ', 'a'), 'a');
+    AppL10n.apply(AppLanguage.system);
+  });
+
+  test('appearance language round-trips and tolerates unknown values', () {
+    final json = const GalleryAppearance(language: AppLanguage.en).toJson();
+    expect(GalleryAppearance.fromJson(json).language, AppLanguage.en);
+    expect(
+      GalleryAppearance.fromJson({...json, 'language': 'xx'}).language,
+      AppLanguage.system,
+    );
+    final legacy = {...json}..remove('language');
+    expect(GalleryAppearance.fromJson(legacy).language, AppLanguage.system);
+  });
 }

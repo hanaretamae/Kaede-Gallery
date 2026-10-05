@@ -5,6 +5,19 @@
 
 ## [Unreleased]
 
+## [1.6.0] - 2026-10-06
+
+### Added
+
+- アプリの表示言語に英語を追加しました。システムの言語が日本語以外の場合は英語が既定になり、設定の「外観」で システム／日本語／English を切り替えられます。
+- 見出しの既定値が英語（`Memo`・`Notes`・`Related`・`Document`）も認識します。
+- README を英語（既定）と日本語（`README.ja.md`）に分け、使い方を先頭に、ビルド・インストールを後ろに移し、動作するノートの例を追加しました。
+
+### Changed
+
+- 英語環境で新規作成するフィルターカテゴリーの既定名は英語になります（保存済みの設定は変わりません）。
+- Added English (default unless the system language is Japanese) with an in-app language switch, English heading defaults, and an English-first README.
+
 ## [1.5.3] - 2026-10-05
 
 ### Added

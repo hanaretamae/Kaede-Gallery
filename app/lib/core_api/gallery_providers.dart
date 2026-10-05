@@ -3,6 +3,7 @@ import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../l10n.dart';
 import 'gallery_repository.dart';
 import 'gallery_tag_settings.dart';
 import 'rust_gallery_repository.dart';
@@ -168,7 +169,12 @@ class VaultController extends AsyncNotifier<VaultSession?> {
     if (vaultPath.startsWith('content://') &&
         await ref.read(vaultPlatformProvider).safAccess.loadVault() !=
             vaultPath) {
-      throw StateError('選択したフォルダへのアクセス権がありません。Vault を選び直してください。');
+      throw StateError(
+        tr(
+          '選択したフォルダへのアクセス権がありません。Vault を選び直してください。',
+          'Access to the selected folder is unavailable. Please choose the vault again.',
+        ),
+      );
     }
     if (vaultPath.startsWith('content://')) {
       final cached = await _readSafScanCache(vaultPath, paths);
@@ -227,7 +233,7 @@ class VaultController extends AsyncNotifier<VaultSession?> {
   Future<void> forgetVault() async {
     final session = state.value;
     if (session == null) {
-      throw StateError('選択中の Vault がありません。');
+      throw StateError(tr('選択中の Vault がありません。', 'No vault is selected.'));
     }
     state = const AsyncLoading();
     final repository = ref.read(galleryRepositoryProvider);

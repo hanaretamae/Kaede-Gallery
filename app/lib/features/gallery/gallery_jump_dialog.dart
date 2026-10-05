@@ -53,19 +53,34 @@ class _GalleryJumpProgressDialog extends ConsumerWidget {
       }
     });
     final message = switch (status) {
-      GalleryJumpStatus.loading => '${targetIndex + 1} 件目のページを読み込んでいます。',
-      GalleryJumpStatus.positioning => '${targetIndex + 1} 件目へ移動しています。',
-      GalleryJumpStatus.completed => '${targetIndex + 1} 件目へ移動しました。',
-      GalleryJumpStatus.notFound => '指定位置の項目が見つかりませんでした。',
-      GalleryJumpStatus.failed => '指定位置の読み込みに失敗しました。',
-      GalleryJumpStatus.idle => '移動を準備しています。',
+      GalleryJumpStatus.loading => tr(
+        '${targetIndex + 1} 件目のページを読み込んでいます。',
+        'Loading the page containing item ${targetIndex + 1}.',
+      ),
+      GalleryJumpStatus.positioning => tr(
+        '${targetIndex + 1} 件目へ移動しています。',
+        'Jumping to item ${targetIndex + 1}.',
+      ),
+      GalleryJumpStatus.completed => tr(
+        '${targetIndex + 1} 件目へ移動しました。',
+        'Jumped to item ${targetIndex + 1}.',
+      ),
+      GalleryJumpStatus.notFound => tr(
+        '指定位置の項目が見つかりませんでした。',
+        'Could not find the item at that position.',
+      ),
+      GalleryJumpStatus.failed => tr(
+        '指定位置の読み込みに失敗しました。',
+        'Failed to load the requested position.',
+      ),
+      GalleryJumpStatus.idle => tr('移動を準備しています。', 'Preparing to jump.'),
     };
     final loading =
         status == GalleryJumpStatus.loading ||
         status == GalleryJumpStatus.positioning ||
         status == GalleryJumpStatus.idle;
     return M3EDialog(
-      title: '指定位置へ移動',
+      title: tr('指定位置へ移動', 'Jump to position'),
       content: Row(
         children: [
           if (loading) ...[
@@ -88,7 +103,7 @@ class _GalleryJumpProgressDialog extends ConsumerWidget {
                 .set(GalleryJumpStatus.idle);
             Navigator.of(context).pop();
           },
-          child: Text(loading ? 'キャンセル' : '閉じる'),
+          child: Text(loading ? tr('キャンセル', 'Cancel') : tr('閉じる', 'Close')),
         ),
       ],
     );
@@ -123,17 +138,23 @@ class _GalleryStartIndexDialogState extends State<_GalleryStartIndexDialog> {
 
   @override
   Widget build(BuildContext context) => M3EDialog(
-    title: '指定した位置へ移動',
+    title: tr('指定した位置へ移動', 'Jump to position'),
     content: M3ETextField(
       controller: controller,
       autofocus: true,
-      label: '何件目から表示',
+      label: tr('何件目から表示', 'Start at item'),
       errorText: errorMessage,
       variant: M3ETextFieldVariant.outlined,
       supportingText: errorMessage == null
           ? widget.maximum == null
-                ? '件数を計算中です。正の整数を指定できます。'
-                : '1 から ${widget.maximum} 件目まで'
+                ? tr(
+                    '件数を計算中です。正の整数を指定できます。',
+                    'The total is still loading. Enter a positive integer.',
+                  )
+                : tr(
+                    '1 から ${widget.maximum} 件目まで',
+                    'Items 1 to ${widget.maximum}',
+                  )
           : null,
       keyboardType: TextInputType.number,
       inputFormatters: [
@@ -147,7 +168,7 @@ class _GalleryStartIndexDialogState extends State<_GalleryStartIndexDialog> {
     actions: [
       M3EButton.text(
         onPressed: () => Navigator.of(context).pop(),
-        child: const Text('キャンセル'),
+        child: Text(tr('キャンセル', 'Cancel')),
       ),
       M3EButton.filled(
         onPressed: () {
@@ -159,8 +180,14 @@ class _GalleryStartIndexDialogState extends State<_GalleryStartIndexDialog> {
               (maximum != null && parsed > maximum)) {
             setState(
               () => errorMessage = widget.maximum == null
-                  ? '1 から $_maximumUnboundedGalleryJump の範囲で入力してください。'
-                  : '1 から ${widget.maximum} の範囲で入力してください。',
+                  ? tr(
+                      '1 から $_maximumUnboundedGalleryJump の範囲で入力してください。',
+                      'Enter a value from 1 to $_maximumUnboundedGalleryJump.',
+                    )
+                  : tr(
+                      '1 から ${widget.maximum} の範囲で入力してください。',
+                      'Enter a value from 1 to ${widget.maximum}.',
+                    ),
             );
             return;
           }
@@ -168,7 +195,7 @@ class _GalleryStartIndexDialogState extends State<_GalleryStartIndexDialog> {
           widget.onSubmit(parsed);
           Navigator.of(context).pop(parsed);
         },
-        child: const Text('移動'),
+        child: Text(tr('移動', 'Jump')),
       ),
     ],
   );

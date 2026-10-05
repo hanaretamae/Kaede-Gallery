@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
+import '../l10n.dart';
 import 'gallery_providers.dart';
 
 enum GalleryBrightnessMode { system, light, dark }
@@ -13,35 +14,42 @@ class GalleryAppearance {
     this.brightness = GalleryBrightnessMode.system,
     this.useSystemColor = false,
     this.pureBlack = false,
+    this.language = AppLanguage.system,
   });
 
   final GalleryBrightnessMode brightness;
   final bool useSystemColor;
   final bool pureBlack;
+  final AppLanguage language;
 
   GalleryAppearance copyWith({
     GalleryBrightnessMode? brightness,
     bool? useSystemColor,
     bool? pureBlack,
+    AppLanguage? language,
   }) => GalleryAppearance(
     brightness: brightness ?? this.brightness,
     useSystemColor: useSystemColor ?? this.useSystemColor,
     pureBlack: pureBlack ?? this.pureBlack,
+    language: language ?? this.language,
   );
 
   Map<String, Object> toJson() => {
     'brightness': brightness.name,
     'useSystemColor': useSystemColor,
     'pureBlack': pureBlack,
+    'language': language.name,
   };
 
   static GalleryAppearance fromJson(Map<String, dynamic> json) {
     final brightnessName = json['brightness'];
     final useSystemColor = json['useSystemColor'] ?? false;
     final pureBlack = json['pureBlack'];
+    final languageName = json['language'] ?? AppLanguage.system.name;
     if (brightnessName is! String ||
         useSystemColor is! bool ||
-        pureBlack is! bool) {
+        pureBlack is! bool ||
+        languageName is! String) {
       throw const FormatException('Invalid gallery appearance settings.');
     }
     final brightness = GalleryBrightnessMode.values
@@ -50,10 +58,17 @@ class GalleryAppearance {
     if (brightness == null) {
       throw const FormatException('Unknown gallery brightness setting.');
     }
+    // An unknown language (for example from a newer version) falls back to the system language.
+    final language =
+        AppLanguage.values
+            .where((value) => value.name == languageName)
+            .firstOrNull ??
+        AppLanguage.system;
     return GalleryAppearance(
       brightness: brightness,
       useSystemColor: useSystemColor,
       pureBlack: pureBlack,
+      language: language,
     );
   }
 }

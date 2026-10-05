@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 
+import '../l10n.dart';
 import '../platform/vault_platform.dart';
 
 import 'package:vault_gallery/src/rust/api.dart' as rust;
@@ -8,6 +9,39 @@ import 'package:vault_gallery/src/rust/api.dart' as rust;
 import 'gallery_repository.dart';
 
 final Map<String, Future<Uint8List?>> _safThumbnailLoads = {};
+
+/// Localizes only Rust's built-in Japanese sentinel labels so user-defined
+/// category and option names stay unchanged.
+String _localizeRustCategoryDisplayName(String path, String displayName) {
+  if (path == '@content' && displayName == 'コンテンツ') {
+    return tr('コンテンツ', 'Content');
+  }
+  return displayName;
+}
+
+String _localizeRustCategoryOptionName({
+  required String categoryPath,
+  required String name,
+  required String fullTag,
+  required String? virtualFilter,
+}) {
+  if (virtualFilter == 'multiple_media' && name == '複数画像') {
+    return tr('複数画像', 'Multiple images');
+  }
+  if (virtualFilter == 'has_memo' && name == '覚書あり') {
+    return tr('覚書あり', 'Has memo');
+  }
+  if (virtualFilter == 'has_video' && name == '動画あり') {
+    return tr('動画あり', 'Has video');
+  }
+  if (virtualFilter == 'has_related' && name == '関連あり') {
+    return tr('関連あり', 'Has related');
+  }
+  if (fullTag == categoryPath && name == 'すべて') {
+    return tr('すべて', 'All');
+  }
+  return name;
+}
 
 class RustGalleryRepository implements GalleryRepository {
   const RustGalleryRepository({required this.safAccess});
@@ -107,12 +141,20 @@ class RustGalleryRepository implements GalleryRepository {
         .map(
           (category) => GalleryCategory(
             path: category.path,
-            displayName: category.displayName,
+            displayName: _localizeRustCategoryDisplayName(
+              category.path,
+              category.displayName,
+            ),
             count: category.count,
             options: category.options
                 .map(
                   (option) => GalleryCategoryOption(
-                    name: option.name,
+                    name: _localizeRustCategoryOptionName(
+                      categoryPath: category.path,
+                      name: option.name,
+                      fullTag: option.fullTag,
+                      virtualFilter: option.virtualFilter,
+                    ),
                     fullTag: option.fullTag,
                     count: option.count,
                     disabled: option.disabled,
@@ -363,7 +405,12 @@ class RustGalleryRepository implements GalleryRepository {
       if (path == null) return null;
       final content = await safAccess.readFile(vaultPath, path);
       if (content == null) {
-        throw StateError('ノートを読み込めません。アクセス権を確認してください。');
+        throw StateError(
+          tr(
+            'ノートを読み込めません。アクセス権を確認してください。',
+            'Unable to read the note. Please check access permissions.',
+          ),
+        );
       }
       detail = await rust.getNoteDetailSaf(
         vaultPath: vaultPath,

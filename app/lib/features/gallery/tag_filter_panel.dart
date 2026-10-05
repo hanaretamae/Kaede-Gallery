@@ -129,9 +129,15 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
       spacing: 14,
       runSpacing: 6,
       children: [
-        _FilterLegendItem(icon: Icons.add, label: 'いずれか (+)'),
-        _FilterLegendItem(icon: Icons.done_all, label: 'すべて (AND)'),
-        _FilterLegendItem(icon: Icons.remove, label: '除外 (-)'),
+        _FilterLegendItem(icon: Icons.add, label: tr('いずれか (+)', 'Any (+)')),
+        _FilterLegendItem(
+          icon: Icons.done_all,
+          label: tr('すべて (AND)', 'All (AND)'),
+        ),
+        _FilterLegendItem(
+          icon: Icons.remove,
+          label: tr('除外 (-)', 'Exclude (-)'),
+        ),
       ],
     ),
   );
@@ -141,12 +147,18 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
     final categories = ref.watch(galleryCategoriesProvider);
     return categories.when(
       loading: () => const Center(child: M3EProgressIndicator.circular()),
-      error: (_, _) => const Center(child: Text('タグ一覧を読み込めませんでした。')),
+      error: (_, _) => Center(
+        child: Text(tr('タグ一覧を読み込めませんでした。', 'Couldn\'t load the tag list.')),
+      ),
       data: (items) {
         final tagSettingsState = ref.watch(galleryTagSettingsProvider);
         return tagSettingsState.when(
           loading: () => const Center(child: M3EProgressIndicator.circular()),
-          error: (_, _) => const Center(child: Text('タグ設定を読み込めませんでした。')),
+          error: (_, _) => Center(
+            child: Text(
+              tr('タグ設定を読み込めませんでした。', 'Couldn\'t load the tag settings.'),
+            ),
+          ),
           data: (tagSettings) {
             final matchingCategories = items
                 .map((category) {
@@ -195,7 +207,7 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                           ExpressiveMaterialScope(
                             theme: Theme.of(context),
                             child: M3EButtonGroup(
-                              semanticLabel: '並べ替えの基準',
+                              semanticLabel: tr('並べ替えの基準', 'Sort field'),
                               type: M3EButtonGroupType.connected,
                               style: M3EButtonStyle.tonal,
                               decoration: galleryChoiceButtonDecoration(
@@ -222,7 +234,7 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                           ExpressiveMaterialScope(
                             theme: Theme.of(context),
                             child: M3EButtonGroup(
-                              semanticLabel: '並べ替えの向き',
+                              semanticLabel: tr('並べ替えの向き', 'Sort direction'),
                               type: M3EButtonGroupType.connected,
                               style: M3EButtonStyle.tonal,
                               decoration: galleryChoiceButtonDecoration(
@@ -268,7 +280,10 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                           theme: Theme.of(context),
                           child: M3ESearchBar(
                             controller: noteSearchController,
-                            hintText: 'ノート名 / #タグ / -#タグ / &#タグ',
+                            hintText: tr(
+                              'ノート名 / #タグ / -#タグ / &#タグ',
+                              'Note name / #tag / -#tag / &#tag',
+                            ),
                             leading: const Icon(Icons.article_outlined),
                             textInputAction: TextInputAction.search,
                             onSubmitted: (_) => _applyNoteSearch(),
@@ -280,13 +295,16 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                       const SizedBox(width: 8),
                       M3EIconButton(
                         variant: M3EIconButtonVariant.tonal,
-                        tooltip: 'ノートを検索',
+                        tooltip: tr('ノートを検索', 'Search notes'),
                         onPressed: _applyNoteSearch,
                         icon: const Icon(Icons.search),
                       ),
                       M3EIconButton(
                         variant: M3EIconButtonVariant.standard,
-                        tooltip: '検索と絞り込みをすべて解除',
+                        tooltip: tr(
+                          '検索と絞り込みをすべて解除',
+                          'Clear all search and filters',
+                        ),
                         onPressed: _clearAll,
                         icon: const Icon(Icons.backspace_outlined),
                       ),
@@ -303,7 +321,7 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                           child: M3ESearchBar(
                             controller: tagSearchController,
                             leading: const Icon(Icons.sell_outlined),
-                            hintText: 'タグを検索',
+                            hintText: tr('タグを検索', 'Search tags'),
                             textInputAction: TextInputAction.search,
                             margin: 0,
                             focusedMargin: 0,
@@ -326,9 +344,9 @@ class _TagPanelState extends ConsumerState<_TagPanel> {
                         const SizedBox(height: 8),
                     itemBuilder: (context, index) {
                       if (matchingCategories.isEmpty) {
-                        return const Padding(
+                        return Padding(
                           padding: EdgeInsets.all(16),
-                          child: Text('一致するタグがありません。'),
+                          child: Text(tr('一致するタグがありません。', 'No matching tags.')),
                         );
                       }
                       final category = matchingCategories[index];
@@ -485,9 +503,11 @@ class _CategoryCard extends ConsumerWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         if (options.isEmpty)
-                          const Padding(
+                          Padding(
                             padding: EdgeInsets.symmetric(vertical: 8),
-                            child: Text('該当する選択肢がありません'),
+                            child: Text(
+                              tr('該当する選択肢がありません', 'No matching options'),
+                            ),
                           )
                         else ...[
                           for (final section in _optionSections(options))
@@ -558,13 +578,13 @@ class _CategoryCard extends ConsumerWidget {
             ),
           ),
         if (options.isEmpty)
-          const Padding(
+          Padding(
             padding: EdgeInsets.symmetric(vertical: 8),
-            child: Text('該当する選択肢がありません'),
+            child: Text(tr('該当する選択肢がありません', 'No matching options')),
           )
         else
           M3EChipGroup(
-            groupLabel: '$title のタグ',
+            groupLabel: tr('$title のタグ', 'Tags in $title'),
             child: Wrap(
               spacing: 6,
               runSpacing: 6,
@@ -595,7 +615,7 @@ class _TagCountPill extends StatelessWidget {
   Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Semantics(
-      label: '件数 $count',
+      label: tr('件数 $count', 'Count $count'),
       child: DecoratedBox(
         decoration: BoxDecoration(
           color: scheme.secondaryContainer,
@@ -644,15 +664,18 @@ class _OptionChip extends ConsumerWidget {
         ? isIncluded || isAllRequired || isExcluded
         : selectedVirtualFilters.contains(virtualFilter);
     final filterState = isIncluded
-        ? 'いずれかに含める'
+        ? tr('いずれかに含める', 'Include in any')
         : isAllRequired
-        ? 'すべてに含める'
+        ? tr('すべてに含める', 'Require all')
         : isExcluded
-        ? '除外'
-        : '未選択';
+        ? tr('除外', 'Exclude')
+        : tr('未選択', 'Not selected');
     return Semantics(
       label: option.fullTag,
-      value: '$filterState、${option.count} 件',
+      value: tr(
+        '$filterState、${option.count} 件',
+        '$filterState, ${option.count} items',
+      ),
       enabled: !option.disabled,
       toggled: selected || isAllRequired,
       child: M3EChip(
