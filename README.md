@@ -256,9 +256,15 @@ DB とキーファイルは Vault や Git 管理下に置かず、端末上の�
 スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査します。
 タグが HEAD より前でも、タグ以降の変更が `CHANGELOG.md` を除く Markdown 文書と
 リリーススクリプトだけなら許可し、アプリやビルド設定の変更があれば停止します。
-Rust/Flutter のテスト、署名 APK（arm64・x86_64・universal）と Linux 実行ファイル（x86_64・aarch64）のビルドと検証の後、Release を作成して添付します。aarch64 の Linux 実行ファイルをビルドするには binfmt（QEMU）か remote builder が必要で、省略する場合は `SKIP_LINUX_ARCHES=aarch64-linux` を指定します。Windows は Nix でクロスビルドできる可能性がありますが、未対応です。macOS は Apple の SDK が必要なため Nix 単体では配布できません。
-作成した Release から APK をダウンロードできます。Release は GitHub 上で配布します。GitHub Actions は設定せず、
-ビルドとアップロードはすべて利用者の PC から行います。
+Rust/Flutter のテスト、署名 APK（arm64・x86_64・universal）と Linux 実行ファイル（x86_64・aarch64）のビルドと検証の後、Release を作成して添付します。aarch64 の Linux 実行ファイルをビルドするには binfmt（QEMU）か remote builder が必要で、省略する場合は `SKIP_LINUX_ARCHES=aarch64-linux` を指定します。macOS は未対応です。
+作成した Release から APK をダウンロードできます。Release は GitHub 上で配布します。
+
+Windows 版は Windows 上でしかビルドできないため、手動実行（`workflow_dispatch`）専用の GitHub Actions
+（`.github/workflows/windows.yml`、標準ランナーのみ・公開リポジトリでは無料）でビルドします。
+Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.5.3` のように入力すると、
+x64 の ZIP を Release に追加して `SHA256SUMS` を更新します。ZIP を展開して `vault_gallery.exe` を起動します。
+arm64 の ZIP は実験的で、同梱の libmpv が x86_64 のみのため動画再生が動かない可能性があります。
+Windows on Arm では x64 版もエミュレーションで動作します。arm64 を添付するには `publish_arm64` を有効にします。
 
 ## アプリを使う
 

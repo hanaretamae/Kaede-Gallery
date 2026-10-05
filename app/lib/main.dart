@@ -21,6 +21,8 @@ Future<void> main() async {
       ['mpv / FFmpeg / libass / libplacebo (bundled native libraries)'],
       'Android builds bundle libmpv and FFmpeg under LGPL-2.1-or-later '
       '(media-kit/libmpv-android-video-build v1.1.7, default flavor). '
+      'Windows builds bundle libmpv and FFmpeg under LGPL-3.0-or-later '
+      '(media-kit/libmpv-win32-video-build, built with --disable-gpl). '
       'Linux bundles include mpv and FFmpeg (built with --enable-gpl '
       '--enable-version3) and are distributed under GPL-3.0-or-later, plus '
       'libass (ISC) and libplacebo (LGPL-2.1-or-later). '

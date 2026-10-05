@@ -10,6 +10,7 @@ Unicode-3.0 / Zlib のみで、`cargo deny check licenses` で検証していま
 | 対象 | ライブラリ | ライセンス | 入手元 |
 |------|-----------|-----------|--------|
 | Android APK | libmpv・FFmpeg（media-kit/libmpv-android-video-build v1.1.7 の `default` ビルド。mpv は `-Dgpl=false`） | LGPL-2.1-or-later | https://github.com/media-kit/libmpv-android-video-build/releases/tag/v1.1.7 |
+| Windows ZIP | libmpv・FFmpeg（media-kit/libmpv-win32-video-build 2023-09-24。下記参照） | LGPL-3.0-or-later | https://github.com/media-kit/libmpv-win32-video-build |
 | Linux バンドル | mpv 0.41.0・FFmpeg 9.0.1・libass・libplacebo（nixpkgs の `flake.lock` で固定） | FFmpeg は `--enable-gpl --enable-version3` でビルドされており GPL-3.0-or-later | https://github.com/NixOS/nixpkgs （`flake.lock` の rev） |
 
 - Android では上記ライブラリは共有ライブラリ（`.so`）として同梱されており、
@@ -33,7 +34,15 @@ BSD-3-Clause・MIT・Apache-2.0 です。例外として `dbus` は MPL-2.0 で�
   - libass: https://github.com/libass/libass （ISC）
   - libplacebo: https://code.videolan.org/videolan/libplacebo （LGPL-2.1-or-later）
 
-## Windows / macOS
+## Windows
 
-Windows と macOS は未対応で、配布物はありません。対応する際は、同梱する
-`media_kit_libs_*` のライセンスを確認してから、この通知を更新してください。
+Windows の ZIP には、`media_kit_libs_windows_video` が取得する libmpv（media-kit/libmpv-win32-video-build
+2023-09-24 の `video` ビルド）と ANGLE（OpenGL ES 実装、BSD-3-Clause）が含まれます。libmpv は
+`--disable-gpl --enable-version3` でビルドされており、FFmpeg 部分は LGPL-3.0-or-later です
+（同梱の DLL で確認）。ソースは https://github.com/media-kit/libmpv-win32-video-build と
+https://github.com/mpv-player/mpv から入手できます。libmpv は動的ライブラリ（`libmpv-2.dll`）として
+同梱され、差し替えられます。このライブラリは x86_64 のみで、arm64 版は実験的です。
+
+## macOS
+
+macOS は未対応で、配布物はありません。
