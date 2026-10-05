@@ -37,8 +37,7 @@ jobs:
           - name: windows-arm64
             runner: windows-11-arm
             flutter_arch: arm64
-            # Flutter does not publish an ARM64 Windows-hosted SDK yet; run
-            # the x64 SDK under emulation and select the ARM64 target.
+            # The Flutter action installs the x64 host bundle; replace its Dart SDK below.
             flutter_sdk_arch: x64
             experimental: true
     steps:
@@ -53,6 +52,28 @@ jobs:
           flutter-version: "3.47.4"
           architecture: ${{ matrix.flutter_sdk_arch }}
           cache: true
+
+      - name: Select ARM64 Dart SDK
+        if: matrix.flutter_arch == 'arm64'
+        shell: pwsh
+        run: |
+          if ($env:PROCESSOR_ARCHITECTURE -ne 'ARM64') {
+            throw "Expected an ARM64 runner, found $env:PROCESSOR_ARCHITECTURE"
+          }
+          $flutterBin = Split-Path -Parent (Get-Command flutter).Source
+          $flutterRoot = Split-Path -Parent $flutterBin
+          $dartCache = Join-Path $flutterRoot 'bin\cache'
+          $dartSdk = Join-Path $dartCache 'dart-sdk'
+          $dartSdkStamp = Join-Path $dartCache 'engine-dart-sdk.stamp'
+          if (Test-Path $dartSdk) { Remove-Item -LiteralPath $dartSdk -Recurse -Force }
+          if (Test-Path $dartSdkStamp) { Remove-Item -LiteralPath $dartSdkStamp -Force }
+          flutter --version
+          $dart = Join-Path $dartCache 'dart-sdk\bin\dart.exe'
+          $dartVersion = (& $dart --version 2>&1 | Out-String)
+          Write-Output $dartVersion
+          if ($dartVersion -notmatch 'windows_arm64') {
+            throw "Expected an ARM64 Dart SDK, got: $dartVersion"
+          }
 
       - name: Install Rust
         shell: pwsh
@@ -76,12 +97,10 @@ jobs:
       - name: Build
         working-directory: app
         shell: pwsh
-        env:
-          FLUTTER_HOST_ARCH: ${{ matrix.flutter_arch }}
         run: |
           flutter config --no-analytics
           flutter pub get --enforce-lockfile
-          flutter build windows --release --target-platform windows-${{ matrix.flutter_arch }} --verbose
+          flutter build windows --release --verbose
 
       - name: Verify bundle
         shell: pwsh
