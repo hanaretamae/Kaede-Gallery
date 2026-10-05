@@ -913,14 +913,10 @@ class MainActivity : FlutterActivity() {
         val clip = ClipData.newRawUri("", target)
         val cropIntent = try {
             WallpaperManager.getInstance(this).getCropAndSetWallpaperIntent(target)
-        } catch (_: Exception) {
+        } catch (_: IllegalArgumentException) {
             null
         }
-        val intent = if (cropIntent != null &&
-            cropIntent.resolveActivity(packageManager) != null
-        ) {
-            cropIntent
-        } else {
+        val intent = cropIntent ?: run {
             Intent(Intent.ACTION_ATTACH_DATA).apply {
                 setDataAndType(target, type)
                 putExtra("mimeType", type)

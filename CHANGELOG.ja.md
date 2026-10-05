@@ -7,6 +7,13 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-06
+
+### Fixed
+
+- Android のパッケージ可視性に対応し、壁紙設定用インテントを修正しました。
+- 公開配布向けのインストール手順と開発者向け文書を修正しました。
+
 ## [1.6.0] - 2026-10-06
 
 ### Added

@@ -185,8 +185,8 @@ with a "missing" flag and are re-checked on later scans.
 
 ### NixOS / Home Manager
 
-The flake provides `packages.x86_64-linux.default`. On NixOS import `nixosModules.default` or add the package to
-`environment.systemPackages`.
+The flake provides `packages.x86_64-linux.default` and `packages.aarch64-linux.default`.
+On NixOS import `nixosModules.default` or add the package to `environment.systemPackages`.
 
 ```nix
 {
@@ -215,8 +215,7 @@ home.packages = [
 The package includes `share/applications/kaede-gallery.desktop`, so it shows up in your launcher after
 re-login. To try it directly: `nix profile install github:hanaretamae/Kaede-Gallery`. No binary cache for Kaede
 Gallery itself is provided, so the first install builds on your machine (dependencies come from the Nix binary
-cache when available). If the repository is private, evaluating the flake requires GitHub read access configured
-for Nix.
+cache when available).
 
 ### Run the Flutter app from source
 
@@ -326,7 +325,7 @@ only for Markdown files other than `CHANGELOG.md` and the release script. Buildi
 
 Windows can only be built on Windows, so it uses a manual (`workflow_dispatch`) GitHub Actions workflow
 (`.github/workflows/windows.yml`; standard runners only, free for public repositories). After creating the
-Release, run "Windows build" from the Actions tab and enter the tag (for example `v1.6.0`). It adds the x64 ZIP to
+Release, run "Windows build" from the Actions tab and enter the tag (for example `v1.6.1`). It adds the x64 ZIP to
 the Release and updates `SHA256SUMS`. Unzip and run `vault_gallery.exe`. Windows on Arm can run this x64 build
 under emulation. A native ARM64 build is unavailable because the bundled Windows video dependencies (libmpv and
 ANGLE) are x64-only.

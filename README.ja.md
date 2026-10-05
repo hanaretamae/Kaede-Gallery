@@ -147,7 +147,7 @@ cargo deny check advisories bans licenses sources
 
 ### NixOS / Home Manager へのインストール
 
-flake は x86_64 Linux 用の `packages.x86_64-linux.default` を提供します。
+flake は x86_64 / aarch64 Linux 用のパッケージを提供します。
 NixOS では `nixosModules.default` を import するか、
 `environment.systemPackages` にパッケージを指定できます。
 
@@ -178,11 +178,9 @@ home.packages = [
 
 パッケージには `share/applications/kaede-gallery.desktop` が含まれ、再ログイン後にランチャーへ表示されます。
 直接試す場合は `nix profile install github:hanaretamae/Kaede-Gallery` を使えます。
-この flake は x86_64 Linux 向けのビルド定義です。Kaede Gallery 自体のバイナリキャッシュは
+この flake は x86_64 / aarch64 Linux 向けのビルド定義です。Kaede Gallery 自体のバイナリキャッシュは
 提供していないため、初回は利用するマシン上でビルドされます。NixOS/Home Manager が
 必要な依存を Nix binary cache から取得できる場合、その依存はキャッシュからダウンロードされます。
-このリポジトリは private のため、flake を評価・取得するユーザーにも GitHub の読み取り権限と
-Nix 用 GitHub 認証設定が必要です。
 
 <details>
 <summary>索引データベースの場所</summary>
@@ -336,7 +334,7 @@ Rust/Flutter のテスト、署名 APK（arm64・x86_64・universal）と Linux 
 
 Windows 版は Windows 上でしかビルドできないため、手動実行（`workflow_dispatch`）専用の GitHub Actions
 （`.github/workflows/windows.yml`、標準ランナーのみ・公開リポジトリでは無料）でビルドします。
-Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.6.0` のように入力すると、
+Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.6.1` のように入力すると、
 x64 の ZIP を Release に追加して `SHA256SUMS` を更新します。ZIP を展開して `vault_gallery.exe` を起動します。
 Windows on Arm では x64 版をエミュレーションで実行できます。ネイティブ ARM64 版は、Windows 用の動画依存
 (libmpv と ANGLE) が x64 のみのため、現在ビルドできません。

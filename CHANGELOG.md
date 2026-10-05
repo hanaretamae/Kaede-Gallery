@@ -5,6 +5,13 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 
 ## [Unreleased]
 
+## [1.6.1] - 2026-10-06
+
+### Fixed
+
+- Fixed Android wallpaper intents for Android package visibility.
+- Corrected public installation and contributor documentation.
+
 ## [1.6.0] - 2026-10-06
 
 ### Added
