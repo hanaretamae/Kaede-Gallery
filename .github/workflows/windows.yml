@@ -9,37 +9,15 @@ on:
         description: "Release tag to build and attach to (for example v1.5.3). Empty builds the selected ref only."
         required: false
         type: string
-      publish_arm64:
-        description: "Also attach the experimental arm64 build to the release"
-        required: false
-        default: false
-        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    # media_kit_libs_windows_video only ships x86_64 libmpv, so arm64 is experimental.
-    continue-on-error: ${{ matrix.experimental }}
+    name: windows-x64
+    runs-on: windows-latest
     timeout-minutes: 60
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: windows-x64
-            runner: windows-latest
-            flutter_arch: x64
-            flutter_sdk_arch: x64
-            experimental: false
-          - name: windows-arm64
-            runner: windows-11-arm
-            flutter_arch: arm64
-            # The Flutter action installs the x64 host bundle; replace its Dart SDK below.
-            flutter_sdk_arch: x64
-            experimental: true
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -50,36 +28,14 @@ jobs:
         with:
           channel: stable
           flutter-version: "3.47.4"
-          architecture: ${{ matrix.flutter_sdk_arch }}
+          architecture: x64
           cache: true
-
-      - name: Select ARM64 Dart SDK
-        if: matrix.flutter_arch == 'arm64'
-        shell: pwsh
-        run: |
-          if ($env:PROCESSOR_ARCHITECTURE -ne 'ARM64') {
-            throw "Expected an ARM64 runner, found $env:PROCESSOR_ARCHITECTURE"
-          }
-          $flutterBin = Split-Path -Parent (Get-Command flutter).Source
-          $flutterRoot = Split-Path -Parent $flutterBin
-          $dartCache = Join-Path $flutterRoot 'bin\cache'
-          $dartSdk = Join-Path $dartCache 'dart-sdk'
-          $dartSdkStamp = Join-Path $dartCache 'engine-dart-sdk.stamp'
-          if (Test-Path $dartSdk) { Remove-Item -LiteralPath $dartSdk -Recurse -Force }
-          if (Test-Path $dartSdkStamp) { Remove-Item -LiteralPath $dartSdkStamp -Force }
-          flutter --version
-          $dart = Join-Path $dartCache 'dart-sdk\bin\dart.exe'
-          $dartVersion = (& $dart --version 2>&1 | Out-String)
-          Write-Output $dartVersion
-          if ($dartVersion -notmatch 'windows_arm64') {
-            throw "Expected an ARM64 Dart SDK, got: $dartVersion"
-          }
 
       - name: Install Rust
         shell: pwsh
         run: |
           if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-            $initializer = if ('${{ matrix.flutter_arch }}' -eq 'arm64') { 'aarch64' } else { 'x86_64' }
+            $initializer = 'x86_64'
             Invoke-WebRequest "https://win.rustup.rs/$initializer" -OutFile rustup-init.exe
             ./rustup-init.exe -y --profile minimal --default-toolchain none
             "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
@@ -87,8 +43,7 @@ jobs:
           }
           rustup toolchain install 1.98.1 --profile minimal
           rustup default 1.98.1
-          $target = if ('${{ matrix.flutter_arch }}' -eq 'arm64') { 'aarch64-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
-          rustup target add $target
+          rustup target add x86_64-pc-windows-msvc
           $rustc = (rustup which rustc).Trim()
           if (-not (Test-Path $rustc)) { throw "rustc was not found at $rustc" }
           "RUSTC=$rustc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
@@ -105,7 +60,7 @@ jobs:
       - name: Verify bundle
         shell: pwsh
         run: |
-          $bundle = 'app/build/windows/${{ matrix.flutter_arch }}/runner/Release'
+          $bundle = 'app/build/windows/x64/runner/Release'
           Get-ChildItem $bundle | Select-Object Name, Length
           foreach ($name in 'vault_gallery.exe', 'gallery_bridge.dll', 'libmpv-2.dll',
               'libEGL.dll', 'libGLESv2.dll', 'vk_swiftshader.dll', 'vulkan-1.dll',
@@ -124,7 +79,7 @@ jobs:
         shell: pwsh
         run: |
           $version = ((Select-String -Path app/pubspec.yaml -Pattern '^version:\s*(\S+)').Matches[0].Groups[1].Value -split '\+')[0]
-          $bundle = 'app/build/windows/${{ matrix.flutter_arch }}/runner/Release'
+          $bundle = 'app/build/windows/x64/runner/Release'
           Copy-Item LICENSE, THIRD_PARTY_NOTICES.md $bundle
           Copy-Item -Recurse app/assets/licenses (Join-Path $bundle 'licenses')
           foreach ($name in 'ANGLE-LICENSE.txt', 'SwiftShader-LICENSE.txt',
@@ -135,13 +90,13 @@ jobs:
               throw "License notice $name is missing from the Windows package"
             }
           }
-          $zip = "kaede-gallery-$version-${{ matrix.name }}.zip"
+          $zip = "kaede-gallery-$version-windows-x64.zip"
           Compress-Archive -Path "$bundle/*" -DestinationPath $zip
           "ZIP_NAME=$zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: ${{ matrix.name }}
+          name: windows-x64
           path: ${{ env.ZIP_NAME }}
           if-no-files-found: error
           retention-days: 7
@@ -163,7 +118,6 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ inputs.tag }}
-          PUBLISH_ARM64: ${{ inputs.publish_arm64 }}
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
@@ -171,7 +125,6 @@ jobs:
           gh release view "$TAG" --repo "$REPO" >/dev/null ||
             { echo "Create the release first (tools/release.sh)." >&2; exit 1; }
           cd dist
-          [[ $PUBLISH_ARM64 == true ]] || rm -f -- *-windows-arm64.zip
           ls -1 -- *.zip
           gh release download "$TAG" --repo "$REPO" --pattern SHA256SUMS --clobber || : > SHA256SUMS
           grep -v -E -- '-windows-(x64|arm64)\.zip$' SHA256SUMS > SHA256SUMS.new || :

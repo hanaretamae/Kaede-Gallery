@@ -338,8 +338,8 @@ Windows 版は Windows 上でしかビルドできないため、手動実行（
 （`.github/workflows/windows.yml`、標準ランナーのみ・公開リポジトリでは無料）でビルドします。
 Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.6.0` のように入力すると、
 x64 の ZIP を Release に追加して `SHA256SUMS` を更新します。ZIP を展開して `vault_gallery.exe` を起動します。
-arm64 の ZIP は実験的で、同梱の libmpv が x86_64 のみのため動画再生が動かない可能性があります。
-Windows on Arm では x64 版もエミュレーションで動作します。arm64 を添付するには `publish_arm64` を有効にします。
+Windows on Arm では x64 版をエミュレーションで実行できます。ネイティブ ARM64 版は、Windows 用の動画依存
+(libmpv と ANGLE) が x64 のみのため、現在ビルドできません。
 
 ## 開発者向け情報
 

@@ -4,6 +4,5 @@ profile = "minimal"
 targets = [
     "aarch64-linux-android",
     "x86_64-linux-android",
-    "aarch64-pc-windows-msvc",
     "x86_64-pc-windows-msvc",
 ]

@@ -37,9 +37,11 @@ implementations; only their lifecycle and data contracts are shared.
 2. **Complete:** Flutter/Linux gallery list with native video-frame thumbnails.
 3. **Complete:** Viewer, details, Obsidian links, and video.
 4. **Complete:** Android, including Storage Access Framework support.
-5. **In progress:** Windows (x64 builds from a manual GitHub Actions workflow;
-   arm64 is experimental because `media_kit_libs_windows_video` bundles only an
-   x86_64 libmpv; unverified on real Windows hardware). macOS is planned.
+5. **In progress:** Windows x64 builds from a manual GitHub Actions workflow.
+   Native arm64 builds are blocked because the bundled Windows video
+   dependencies (`libmpv` and ANGLE) are x86_64-only; Windows on Arm can run the
+   x64 build under emulation. Windows builds are unverified on real hardware.
+   macOS is planned.
 6. **Blocked on a design decision:** iOS external Vault access.
 
 Complete and verify one phase before starting another.
