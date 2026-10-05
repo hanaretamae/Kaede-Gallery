@@ -220,6 +220,7 @@ done
 
 cp -- LICENSE "$dist_dir/kaede-gallery-LICENSE.txt"
 cp -- THIRD_PARTY_NOTICES.md "$dist_dir/kaede-gallery-THIRD_PARTY_NOTICES.md"
+tar -C app/assets -czf "$dist_dir/kaede-gallery-third-party-licenses.tar.gz" licenses
 (cd "$dist_dir" && sha256sum -- kaede-gallery-* > SHA256SUMS)
 
 gh release create "$tag" "$dist_dir"/kaede-gallery-* "$dist_dir/SHA256SUMS" \

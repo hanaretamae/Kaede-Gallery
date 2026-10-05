@@ -14,7 +14,16 @@ English: [CONTRIBUTING.md](CONTRIBUTING.md)
 
 ## 提出前チェック
 
+```
+
+Rust 依存を変更した場合は、同梱するライセンス通知を再生成してください。
+
 ```sh
+python3 tools/update-rust-license-notices.py
+```
+
+生成された `app/assets/licenses/RUST-DEPENDENCY-LICENSES.txt` も依存変更と
+一緒にコミットしてください。sh
 # Rust
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings

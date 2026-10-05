@@ -1,0 +1,13 @@
+Microsoft Direct3D Compiler redistribution notice
+
+The Windows ANGLE.7z archive includes Microsoft's d3dcompiler_47.dll. Microsoft
+lists this DLL among the Windows SDK redistributable files for classic Windows
+applications. Redistribution is subject to the applicable Windows SDK
+redistribution terms; this notice is not an open-source license.
+
+Microsoft Windows SDK redistributable list:
+https://learn.microsoft.com/en-us/legal/windows-sdk/redist
+
+The upstream ANGLE archive does not record the exact Windows SDK version used
+to obtain this DLL. Consult the current Microsoft terms and retain the
+upstream archive and its checksum when redistributing the Windows bundle.

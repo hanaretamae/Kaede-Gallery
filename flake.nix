@@ -92,6 +92,13 @@
             install -Dm644 \
               ${desktopItem}/share/applications/kaede-gallery.desktop \
               $out/share/applications/kaede-gallery.desktop
+            install -Dm644 \
+              ${self}/LICENSE \
+              $out/share/licenses/kaede-gallery/LICENSE
+            install -Dm644 \
+              ${self}/THIRD_PARTY_NOTICES.md \
+              $out/share/licenses/kaede-gallery/THIRD_PARTY_NOTICES.md
+            cp -R assets/licenses/. $out/share/licenses/kaede-gallery/
           '';
           preBuild = ''
             export HOME="$NIX_BUILD_TOP/home"
@@ -112,7 +119,7 @@
           meta = {
             description = "Offline, read-only gallery for Obsidian Vaults";
             homepage = "https://github.com/hanaretamae/Kaede-Gallery";
-            license = pkgs.lib.licenses.mit;
+            license = pkgs.lib.licenses.gpl3Plus;
             mainProgram = "vault_gallery";
             platforms = [ "x86_64-linux" "aarch64-linux" ];
           };
@@ -157,10 +164,12 @@
               (with pkgs; [
                 rustc
                 cargo
+                cargo-about
                 rustfmt
                 clippy
                 rustup
                 cargo-deny
+                python3
                 git
                 github-cli
                 keepassxc

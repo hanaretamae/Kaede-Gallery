@@ -1,0 +1,20 @@
+Kaede Gallery Rust third-party dependency licenses
+=================================================
+Generated from the gallery-bridge dependency graph for all shipped targets.
+
+{{#each overview}}
+{{name}}: {{count}} package(s)
+{{/each}}
+
+{{#each licenses}}
+==============================================================================
+{{name}} ({{id}})
+
+Used by:
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}{{#if crate.repository}} ({{crate.repository}}){{/if}}
+{{/each}}
+
+{{{text}}}
+
+{{/each}}

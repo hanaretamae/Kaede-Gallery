@@ -14,7 +14,16 @@ Use the pinned development environment with `nix develop`.
 
 ## Checks before submitting
 
+```
+
+When a Rust dependency changes, regenerate the bundled Rust license report:
+
 ```sh
+python3 tools/update-rust-license-notices.py
+```
+
+Commit the updated `app/assets/licenses/RUST-DEPENDENCY-LICENSES.txt` with the
+dependency change.sh
 # Rust
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings

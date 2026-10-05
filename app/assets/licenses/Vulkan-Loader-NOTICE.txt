@@ -1,0 +1,41 @@
+Vulkan Loader additional licenses and copyright notices
+
+The Vulkan Loader is primarily distributed under the Apache License 2.0.
+Upstream metadata identifies The Khronos Group Inc., Valve Corporation, and
+LunarG, Inc. See Vulkan-Loader-LICENSE.txt for the Apache license.
+
+cJSON (MIT License)
+Copyright (c) 2009-2017 Dave Gamble and cJSON contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+
+Windows directory browsing functions (HPND-Kevlin-Henney)
+Copyright Kevlin Henney, 1997, 2003, 2012. All rights reserved.
+Copyright (c) 2015 The Khronos Group Inc.
+Copyright (c) 2015 Valve Corporation
+Copyright (c) 2015 LunarG, Inc.
+
+Permission to use, copy, modify, and distribute this software and its
+documentation for any purpose is hereby granted without fee, provided that
+this copyright and permissions notice appear in all copies and derivatives.
+
+This software is supplied "as is" without express or implied warranty.
+
+Upstream source: https://github.com/KhronosGroup/Vulkan-Loader
+The notices above are from loader/cJSON.c and loader/dirent_on_windows.c.
