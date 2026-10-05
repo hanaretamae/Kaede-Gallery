@@ -336,4 +336,4 @@ app/lib/
 docs/design.md      設計の基準
 ```
 
-このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。同梱する mpv・FFmpeg などのライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください（Linux バンドルは GPL-2.0-or-later の部品を含みます）。
+このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.md](CONTRIBUTING.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。同梱する mpv・FFmpeg などのライセンスは [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) を参照してください（Linux バンドルは FFmpeg 由来で GPL-3.0-or-later として配布します。Android APK は LGPL の同梱ライブラリのみです）。
