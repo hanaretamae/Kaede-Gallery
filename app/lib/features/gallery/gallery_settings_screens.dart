@@ -32,7 +32,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: 'ページングと一覧表示',
               supportingText: '一覧の読み込み単位や件数、タイルの表示を設定します',
-              leading: _settingsIcon(context, Icons.view_agenda_outlined),
+              leading: _settingsIcon(context, Icons.view_agenda_outlined, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _PaginationSettingsScreen(),
@@ -146,7 +146,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: 'ノート構造と表示',
               supportingText: 'ノートの項目順や見出しの読み取り、一覧表示を設定します',
-              leading: _settingsIcon(context, Icons.account_tree_outlined),
+              leading: _settingsIcon(context, Icons.account_tree_outlined, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _NoteStructureSettingsScreen(),
@@ -156,7 +156,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             M3EListItem(
               headline: 'タグ設定',
               supportingText: 'ギャラリー対象タグ、絞り込み、表示色を設定します',
-              leading: _settingsIcon(context, Icons.label_outline, tone: 0),
+              leading: _settingsIcon(context, Icons.label_outline, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _TagRulesSettingsScreen(),
@@ -177,7 +177,7 @@ class _GallerySettingsScreen extends ConsumerWidget {
             ),
             M3EListItem(
               headline: 'インポート・エクスポート・リセット',
-              leading: _settingsIcon(context, Icons.storage_outlined, tone: 2),
+              leading: _settingsIcon(context, Icons.storage_outlined, tone: 1),
               onTap: () => Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (context) => const _DataSettingsScreen(),
