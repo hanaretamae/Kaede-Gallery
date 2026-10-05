@@ -81,7 +81,7 @@ jobs:
         run: |
           flutter config --no-analytics
           flutter pub get --enforce-lockfile
-          flutter build windows --release --verbose
+          flutter build windows --release --target-platform windows-${{ matrix.flutter_arch }} --verbose
 
       - name: Verify bundle
         shell: pwsh
