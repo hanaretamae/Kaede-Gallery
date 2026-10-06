@@ -118,6 +118,7 @@ pub struct NoteSummary {
 pub struct MediaSummary {
     pub id: i64,
     pub note_id: i64,
+    pub note_path: String,
     pub is_video: bool,
     pub exists: bool,
     pub media_count: u64,
@@ -827,6 +828,7 @@ fn to_media_summary(media: CoreMediaSummary) -> MediaSummary {
     MediaSummary {
         id: media.id,
         note_id: media.note_id,
+        note_path: media.note_path,
         is_video: media.is_video,
         exists: media.exists,
         media_count: media.media_count as u64,

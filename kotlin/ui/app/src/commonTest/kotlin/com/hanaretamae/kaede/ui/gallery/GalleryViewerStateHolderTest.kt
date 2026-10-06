@@ -121,6 +121,7 @@ private fun note(representative: MediaId) = NoteSummary(
 private fun media(id: Long) = MediaSummary(
     id = MediaId(id),
     noteId = NoteId(7),
+    notePath = "notes/sample.md",
     isVideo = false,
     exists = true,
     mediaCount = 2,

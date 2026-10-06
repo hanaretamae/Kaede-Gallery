@@ -133,6 +133,7 @@ pub struct NoteSummary {
 pub struct MediaSummary {
     pub id: i64,
     pub note_id: i64,
+    pub note_path: String,
     pub is_video: bool,
     pub exists: bool,
     pub media_count: usize,
@@ -1338,16 +1339,18 @@ impl Gallery {
             if result.len() >= limit {
                 break;
             }
-            let (media_count, memo_count, related_count) = self
+            let (note_path, media_count, memo_count, related_count) = self
                 .connection
                 .query_row(
-                    "SELECT media_count, memo_count, related_count FROM notes WHERE id=?1",
+                    "SELECT path, media_count, memo_count, related_count
+                     FROM notes WHERE id=?1",
                     [note_id],
                     |row| {
                         Ok((
-                            row.get::<_, i64>(0)? as usize,
+                            row.get::<_, String>(0)?,
                             row.get::<_, i64>(1)? as usize,
                             row.get::<_, i64>(2)? as usize,
+                            row.get::<_, i64>(3)? as usize,
                         ))
                     },
                 )
@@ -1377,6 +1380,7 @@ impl Gallery {
                 result.push(MediaSummary {
                     id: media_id,
                     note_id,
+                    note_path: note_path.clone(),
                     is_video: kind == "video",
                     exists: exists_flag != 0,
                     media_count,
@@ -1904,8 +1908,9 @@ impl Gallery {
             let mut statement = self
                 .connection
                 .prepare(
-                    "SELECT media.id, media.note_id, media.kind, media.exists_flag,
-                            notes.media_count, notes.memo_count, notes.related_count
+                    "SELECT media.id, media.note_id, notes.path, media.kind,
+                            media.exists_flag, notes.media_count, notes.memo_count,
+                            notes.related_count
                      FROM media JOIN notes ON notes.id=media.note_id
                      WHERE media.note_id=?1 ORDER BY media.ord",
                 )
@@ -1915,11 +1920,12 @@ impl Gallery {
                     Ok(MediaSummary {
                         id: row.get(0)?,
                         note_id: row.get(1)?,
-                        is_video: row.get::<_, String>(2)? == "video",
-                        exists: row.get(3)?,
-                        media_count: row.get::<_, i64>(4)? as usize,
-                        memo_count: row.get::<_, i64>(5)? as usize,
-                        related_count: row.get::<_, i64>(6)? as usize,
+                        note_path: row.get(2)?,
+                        is_video: row.get::<_, String>(3)? == "video",
+                        exists: row.get(4)?,
+                        media_count: row.get::<_, i64>(5)? as usize,
+                        memo_count: row.get::<_, i64>(6)? as usize,
+                        related_count: row.get::<_, i64>(7)? as usize,
                     })
                 })
                 .map_err(|_| CoreError::Database)?;
@@ -4459,6 +4465,12 @@ mod tests {
         assert!(!media[0].is_video);
         assert!(!media[1].is_video);
         assert!(media[2].is_video);
+        let mut note_paths = media
+            .iter()
+            .map(|item| item.note_path.as_str())
+            .collect::<Vec<_>>();
+        note_paths.sort_unstable();
+        assert_eq!(note_paths, ["many.md", "many.md", "single.md"]);
         assert_ne!(media[0].note_id, media[1].note_id);
         assert_eq!(media[1].note_id, media[2].note_id);
         let created_media = gallery

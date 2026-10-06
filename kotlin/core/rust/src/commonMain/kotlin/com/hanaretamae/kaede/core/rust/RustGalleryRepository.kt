@@ -175,6 +175,7 @@ private fun NoteSummary.toModel(): ModelNoteSummary? = ModelNoteSummary(
 private fun MediaSummary.toModel(): ModelMediaSummary? = ModelMediaSummary(
     id = ModelMediaId(id),
     noteId = ModelNoteId(noteId),
+    notePath = notePath,
     isVideo = isVideo,
     exists = exists,
     mediaCount = mediaCount.toLongOrNull() ?: return null,

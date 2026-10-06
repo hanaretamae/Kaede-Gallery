@@ -193,6 +193,22 @@ class AndroidSafVaultScanner(context: Context) {
             throw SafAccessException()
         }
 
+    suspend fun readNoteContent(treeUri: Uri, relativePath: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            if (!relativePath.endsWith(".md", ignoreCase = true)) throw SafAccessException()
+            try {
+                val uri = resolveMedia(treeUri, relativePath)
+                val input = resolver.openInputStream(uri) ?: throw SafAccessException()
+                val bytes = input.use { it.readBounded(MAX_NOTE_BYTES) }
+                if (bytes.size > MAX_NOTE_BYTES) throw SafAccessException()
+                bytes
+            } catch (_: SecurityException) {
+                throw SafAccessException()
+            } catch (_: IOException) {
+                throw SafAccessException()
+            }
+        }
+
     suspend fun decodeImage(
         treeUri: Uri,
         relativePath: String,

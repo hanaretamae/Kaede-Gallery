@@ -71,6 +71,7 @@ data class NoteSummary(
 data class MediaSummary(
     val id: MediaId,
     val noteId: NoteId,
+    val notePath: String,
     val isVideo: Boolean,
     val exists: Boolean,
     override val mediaCount: Long,

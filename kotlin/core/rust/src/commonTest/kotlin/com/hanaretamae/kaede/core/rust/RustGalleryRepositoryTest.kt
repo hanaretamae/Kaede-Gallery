@@ -112,6 +112,7 @@ class RustGalleryRepositoryTest {
                     MediaSummary(
                         id = 11,
                         noteId = 42,
+                        notePath = "notes/example.md",
                         isVideo = true,
                         exists = false,
                         mediaCount = 2u,
@@ -133,6 +134,7 @@ class RustGalleryRepositoryTest {
             ModelMediaSummary(
                 id = ModelMediaId(11),
                 noteId = ModelNoteId(42),
+                notePath = "notes/example.md",
                 isVideo = true,
                 exists = false,
                 mediaCount = 2,

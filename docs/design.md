@@ -191,6 +191,11 @@ platform channel. On SAF-backed Vaults, video thumbnails use the bundled media
 decoder through a validated read-only file descriptor before falling back to
 the platform frame extractor. Only the resulting thumbnail is cached in app
 data.
+SAF note details are loaded on demand by resolving the indexed note's validated
+relative path under the selected tree and reading at most 2 MiB through
+`ContentResolver`; the bytes are passed directly to Rust for parsing and are
+not cached or logged. Media summaries include their parent note path so this
+also works when opening a note from the media grid.
 Nearby thumbnails are prefetched while scrolling. Rescanning remains explicit,
 so users can refresh after changing Vault contents. Keep this behavior
 read-only and do not request broad all-files access.

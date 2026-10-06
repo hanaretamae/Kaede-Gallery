@@ -45,6 +45,14 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
+import com.hanaretamae.kaede.core.model.GalleryCategory
+import com.hanaretamae.kaede.core.model.GalleryNoteDetail
+import com.hanaretamae.kaede.core.model.GalleryPage
+import com.hanaretamae.kaede.core.model.GalleryQuery
+import com.hanaretamae.kaede.core.model.MediaId
+import com.hanaretamae.kaede.core.model.MediaSummary
+import com.hanaretamae.kaede.core.model.NoteId
+import com.hanaretamae.kaede.core.model.NoteSummary
 import com.hanaretamae.kaede.core.repository.GallerySessionHandle
 import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.GalleryScanSummary
@@ -68,6 +76,7 @@ import java.io.IOException
 import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
@@ -337,7 +346,7 @@ private fun AndroidGalleryRoot() {
                     }
                     is RepositoryResult.Success -> {
                         session?.close()
-                        session = AndroidSessionHandle(opened.value)
+                        session = AndroidSessionHandle(opened.value, scanner, Uri.parse(vaultUri))
                         selectedVault = vaultUri
                         loading = false
                     }
@@ -445,7 +454,8 @@ private fun AndroidGalleryRoot() {
     }
 
     DisposableEffect(session) {
-        onDispose { session?.close() }
+        val activeSession = session
+        onDispose { activeSession?.close() }
     }
 
     val activeSession = session
@@ -672,21 +682,69 @@ private const val MAX_VIEWER_IMAGE_SIZE = 2_048
 
 private class AndroidSessionHandle(
     private val delegate: GallerySessionHandle,
+    scanner: AndroidSafVaultScanner,
+    treeUri: Uri,
 ) : GallerySessionHandle {
     private val closed = AtomicBoolean(false)
+    private val notePathsById = ConcurrentHashMap<NoteId, String>()
 
-    override val gallery: GalleryRepository
-        get() = delegate.gallery
+    override val gallery: GalleryRepository = object : GalleryRepository {
+        override suspend fun queryPage(query: GalleryQuery): RepositoryResult<GalleryPage> {
+            val result = delegate.gallery.queryPage(query)
+            if (result is RepositoryResult.Success) {
+                result.value.entries.forEach { entry ->
+                    when (entry) {
+                        is NoteSummary -> notePathsById[entry.id] = entry.path
+                        is MediaSummary -> notePathsById[entry.noteId] = entry.notePath
+                    }
+                }
+            }
+            return result
+        }
+
+        override suspend fun categories(
+            query: GalleryQuery,
+        ): RepositoryResult<List<GalleryCategory>> = delegate.gallery.categories(query)
+
+        override suspend fun noteDetail(
+            noteId: NoteId,
+            safContent: ByteArray?,
+        ): RepositoryResult<GalleryNoteDetail?> {
+            if (safContent != null) return delegate.gallery.noteDetail(noteId, safContent)
+            val path = notePathsById[noteId]
+                ?: return RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val content = try {
+                scanner.readNoteContent(treeUri, path)
+            } catch (_: AndroidSafVaultScanner.SafAccessException) {
+                return RepositoryResult.Failure(RepositoryError.VAULT_UNAVAILABLE)
+            }
+            return delegate.gallery.noteDetail(noteId, content)
+        }
+
+        override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> =
+            delegate.gallery.mediaLocation(mediaId)
+
+        override suspend fun thumbnail(
+            mediaId: MediaId,
+            size: Int,
+        ): RepositoryResult<ByteArray?> = delegate.gallery.thumbnail(mediaId, size)
+    }
 
     override val initialScan: GalleryScanSummary
         get() = delegate.initialScan
 
-    override suspend fun rescan() = delegate.rescan()
+    override suspend fun rescan(): RepositoryResult<GalleryScanSummary> {
+        notePathsById.clear()
+        return delegate.rescan()
+    }
 
     override suspend fun rescanSaf(
         filePaths: List<String>,
         batches: Flow<List<SafScanNote>>,
-    ) = delegate.rescanSaf(filePaths, batches)
+    ): RepositoryResult<GalleryScanSummary> {
+        notePathsById.clear()
+        return delegate.rescanSaf(filePaths, batches)
+    }
 
     override fun close() {
         if (closed.compareAndSet(false, true)) delegate.close()

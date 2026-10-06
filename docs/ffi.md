@@ -79,6 +79,11 @@ session API rejects `content://` locators. Android SAF enumeration and scan
 submission remain platform-layer work; do not send the whole SAF collection
 through `scanSaf` without the bounded batch/transaction protocol or measured
 memory evidence described below.
+For SAF-backed note details, Android resolves the note path from the bounded
+gallery page, validates it beneath the selected tree, and reads no more than
+the 2 MiB note limit before passing the bytes to the SAF detail operation.
+Media summaries carry their parent note path for details opened from the media
+grid; note bytes are never persisted or logged.
 The common `core:settings` module defines appearance and gallery
 pagination/display settings with a repository interface and state holder.
 Android implements that contract with app-private preferences; desktop
