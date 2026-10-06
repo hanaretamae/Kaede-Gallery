@@ -370,7 +370,10 @@ class RustGalleryRepository implements GalleryRepository {
       indexPath: indexPath,
       mediaId: mediaId,
     );
-    if (source == null || !vaultPath.startsWith('content://')) return source;
+    if (source == null) return null;
+    if (!vaultPath.startsWith('content://')) {
+      return normalizeLocalPath(source);
+    }
     return safAccess.resolveFile(vaultPath, source, video: true);
   }
 
@@ -385,7 +388,10 @@ class RustGalleryRepository implements GalleryRepository {
       indexPath: indexPath,
       mediaId: mediaId,
     );
-    if (source == null || !vaultPath.startsWith('content://')) return source;
+    if (source == null) return null;
+    if (!vaultPath.startsWith('content://')) {
+      return normalizeLocalPath(source);
+    }
     return safAccess.resolveFile(vaultPath, source);
   }
 

@@ -117,7 +117,11 @@ String vaultDisplayName(String vaultPath) {
 Uri obsidianOpenUri(String vaultPath, String notePath) {
   final queryParameters = vaultPath.startsWith('content://')
       ? {'vault': vaultDisplayName(vaultPath), 'file': notePath}
-      : {'path': path.join(vaultPath, notePath)};
+      : {
+          'path': path.normalize(
+            path.join(normalizeLocalPath(vaultPath), notePath),
+          ),
+        };
   return Uri(
     scheme: 'obsidian',
     host: 'open',
@@ -426,4 +430,12 @@ class NativeVaultPlatform implements VaultPlatform {
       thumbnailDirectory: path.join(directory, 'thumbnails'),
     );
   }
+}
+
+/// Strips the Windows verbatim prefix (`\\?\`) that canonicalised paths carry;
+/// most external apps and URI handlers reject it.
+String normalizeLocalPath(String value) {
+  if (value.startsWith(r'\\?\UNC\')) return '\\\\${value.substring(8)}';
+  if (value.startsWith(r'\\?\')) return value.substring(4);
+  return value;
 }

@@ -10,6 +10,10 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 ### Fixed
 
 - Fixed the Windows system accent colour not updating until the app was reopened.
+- Fixed missing video thumbnails on Windows.
+- Fixed "Open in Obsidian" on Windows failing with "Vault not found".
+- Fixed "Open with" and "Show in file manager" on Windows opening the wrong thing; the file manager now selects the file.
+- Fixed the Open media menu being truncated on desktop; it is now a dialog.
 
 ### Changed
 

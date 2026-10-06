@@ -1,7 +1,7 @@
-import 'dart:typed_data';
-
 import 'package:fc_native_video_thumbnail/fc_native_video_thumbnail.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:path/path.dart' as path;
 
 import 'gallery_providers.dart';
 import '../platform/android_video_thumbnail.dart';
@@ -53,12 +53,16 @@ final galleryThumbnailProvider = FutureProvider.autoDispose
       if (videoPath == null) {
         return null;
       }
-      return FcNativeVideoThumbnail().saveThumbnailToBytes(
-        srcFile: videoPath,
-        width: 320,
-        height: 320,
-        quality: 75,
-      );
+      try {
+        return await FcNativeVideoThumbnail().saveThumbnailToBytes(
+          srcFile: path.normalize(videoPath),
+          width: 320,
+          height: 320,
+          quality: 75,
+        );
+      } on PlatformException {
+        return null;
+      }
     });
 
 final gallerySafImageBytesProvider = FutureProvider.family<Uint8List, String>((

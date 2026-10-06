@@ -665,35 +665,60 @@ Future<void> _showMediaOpenActions(
   String? vaultPath,
 }) async {
   final canSetWallpaper = _canSetWallpaper(mediaPath);
-  final action = await M3EBottomSheet.showAdaptive<_MediaOpenAction>(
-    context,
-    title: context.l10n.openMedia,
-    builder: (context) => SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-        child: _settingsGroup(context, [
-          M3EListItem(
-            headline: context.l10n.chooseAnAppToOpenTheImageOrVideo,
-            leading: const Icon(Icons.open_in_new),
-            onTap: () => Navigator.of(context).pop(_MediaOpenAction.chooseApp),
-          ),
-          if (canSetWallpaper)
-            M3EListItem(
-              headline: context.l10n.setImageAsWallpaper,
-              leading: const Icon(Icons.wallpaper),
-              onTap: () =>
-                  Navigator.of(context).pop(_MediaOpenAction.setWallpaper),
-            ),
-          M3EListItem(
-            headline: context.l10n.showFileInFileManager,
-            leading: const Icon(Icons.folder_open),
-            onTap: () =>
-                Navigator.of(context).pop(_MediaOpenAction.revealInFileManager),
-          ),
-        ]),
-      ),
+  final options = <({String label, IconData icon, _MediaOpenAction action})>[
+    (
+      label: context.l10n.chooseAnAppToOpenTheImageOrVideo,
+      icon: Icons.open_in_new,
+      action: _MediaOpenAction.chooseApp,
     ),
-  );
+    if (canSetWallpaper)
+      (
+        label: context.l10n.setImageAsWallpaper,
+        icon: Icons.wallpaper,
+        action: _MediaOpenAction.setWallpaper,
+      ),
+    (
+      label: context.l10n.showFileInFileManager,
+      icon: Icons.folder_open,
+      action: _MediaOpenAction.revealInFileManager,
+    ),
+  ];
+  final _MediaOpenAction? action;
+  if (Platform.isAndroid) {
+    action = await M3EBottomSheet.showAdaptive<_MediaOpenAction>(
+      context,
+      title: context.l10n.openMedia,
+      builder: (context) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: _settingsGroup(context, [
+            for (final option in options)
+              M3EListItem(
+                headline: option.label,
+                leading: Icon(option.icon),
+                onTap: () => Navigator.of(context).pop(option.action),
+              ),
+          ]),
+        ),
+      ),
+    );
+  } else {
+    // Desktop side sheets are too narrow for these labels; use a dialog.
+    action = await showDialog<_MediaOpenAction>(
+      context: context,
+      builder: (context) => SimpleDialog(
+        title: Text(context.l10n.openMedia),
+        children: [
+          for (final option in options)
+            ListTile(
+              leading: Icon(option.icon),
+              title: Text(option.label),
+              onTap: () => Navigator.of(context).pop(option.action),
+            ),
+        ],
+      ),
+    );
+  }
   if (action == null || !context.mounted) return;
   final revealInFileManager = action == _MediaOpenAction.revealInFileManager;
   final setAsWallpaper = action == _MediaOpenAction.setWallpaper;
@@ -752,7 +777,22 @@ Future<void> _showMediaOpenActions(
     }
     return;
   }
-  final uri = Uri.file(mediaPath);
+  if (revealInFileManager && Platform.isWindows) {
+    try {
+      await Process.start('explorer.exe', [
+        '/select,',
+        p.windows.normalize(normalizeLocalPath(mediaPath)),
+      ]);
+    } on ProcessException {
+      if (!context.mounted) return;
+      M3ESnackbar.show(
+        context,
+        message: context.l10n.couldnLaunchTheFileManager,
+      );
+    }
+    return;
+  }
+  final uri = Uri.file(normalizeLocalPath(mediaPath));
   await _openExternalUri(context, uri);
 }
 
