@@ -334,7 +334,7 @@ Rust/Flutter のテスト、署名 APK（arm64・x86_64・universal）と Linux 
 
 Windows 版は Windows 上でしかビルドできないため、手動実行（`workflow_dispatch`）専用の GitHub Actions
 （`.github/workflows/windows.yml`、標準ランナーのみ・公開リポジトリでは無料）でビルドします。
-Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.6.1` のように入力すると、
+Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.6.2` のように入力すると、
 x64 の ZIP を Release に追加して `SHA256SUMS` を更新します。ZIP を展開して `vault_gallery.exe` を起動します。
 Windows on Arm では x64 版をエミュレーションで実行できます。ネイティブ ARM64 版は、Windows 用の動画依存
 (libmpv と ANGLE) が x64 のみのため、現在ビルドできません。

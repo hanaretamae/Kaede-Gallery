@@ -4,6 +4,7 @@ import 'package:dynamic_color/dynamic_color.dart' as dynamic_color;
 
 import 'app_theme.dart';
 import 'core_api/gallery_appearance.dart';
+import 'core_api/desktop_system_appearance.dart';
 import 'core_api/linux_system_appearance.dart';
 import 'l10n.dart';
 import 'l10n/app_localizations.dart';
@@ -20,7 +21,8 @@ class VaultGalleryApp extends ConsumerWidget {
         const GalleryAppearance();
     AppL10n.apply(appearance.language);
     final portalAccent = appearance.useSystemColor
-        ? ref.watch(linuxPortalAccentColorProvider).asData?.value
+        ? ref.watch(linuxPortalAccentColorProvider).asData?.value ??
+              ref.watch(windowsAccentColorProvider).asData?.value
         : null;
     return dynamic_color.DynamicColorBuilder(
       builder: (lightDynamic, darkDynamic) {

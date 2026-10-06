@@ -5,6 +5,16 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 
 ## [Unreleased]
 
+## [1.6.2] - 2026-10-06
+
+### Fixed
+
+- Fixed the Windows system accent colour not updating until the app was reopened.
+
+### Changed
+
+- Set a minimum window size (640x480) so at least two images fit side by side.
+
 ## [1.6.1] - 2026-10-06
 
 ### Fixed

@@ -15,6 +15,7 @@ Future<void> main() async {
   MediaKit.ensureInitialized();
   if (Platform.isLinux || Platform.isWindows || Platform.isMacOS) {
     await windowManager.ensureInitialized();
+    await windowManager.setMinimumSize(const Size(640, 480));
   }
   registerBundledLicenses();
   PaintingBinding.instance.imageCache
