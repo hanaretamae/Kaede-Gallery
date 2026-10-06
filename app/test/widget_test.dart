@@ -631,8 +631,8 @@ void main() {
       final idleBackground = decoration.backgroundColor!.resolve(const {})!;
       final idleForeground = decoration.foregroundColor!.resolve(const {})!;
 
-      expect(selectedBackground, scheme.primary);
-      expect(selectedForeground, scheme.onPrimary);
+      expect(selectedBackground, scheme.secondaryContainer);
+      expect(selectedForeground, scheme.onSecondaryContainer);
       expect(idleBackground, scheme.surfaceContainerHighest);
       expect(idleForeground, scheme.onSurface);
       expect(idleBackground, isNot(scheme.surfaceContainerLow));
@@ -1546,7 +1546,7 @@ void main() {
 
     expect(
       activeChoice.decoration!.backgroundColor!.resolve({WidgetState.selected}),
-      scheme.primary,
+      scheme.secondaryContainer,
     );
     void expectActiveChoiceTracksTheme(Brightness brightness) {
       final activeGroup = find.byType(m3e.M3EButtonGroup).first;
@@ -1559,7 +1559,7 @@ void main() {
         activeButton.decoration!.backgroundColor!.resolve({
           WidgetState.selected,
         }),
-        currentTheme.colorScheme.primary,
+        currentTheme.colorScheme.secondaryContainer,
       );
       final decoration = galleryChoiceButtonDecoration(
         currentTheme.colorScheme,

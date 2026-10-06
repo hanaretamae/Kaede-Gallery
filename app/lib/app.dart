@@ -31,24 +31,21 @@ class VaultGalleryApp extends ConsumerWidget {
                   ? null
                   : ColorScheme.fromSeed(
                       seedColor: lightDynamic.primary,
-                      dynamicSchemeVariant: DynamicSchemeVariant.expressive,
+
                       brightness: Brightness.light,
                     )
-            : ColorScheme.fromSeed(
-                seedColor: portalAccent,
-                dynamicSchemeVariant: DynamicSchemeVariant.expressive,
-              );
+            : ColorScheme.fromSeed(seedColor: portalAccent);
         final darkSystemScheme = portalAccent == null
             ? darkDynamic == null
                   ? null
                   : ColorScheme.fromSeed(
                       seedColor: darkDynamic.primary,
-                      dynamicSchemeVariant: DynamicSchemeVariant.expressive,
+
                       brightness: Brightness.dark,
                     )
             : ColorScheme.fromSeed(
                 seedColor: portalAccent,
-                dynamicSchemeVariant: DynamicSchemeVariant.expressive,
+
                 brightness: Brightness.dark,
               );
         return MaterialApp(
