@@ -18,6 +18,9 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 - デスクトップで「メディアを開く」メニューの文字が省略される問題を修正し、ダイアログで表示するようにしました。
 - ピュアブラック有効時もリストやカード等で Material You の色味が失われないようにしました。
 - システムカラーに Material 3 Expressive の配色バリアントを使用します。
+- Expressive の配色を M3E のリストなどすべてのコンポーネントに一貫して適用しました。
+- 実行ファイル名を `kaede_gallery`（Windows は `kaede_gallery.exe`）に変更しました。
+- Linux のアプリケーション ID を `com.hanaretamae.kaede_gallery` にし、デスクトップファイル名も合わせて、Waybar などでアイコンが表示されるようにしました。
 - 動画コントロールに暗い背景を付け、明るい映像上でも読みやすくしました。
 
 ### Changed

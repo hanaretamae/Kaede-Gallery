@@ -16,6 +16,9 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 - Fixed the Open media menu being truncated on desktop; it is now a dialog.
 - Pure black no longer discards Material You tinting on lists, cards and sheets.
 - System colours now use the Material 3 Expressive palette variant.
+- The Expressive palette is applied consistently to M3E lists and all themed components.
+- Renamed the executable to `kaede_gallery` (`kaede_gallery.exe` on Windows).
+- Linux application ID is now `com.hanaretamae.kaede_gallery` and the desktop file matches it, so panels such as Waybar can show the app icon.
 - Video controls sit on a dark scrim so they stay legible over bright frames.
 
 ### Changed

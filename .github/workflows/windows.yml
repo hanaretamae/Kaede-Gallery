@@ -62,7 +62,7 @@ jobs:
         run: |
           $bundle = 'app/build/windows/x64/runner/Release'
           Get-ChildItem $bundle | Select-Object Name, Length
-          foreach ($name in 'vault_gallery.exe', 'gallery_bridge.dll', 'libmpv-2.dll',
+          foreach ($name in 'kaede_gallery.exe', 'gallery_bridge.dll', 'libmpv-2.dll',
               'libEGL.dll', 'libGLESv2.dll', 'vk_swiftshader.dll', 'vulkan-1.dll',
               'zlib.dll', 'd3dcompiler_47.dll') {
             if (-not (Test-Path (Join-Path $bundle $name))) { throw "$name is missing from the bundle" }

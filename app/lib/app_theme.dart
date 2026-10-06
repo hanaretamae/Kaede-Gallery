@@ -43,6 +43,7 @@ ColorScheme materialYouScheme(
 }) => ColorScheme.fromSeed(
   seedColor: systemScheme.primary,
   brightness: brightness,
+  dynamicSchemeVariant: DynamicSchemeVariant.expressive,
 );
 
 m3e.M3EButtonDecoration galleryChoiceButtonDecoration(ColorScheme scheme) =>
@@ -96,7 +97,11 @@ ThemeData galleryTheme(
 }) {
   final generatedScheme =
       dynamicScheme ??
-      ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
+      ColorScheme.fromSeed(
+        seedColor: seed,
+        brightness: brightness,
+        dynamicSchemeVariant: DynamicSchemeVariant.expressive,
+      );
   final colorScheme = pureBlack && brightness == Brightness.dark
       ? _pureBlackScheme(generatedScheme)
       : generatedScheme;
@@ -263,6 +268,7 @@ m3e.M3EThemeData _buildExpressiveTheme(ThemeData theme) {
       mui.ColorScheme.fromSeed(
         seedColor: flutterScheme.primary,
         brightness: flutterScheme.brightness,
+        dynamicSchemeVariant: mui.DynamicSchemeVariant.expressive,
       ).copyWith(
         primary: flutterScheme.primary,
         onPrimary: flutterScheme.onPrimary,

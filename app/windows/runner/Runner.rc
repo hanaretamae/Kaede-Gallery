@@ -94,7 +94,7 @@ BEGIN
             VALUE "FileVersion", VERSION_AS_STRING "\0"
             VALUE "InternalName", "Kaede Gallery" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2026 hanaretamae and Kaede Gallery contributors. MIT License." "\0"
-            VALUE "OriginalFilename", "vault_gallery.exe" "\0"
+            VALUE "OriginalFilename", "kaede_gallery.exe" "\0"
             VALUE "ProductName", "Kaede Gallery" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END

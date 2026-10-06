@@ -326,7 +326,7 @@ only for Markdown files other than `CHANGELOG.md` and the release script. Buildi
 Windows can only be built on Windows, so it uses a manual (`workflow_dispatch`) GitHub Actions workflow
 (`.github/workflows/windows.yml`; standard runners only, free for public repositories). After creating the
 Release, run "Windows build" from the Actions tab and enter the tag (for example `v1.6.2`). It adds the x64 ZIP to
-the Release and updates `SHA256SUMS`. Unzip and run `vault_gallery.exe`. Windows on Arm can run this x64 build
+the Release and updates `SHA256SUMS`. Unzip and run `kaede_gallery.exe`. Windows on Arm can run this x64 build
 under emulation. A native ARM64 build is unavailable because the bundled Windows video dependencies (libmpv and
 ANGLE) are x64-only.
 
