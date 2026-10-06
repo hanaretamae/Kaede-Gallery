@@ -1404,90 +1404,108 @@ class _VideoControlBar extends StatelessWidget {
             durationMilliseconds - positionMilliseconds <= 250
         ? maxSeconds
         : positionMilliseconds.toDouble().clamp(0, maxSeconds).toDouble();
+    // The scrim keeps white controls legible over bright video frames.
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 20),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          M3ETheme(
-            data: _wideIndicatorTheme(context),
-            child: M3ESlider(
-              value: currentSeconds,
-              max: maxSeconds,
-              semanticLabel: context.l10n.videoPlaybackPosition,
-              label: _formatDuration(
-                Duration(milliseconds: currentSeconds.round()),
-              ),
-              semanticFormatterCallback: (value) =>
-                  _formatDuration(Duration(milliseconds: value.round())),
-              onChanged: duration == Duration.zero
-                  ? null
-                  : (value) => onSeek(Duration(milliseconds: value.round())),
-            ),
-          ),
-          Row(
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.6),
+          borderRadius: BorderRadius.circular(GalleryShape.large),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
             children: [
-              M3EIconButton(
-                variant: M3EIconButtonVariant.standard,
-                tooltip: playing ? context.l10n.pause : context.l10n.play,
-                onPressed: onPlayPause,
-                icon: Icon(
-                  playing ? Icons.pause : Icons.play_arrow,
-                  color: Colors.white,
+              M3ETheme(
+                data: _wideIndicatorTheme(context),
+                child: M3ESlider(
+                  value: currentSeconds,
+                  max: maxSeconds,
+                  semanticLabel: context.l10n.videoPlaybackPosition,
+                  label: _formatDuration(
+                    Duration(milliseconds: currentSeconds.round()),
+                  ),
+                  semanticFormatterCallback: (value) =>
+                      _formatDuration(Duration(milliseconds: value.round())),
+                  onChanged: duration == Duration.zero
+                      ? null
+                      : (value) =>
+                            onSeek(Duration(milliseconds: value.round())),
                 ),
               ),
-              const SizedBox(width: 4),
-              Text(
-                '${_formatDuration(position)} / ${_formatDuration(duration)}',
-                style: Theme.of(context).textTheme.labelMedium
-                    ?.copyWith(color: Colors.white),
-              ),
-              const Spacer(),
-              M3EMenu(
-                selectedValue: rate,
-                onSelected: (value) {
-                  if (value is double) onRate(value);
-                },
-                anchorBuilder: (context, open) => M3EButton.text(
-                  onPressed: open,
-                  child: Text(
-                    '${rate}x',
-                    style: Theme.of(context).textTheme.labelLarge
+              Row(
+                children: [
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
+                    tooltip: playing ? context.l10n.pause : context.l10n.play,
+                    onPressed: onPlayPause,
+                    icon: Icon(
+                      playing ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${_formatDuration(position)} / ${_formatDuration(duration)}',
+                    style: Theme.of(context).textTheme.labelMedium
                         ?.copyWith(color: Colors.white),
                   ),
-                ),
-                children: [
-                  for (final value in const [0.5, 0.75, 1.0, 1.25, 1.5, 2.0])
-                    M3EMenuSelectable(
-                      value: value,
-                      label: '${value}x',
-                      selected: rate == value,
+                  const Spacer(),
+                  M3EMenu(
+                    selectedValue: rate,
+                    onSelected: (value) {
+                      if (value is double) onRate(value);
+                    },
+                    anchorBuilder: (context, open) => M3EButton.text(
+                      onPressed: open,
+                      child: Text(
+                        '${rate}x',
+                        style: Theme.of(context).textTheme.labelLarge
+                            ?.copyWith(color: Colors.white),
+                      ),
                     ),
+                    children: [
+                      for (final value in const [
+                        0.5,
+                        0.75,
+                        1.0,
+                        1.25,
+                        1.5,
+                        2.0,
+                      ])
+                        M3EMenuSelectable(
+                          value: value,
+                          label: '${value}x',
+                          selected: rate == value,
+                        ),
+                    ],
+                  ),
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
+                    tooltip: looping
+                        ? context.l10n.turnLoopingOff
+                        : context.l10n.loopCurrentVideo,
+                    onPressed: () => onLoopChanged(!looping),
+                    icon: Icon(
+                      Icons.repeat_one,
+                      color: looping ? Colors.white : Colors.white70,
+                    ),
+                  ),
+                  M3EIconButton(
+                    variant: M3EIconButtonVariant.standard,
+                    tooltip: muted ? context.l10n.unmute : context.l10n.mute,
+                    onPressed: () => onMuteChanged(!muted),
+                    icon: Icon(
+                      muted ? Icons.volume_off : Icons.volume_up,
+                      color: Colors.white,
+                    ),
+                  ),
                 ],
-              ),
-              M3EIconButton(
-                variant: M3EIconButtonVariant.standard,
-                tooltip: looping
-                    ? context.l10n.turnLoopingOff
-                    : context.l10n.loopCurrentVideo,
-                onPressed: () => onLoopChanged(!looping),
-                icon: Icon(
-                  Icons.repeat_one,
-                  color: looping ? Colors.white : Colors.white70,
-                ),
-              ),
-              M3EIconButton(
-                variant: M3EIconButtonVariant.standard,
-                tooltip: muted ? context.l10n.unmute : context.l10n.mute,
-                onPressed: () => onMuteChanged(!muted),
-                icon: Icon(
-                  muted ? Icons.volume_off : Icons.volume_up,
-                  color: Colors.white,
-                ),
               ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

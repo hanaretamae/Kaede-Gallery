@@ -71,6 +71,23 @@ m3e.M3EButtonDecoration galleryChoiceButtonDecoration(ColorScheme scheme) =>
       side: const WidgetStatePropertyAll(BorderSide.none),
     );
 
+/// Darkens the surface roles toward black while keeping the scheme's hue, so
+/// Material You tinting survives in lists, cards and sheets.
+ColorScheme _pureBlackScheme(ColorScheme scheme) {
+  Color toward(Color color, double amount) =>
+      Color.lerp(color, Colors.black, amount)!;
+  return scheme.copyWith(
+    surface: Colors.black,
+    surfaceDim: Colors.black,
+    surfaceBright: Colors.black,
+    surfaceContainerLowest: toward(scheme.surfaceContainerLowest, 0.8),
+    surfaceContainerLow: toward(scheme.surfaceContainerLow, 0.55),
+    surfaceContainer: toward(scheme.surfaceContainer, 0.5),
+    surfaceContainerHigh: toward(scheme.surfaceContainerHigh, 0.4),
+    surfaceContainerHighest: toward(scheme.surfaceContainerHighest, 0.3),
+  );
+}
+
 ThemeData galleryTheme(
   Color seed, {
   Brightness brightness = Brightness.light,
@@ -81,16 +98,7 @@ ThemeData galleryTheme(
       dynamicScheme ??
       ColorScheme.fromSeed(seedColor: seed, brightness: brightness);
   final colorScheme = pureBlack && brightness == Brightness.dark
-      ? generatedScheme.copyWith(
-          surface: Colors.black,
-          surfaceDim: Colors.black,
-          surfaceBright: Colors.black,
-          surfaceContainerLowest: const Color(0xFF101012),
-          surfaceContainerLow: const Color(0xFF191A1E),
-          surfaceContainer: const Color(0xFF202126),
-          surfaceContainerHigh: const Color(0xFF27282E),
-          surfaceContainerHighest: const Color(0xFF2E2F35),
-        )
+      ? _pureBlackScheme(generatedScheme)
       : generatedScheme;
   final outline = colorScheme.outlineVariant;
   final roundedOutline = OutlineInputBorder(

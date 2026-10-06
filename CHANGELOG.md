@@ -14,6 +14,9 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 - Fixed "Open in Obsidian" on Windows failing with "Vault not found".
 - Fixed "Open with" and "Show in file manager" on Windows opening the wrong thing; the file manager now selects the file.
 - Fixed the Open media menu being truncated on desktop; it is now a dialog.
+- Pure black no longer discards Material You tinting on lists, cards and sheets.
+- System colours now use the Material 3 Expressive palette variant.
+- Video controls sit on a dark scrim so they stay legible over bright frames.
 
 ### Changed
 
