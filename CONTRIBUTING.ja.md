@@ -30,6 +30,22 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo deny check advisories bans licenses sources
 
+# Kotlin Multiplatform / Compose
+cd kotlin
+./gradlew :core:model:allTests :core:settings:allTests :core:rust:allTests :ui:app:allTests :ui:app:compileKotlinJvm :ui:app:compileAndroidMain :desktopApp:test :desktopApp:compileKotlin
+
+# Linux Desktop版Compose UIの起動（filesystem Vaultと画像）
+LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" \
+  ./gradlew :desktopApp:run
+./gradlew :desktopApp:createDistributable
+
+# Nix 開発環境からLinux向けAndroid native libraryをビルド
+rustup target add --toolchain 1.98.1 aarch64-linux-android
+PATH="$(dirname "$(rustup which cargo --toolchain 1.98.1)"):$PATH" \
+  env "CC_aarch64-linux-android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" \
+    "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" \
+  ./gradlew :core:rust:cargoBuildAarch64AndroidDebug
+
 # Flutter
 cd app
 dart format lib test
@@ -43,7 +59,7 @@ flutter test
 > Vault を編集・書き込みしてはいけません。スキャナーやテストも同様です。
 
 - **架空データのみ**: テスト・ドキュメント・Issue・プルリクエストには、架空のノートとメディアだけを追加します。
-- **言語**: Rust と Dart のみを使います。他言語のツールを追加しないでください。
+- **言語**: 移行先は Rust と Kotlin です。platform parity の確認が終わるまで既存 Dart/Flutter も動作させ、無関係な実装言語を増やさないでください。
 - **安全性**: core／parser は `forbid(unsafe_code)`、オフライン、入力上限あり、ログ・エラーにノート内容を含めない。
 - **パスと保存先**: パスは開く前に検証し、索引・キャッシュは Vault 外のプライベートなアプリデータに置きます。
 - **ネットワーク**: 通信・テレメトリ・広告・リモートのクラッシュレポートに関する依存は追加しません。

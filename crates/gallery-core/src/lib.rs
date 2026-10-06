@@ -754,8 +754,18 @@ impl Gallery {
         documents: Vec<SafNoteDocument>,
         file_paths: Vec<String>,
     ) -> Result<ScanReport, CoreError> {
-        if !self.saf || documents.len() > MAX_SAF_DOCUMENTS || file_paths.len() > MAX_SAF_DOCUMENTS
-        {
+        self.scan_saf_iter(file_paths, documents.into_iter().map(Ok))
+    }
+
+    pub fn scan_saf_iter<I>(
+        &mut self,
+        file_paths: Vec<String>,
+        documents: I,
+    ) -> Result<ScanReport, CoreError>
+    where
+        I: IntoIterator<Item = Result<SafNoteDocument, CoreError>>,
+    {
+        if !self.saf || file_paths.len() > MAX_SAF_DOCUMENTS {
             return Err(CoreError::InvalidVault);
         }
 
@@ -796,7 +806,13 @@ impl Gallery {
             )
             .map_err(|_| CoreError::Database)?;
 
+        let mut document_count = 0;
         for document in documents {
+            let document = document?;
+            document_count += 1;
+            if document_count > MAX_SAF_DOCUMENTS {
+                return Err(CoreError::InvalidVault);
+            }
             if !saf_path_within_limits(&document.path) {
                 return Err(CoreError::InvalidVault);
             }

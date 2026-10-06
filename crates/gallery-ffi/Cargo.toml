@@ -1,0 +1,19 @@
+[package]
+name = "gallery-ffi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version = "1.91"
+
+[lib]
+name = "gallery_ffi"
+crate-type = ["lib", "cdylib", "staticlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+gallery-core = { version = "0.1.0", path = "../gallery-core" }
+gallery-parse = { version = "0.1.0", path = "../gallery-parse" }
+thiserror.workspace = true
+uniffi = "=0.32.0"

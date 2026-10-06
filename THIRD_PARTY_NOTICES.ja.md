@@ -38,6 +38,13 @@ Android の共有ライブラリ（`.so`）と Windows の `libmpv-2.dll` は動
 Linux バンドルの Nix package metadata も、同梱アプリの配布条件と一致する
 GPL-3.0-or-later を指定しています。
 
+## Kotlin Multiplatform デスクトップ依存
+
+Compose Desktop の Linux / Windows 配布物には JNA 5.19.1 を同梱します。
+JNA は Apache-2.0 または LGPL-2.1-or-later のデュアルライセンスです。
+同梱する JNA JAR の `META-INF/LICENSE` に通知とライセンス参照があります。
+ソース: https://github.com/java-native-access/jna
+
 ## Windows グラフィックスライブラリ
 
 Windows ZIP には `media_kit_libs_windows_video` が使用する ANGLE v1.0.1 の
@@ -76,7 +83,7 @@ Dart / Flutter 依存のライセンス全文は Flutter のライセンスレ�
 
 生成された `RUST-DEPENDENCY-LICENSES.txt` は、配布アプリが使う Rust 依存を
 ライセンス別に列挙し、パッケージ名・バージョン、ライセンス全文、依存元に含まれる
-`NOTICE` / 著作権表示を収録します。`about.toml` で指定した配布対象 6 Rust
+`NOTICE` / 著作権表示を収録します。`about.toml` で指定した配布対象 7 Rust
 ターゲットを確認し、ビルド専用・開発専用依存は除外しています。
 
 ## macOS

@@ -142,8 +142,9 @@
             platformVersions = [
               "35"
               "36"
+              "37"
             ];
-            buildToolsVersions = [ "36.0.0" ];
+            buildToolsVersions = [ "37.0.0" ];
             includeCmake = true;
             cmakeVersions = [ "3.22.1" ];
             includeNDK = true;

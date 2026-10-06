@@ -30,6 +30,22 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo deny check advisories bans licenses sources
 
+# Kotlin Multiplatform / Compose
+cd kotlin
+./gradlew :core:model:allTests :core:settings:allTests :core:rust:allTests :ui:app:allTests :ui:app:compileKotlinJvm :ui:app:compileAndroidMain :desktopApp:test :desktopApp:compileKotlin
+
+# Launch the Linux Desktop replacement UI (filesystem Vaults and images)
+LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" \
+  ./gradlew :desktopApp:run
+./gradlew :desktopApp:createDistributable
+
+# Linux Android native library (from the Nix development shell)
+rustup target add --toolchain 1.98.1 aarch64-linux-android
+PATH="$(dirname "$(rustup which cargo --toolchain 1.98.1)"):$PATH" \
+  env "CC_aarch64-linux-android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" \
+    "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" \
+  ./gradlew :core:rust:cargoBuildAarch64AndroidDebug
+
 # Flutter
 cd app
 dart format lib test
@@ -43,7 +59,7 @@ flutter test
 > Never edit or write to an Obsidian Vault. Scanners and tests must follow this rule too.
 
 - **Fictional data only:** Add only fictional notes and media to tests and documentation.
-- **Languages:** Use Rust and Dart only. Do not add tools written in other languages.
+- **Languages:** The migration target is Rust and Kotlin. Keep existing Dart/Flutter code working until platform parity is verified; do not add unrelated implementation languages.
 - **Safety:** Core and parser code must use `forbid(unsafe_code)`, remain offline and bounded, and never put note
   content in logs or errors.
 - **Paths and storage:** Validate paths before opening them. Store indexes and caches outside the Vault in

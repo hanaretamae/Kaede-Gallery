@@ -6,7 +6,10 @@ from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MANIFEST = ROOT / "crates/gallery-bridge/Cargo.toml"
+MANIFESTS = [
+    ROOT / "crates/gallery-bridge/Cargo.toml",
+    ROOT / "crates/gallery-ffi/Cargo.toml",
+]
 TEMPLATE = ROOT / "tools/rust-dependency-licenses.hbs"
 OUTPUT = ROOT / "app/assets/licenses/RUST-DEPENDENCY-LICENSES.txt"
 NOTICE_NAMES = {
@@ -22,15 +25,18 @@ NOTICE_NAMES = {
 
 
 def shipped_dependency_ids(metadata: dict) -> set[str]:
-    root_package = next(
-        package
+    root_package_ids = {
+        package["id"]
         for package in metadata["packages"]
-        if package["name"] == "gallery-bridge"
-        and Path(package["manifest_path"]).resolve() == MANIFEST.resolve()
-    )
+        if package["name"] in {"gallery-bridge", "gallery-ffi"}
+        and any(
+            Path(package["manifest_path"]).resolve() == manifest.resolve()
+            for manifest in MANIFESTS
+        )
+    }
     nodes = {node["id"]: node for node in metadata["resolve"]["nodes"]}
-    reachable = {root_package["id"]}
-    pending = [root_package["id"]]
+    reachable = set(root_package_ids)
+    pending = list(root_package_ids)
 
     while pending:
         node = nodes[pending.pop()]
@@ -85,20 +91,23 @@ def append_package_notices(report: str, metadata: dict) -> str:
 
 
 def main() -> None:
-    generated = subprocess.run(
-        [
-            "cargo",
-            "about",
-            "generate",
-            "--manifest-path",
-            str(MANIFEST),
-            str(TEMPLATE),
-        ],
-        cwd=ROOT,
-        check=True,
-        text=True,
-        stdout=subprocess.PIPE,
-    ).stdout
+    generated = "\n\n".join(
+        subprocess.run(
+            [
+                "cargo",
+                "about",
+                "generate",
+                "--manifest-path",
+                str(manifest),
+                str(TEMPLATE),
+            ],
+            cwd=ROOT,
+            check=True,
+            text=True,
+            stdout=subprocess.PIPE,
+        ).stdout.rstrip()
+        for manifest in MANIFESTS
+    )
     metadata_json = subprocess.run(
         [
             "cargo",
@@ -107,7 +116,7 @@ def main() -> None:
             "1",
             "--locked",
             "--manifest-path",
-            str(MANIFEST),
+            str(ROOT / "Cargo.toml"),
         ],
         cwd=ROOT,
         check=True,
@@ -115,6 +124,7 @@ def main() -> None:
         stdout=subprocess.PIPE,
     ).stdout
     report = append_package_notices(generated, json.loads(metadata_json))
+    report = "\n".join(line.rstrip() for line in report.splitlines()).rstrip() + "\n"
     temporary = OUTPUT.with_suffix(".tmp")
     try:
         temporary.write_text(report, encoding="utf-8")

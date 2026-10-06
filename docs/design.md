@@ -1,67 +1,167 @@
-# vault-gallery design
+# Kaede Gallery design
 
 This document records the implementation contract for the repository. The
-user-provided Japanese design in the project brief is the source of truth; this
-summary preserves the constraints needed to implement the current phase. If
-implementation and brief conflict, report the discrepancy and follow the
-brief.
+approved Kotlin Multiplatform / Compose Multiplatform migration brief is the
+source of truth for the target architecture and migration phases. The
+historical Flutter behavior documented below remains the compatibility
+contract until each replacement has passed parity checks. Report other
+conflicts instead of silently overriding either contract.
 
 ## Purpose and scope
 
 Provide an offline gallery for media and metadata in an Obsidian Vault,
-initially targeting NixOS/Linux and Android. Rust owns parsing, scanning,
-indexing, filtering, and image thumbnails. Flutter will own the UI and video
-decoding/playback. The Vault is always read-only.
+initially targeting Linux and Android, with Windows support in progress. Rust
+owns parsing, scanning, indexing, filtering, and image thumbnails. Kotlin
+Multiplatform and Compose Multiplatform are the target application and shared
+UI layers; Android and desktop integrations remain platform-specific. The
+Vault is always read-only.
 
 The application must not edit, create, delete, or move Vault files; render
 Markdown; synchronize data; automatically access the network; send telemetry,
 ads, or crash reports; or generate/tag images with AI. Only fictional test
 notes and media may be committed.
 
-## Architecture and phase order
+## Architecture and migration phase order
+
+Target dependency direction:
 
 ```text
-Flutter features/platform -> gallery-bridge -> gallery-core -> gallery-parse
+Compose UI -> Kotlin state/repository -> Rust FFI facade -> gallery-core -> gallery-parse
 ```
 
 Dependencies point downwards only. `gallery-parse` is pure parsing without
-filesystem I/O. `gallery-core` does not know Flutter or the bridge. Flutter
-features do not import each other; the UI calls Rust through a repository
-interface and keeps OS-specific behavior in `platform/`.
-Repositories, settings, and viewer actions depend on injectable platform
-capabilities rather than constructing Android method-channel adapters directly.
-The Linux filesystem chooser and Android `ContentResolver` remain distinct I/O
-implementations; only their lifecycle and data contracts are shared.
+filesystem I/O. `gallery-core` does not know about Kotlin, Compose, or the FFI
+facade. Common Kotlin code owns domain-facing models, repositories, state,
+settings, navigation, and shared UI. UI calls Rust only through a repository
+and a coarse-grained FFI facade; Composables do not call bindings directly.
+Platform-specific behavior is injected behind platform capabilities. Android
+SAF and Media3 remain separate from desktop filesystem, window, and video
+integrations.
 
-1. **Complete:** Rust parser, core, CLI, fictional fixture generator, and initial benchmark.
-2. **Complete:** Flutter/Linux gallery list with native video-frame thumbnails.
-3. **Complete:** Viewer, details, Obsidian links, and video.
-4. **Complete:** Android, including Storage Access Framework support.
-5. **In progress:** Windows x64 builds from a manual GitHub Actions workflow.
-   Native arm64 builds are blocked because the bundled Windows video
-   dependencies (`libmpv` and ANGLE) are x86_64-only; Windows on Arm can run the
-   x64 build under emulation. Windows builds are unverified on real hardware.
-   macOS is planned.
-6. **Blocked on a design decision:** iOS external Vault access.
+1. **Complete (historical):** Rust parser, core, CLI, fictional fixture
+   generator, and initial benchmark.
+2. **Complete (historical):** Flutter/Linux gallery list with native
+   video-frame thumbnails.
+3. **Complete (historical):** Viewer, details, Obsidian links, and video.
+4. **Complete (historical):** Android, including Storage Access Framework
+   support.
+5. **In progress (legacy delivery):** Windows x64 builds from a manual GitHub
+   Actions workflow. Keep this Flutter release path working while the KMP
+   replacement is developed; do not make the KMP migration wait on it. Native
+   arm64 builds are blocked because the bundled Windows video dependencies
+   (`libmpv` and ANGLE) are x86_64-only; Windows on Arm can run the x64 build
+   under emulation. Windows builds are unverified on real hardware.
+6. **Complete:** Rust Core readiness. The Rust API, safety, tests, limits, and
+   performance baseline have been audited; the Kotlin-facing facade contract
+   is documented. Reuse existing functionality instead of duplicating it.
+7. **Complete (foundation):** Add Kotlin Multiplatform / Compose Multiplatform
+   modules and build/test infrastructure while retaining the Flutter app.
+8. **Current migration — Rust FFI:** Add generated Kotlin bindings behind a
+   coarse-grained, read-only repository API. Validate the selected FFI
+   technology and its supported target ABIs before treating this phase as
+   complete.
+9. **Shared UI:** Migrate Gallery, Search, Filter, and Viewer to shared Compose
+   UI with immutable state, paging, and stable keys.
+10. **Settings and design system:** Migrate settings, localization, theme, and
+    Material 3 Expressive presentation without writing into the Vault.
+11. **Android:** Migrate SAF and lifecycle integration; use an Android-native
+    video backend where appropriate.
+12. **Desktop:** Migrate Linux and Windows filesystem, window, and video
+    integrations to desktop implementations.
+13. **Parity and performance:** Verify functional parity, security properties,
+    build/release paths, and measured performance on fictional fixtures before
+    retiring any Flutter target.
+14. **Flutter removal:** Remove Flutter only after all replacement targets
+    and release paths have passed parity and acceptance checks.
+15. **Future platform:** Keep the common architecture extensible to macOS and
+    iOS. iOS external Vault access remains blocked on a separate design
+    decision; do not imply it is supported by this migration.
 
-Complete and verify one phase before starting another.
+The later shared-UI and settings steps already have partial implementations;
+their presence does not mean those phases passed parity or acceptance checks.
+Complete and verify phases in order rather than treating those early
+implementations as finished.
+
+### Current KMP implementation status
+
+The repository currently contains the KMP model, repository, Rust binding
+adapter, and initial shared Gallery/Search/Filter screens with paging and
+filter state. A shared Gallery-to-note-detail route and same-note media
+navigation are also present; the common viewer delegates media rendering to a
+platform capability. Linux image display is implemented in `desktopApp`;
+Android has an application module with SAF selection, bounded staged scans,
+private-index reuse on launch, explicit rescan, bounded image decoding, and a
+Media3 video player. It also provides a confirmed forget-Vault action that
+removes the private index and releases the persisted read grant. Its debug APK
+and Android arm64/x86_64 native libraries build successfully; it has not been
+exercised against a real DocumentsProvider or device, so Android acceptance is
+still pending. Linux/JVM Compose Desktop packaging is available; a Windows x64
+CI job has been added to verify the JVM FFI ABI and application packaging.
+Common
+appearance and gallery-pagination settings models, state, controls, and
+Android and desktop private-settings adapters are present. Both platforms now
+support versioned, size-bounded settings-file import/export with Vault-safe
+destination checks. Theme selection,
+pure-black surfaces, platform system-locale fallback, and Android dynamic-color
+scheme injection are wired at the shared app boundary.
+Rust selected-Vault storage calls and filesystem session open,
+initial scan, index reuse on launch, rescan, and disposal are wrapped by typed
+Kotlin repositories; an integration test exercises initial scans, index reuse,
+and explicit rescan against a temporary fictional Vault. Both Android and
+desktop offer a confirmed forget-Vault action.
+The `desktopApp` Compose Desktop module provides a Linux/JVM entrypoint,
+directory selection, private settings persistence, Rust filesystem indexing,
+index reuse on launch, an explicit rescan action, and bounded-resolution image
+display. Linux video is rendered in an embedded native child window from a
+separate `mpv` process; Linux runtime requires `mpv` on `PATH`. Launch disables
+mpv user configuration, scripts, subtitle/audio auto-loading, and automatic
+sidecar loading. A basic localized About section now links to the project and
+license. Windows ABI compatibility and packaging verification, parity
+checks, and performance acceptance remain unfinished. A Windows x64 CI job now
+builds/tests the JVM FFI host target and Compose Desktop distributable; its
+first successful run is still required before considering that target
+verified.
+Keep Flutter and its release paths until those gaps are verified; the current
+Compose UI is not yet a replacement.
+
+Latest local verification (2026-10-07): Rust workspace tests, formatting,
+Clippy, and dependency policy checks pass. Kotlin/JVM tests and compilation,
+including generated UniFFI bindings, Android host tests and Android source
+compilation, Android arm64 and x86_64 Rust FFI builds, the Compose Android
+debug APK, and the Linux Compose Desktop distribution build pass. The Android
+build uses the installed Rust 1.98.1 Android target libraries and Android NDK
+clang for native cross-compilation; the Nix-packaged Rust compiler alone does
+not include those target libraries. All 62 Flutter tests also pass. These
+checks validate compilation and packaging, not Android device behavior,
+Windows ABI compatibility, or parity/performance acceptance. The bounded SAF
+staging integration tests verify cancellation preserves the committed index
+and removes its temporary scan file. Settings transfer codec and state tests
+cover round-trip, malformed input, bounds, and failed imports; desktop transfer
+tests also verify vault-contained export is rejected before creating a file.
+The embedded-video launch argument test checks the Linux player disables
+mpv's user configuration, scripts, and automatic sidecar loading.
+
+Complete and verify one migration phase before starting the next. During the
+transition Flutter and KMP may coexist; do not remove or degrade a working
+Flutter target as a shortcut.
 
 ## Application language
 
-The Flutter UI supports Japanese and English. System language is the default:
+The existing Flutter UI supports Japanese and English. System language is the default:
 Japanese is selected only when the system locale is Japanese; all other system
 locales use English. Users can override this with System, Japanese, or English
 in Appearance settings. The selection is persisted in private app data with
 the other appearance preferences and never changes Vault contents. UI text is
-localized at the Flutter presentation layer; Rust parser/index contracts and
+localized at the presentation layer; Rust parser/index contracts and
 stored user-provided note/category labels are not translated.
 
-Flutter localization uses `gen-l10n`. The English and Japanese source messages
+The current Flutter localization uses `gen-l10n`. The English and Japanese source messages
 are `app/lib/l10n/app_en.arb` and `app/lib/l10n/app_ja.arb`; keep their message
 keys and named placeholders in sync. Run `flutter gen-l10n` from `app/` after
 editing either file. Generated Dart files in `app/lib/l10n/` must not be edited
 by hand. Widgets use `context.l10n`; `AppL10n.current` is only for code that
-cannot receive a `BuildContext`.
+cannot receive a `BuildContext`. Preserve these locale and fallback behaviors
+in the Kotlin UI and keep the Flutter localization until parity is verified.
 
 Phase 4 delivered a privately sideloaded APK; this does not imply
 store-distribution readiness. Android Vault access targets an ordinary

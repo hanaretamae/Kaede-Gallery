@@ -1,4 +1,7 @@
 /target/
+/kotlin/.gradle/
+/kotlin/**/build/
+/kotlin/local.properties
 __pycache__/
 *.sqlite
 *.sqlite-shm

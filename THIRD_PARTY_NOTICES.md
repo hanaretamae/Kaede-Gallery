@@ -38,6 +38,13 @@ linked and replaceable. Source/build projects are available at:
 The Linux bundle's Nix package metadata identifies GPL-3.0-or-later, matching
 the license terms of the bundled application.
 
+## Kotlin Multiplatform desktop dependencies
+
+The Compose Desktop Linux and Windows distributions bundle JNA 5.19.1, dual
+licensed under Apache-2.0 or LGPL-2.1-or-later. Its bundled JNA JAR contains
+the `META-INF/LICENSE` notice and license references. Source:
+https://github.com/java-native-access/jna
+
 ## Windows graphics libraries
 
 The Windows ZIP includes the prebuilt ANGLE v1.0.1 archive used by
@@ -78,7 +85,7 @@ the other Dart/Flutter package licenses.
 The generated `RUST-DEPENDENCY-LICENSES.txt` lists the Rust packages in the
 shipped application dependency graph by license, package name, and version,
 followed by the license texts and any included dependency `NOTICE` or
-copyright files. The report covers the six shipped Rust target triples
+copyright files. The report covers the seven shipped Rust target triples
 configured in `about.toml`; build-only and development-only dependencies are
 excluded.
 
