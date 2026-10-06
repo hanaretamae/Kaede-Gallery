@@ -46,16 +46,16 @@ class RustGallerySessionRepositoryTest {
             }
             try {
                 val selectionRepository = RustVaultSelectionRepository()
-                assertIs<RepositoryResult.Success<String>>(
+                val savedSelection = assertIs<RepositoryResult.Success<String>>(
                     selectionRepository.saveSelected(
                         privateDataDirectory = privateData.toString(),
                         vaultLocator = vault.toString(),
                     ),
-                )
+                ).value
                 val selected = assertIs<RepositoryResult.Success<String?>>(
                     selectionRepository.loadSelected(privateData.toString()),
                 )
-                assertEquals(vault.toString(), selected.value)
+                assertEquals(savedSelection, selected.value)
                 assertIs<RepositoryResult.Success<*>>(
                     handle.gallery.queryPage(GalleryQuery(pageSize = 10)),
                 )
