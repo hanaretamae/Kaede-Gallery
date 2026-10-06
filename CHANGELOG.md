@@ -19,6 +19,7 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 - Linux application ID is now `com.hanaretamae.kaede_gallery` and the desktop file matches it, so panels such as Waybar can show the app icon.
 - Video controls are now separate Material 3 Expressive buttons and an opaque time chip; the seek bar has no frame.
 - Settings choice buttons use the muted secondary container instead of the saturated primary colour. The system accent is used as-is (tonal-spot palette) so primary matches the OS accent.
+- System colour now uses the vibrant variant (same hue as the OS accent, more saturated surfaces) so enabling Material You is clearly visible.
 
 ### Changed
 

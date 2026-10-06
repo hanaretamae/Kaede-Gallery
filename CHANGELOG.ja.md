@@ -21,6 +21,7 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 - Linux のアプリケーション ID を `com.hanaretamae.kaede_gallery` にし、デスクトップファイル名も合わせて、Waybar などでアイコンが表示されるようにしました。
 - 動画コントロールを個別の Material 3 Expressive ボタンと不透明な時間表示に分け、シークバーの枠をなくしました。
 - 設定の選択ボタンを彩度の高い primary ではなく控えめな secondary container にしました。システムのアクセントはそのまま（tonal spot）使い、OS のアクセントと primary が一致します。
+- システムカラーは vibrant 配色（OS のアクセントと同じ色相で、面の色味が強い）を使い、Material You を有効にした変化が分かりやすくなりました。
 
 ### Changed
 
