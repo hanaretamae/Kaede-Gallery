@@ -31,18 +31,53 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
             if (pageSize !in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE) {
                 return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
             }
+            val galleryTagPrefixes = preferences.getString(
+                KEY_GALLERY_TAG_PREFIXES,
+                GalleryTagPrefixesCodec.encodeStorage(GalleryTagPrefixesCodec.DEFAULT_PREFIXES),
+            )?.let(GalleryTagPrefixesCodec::decodeStorage)
+                ?: return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val includedTagPrefixes = preferences.getString(
+                KEY_INCLUDED_TAG_PREFIXES,
+                GalleryTagDisplayPrefixesCodec.encodeStorage(
+                    GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
+                ),
+            )?.let(GalleryTagDisplayPrefixesCodec::decodeStorage)
+                ?: return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val hiddenTagPrefixes = preferences.getString(
+                KEY_HIDDEN_TAG_PREFIXES,
+                GalleryTagDisplayPrefixesCodec.encodeStorage(
+                    GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
+                ),
+            )?.let(GalleryTagDisplayPrefixesCodec::decodeStorage)
+                ?: return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val flutterTagSettingsJson = preferences.getString(KEY_FLUTTER_TAG_SETTINGS, null)
+            if (
+                flutterTagSettingsJson != null &&
+                flutterTagSettingsJson.encodeToByteArray().size >
+                SettingsTransferCodec.MAX_BYTES - 1024
+            ) {
+                return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            }
             RepositoryResult.Success(
                 GallerySettings(
                     appearance = AppearanceSettings(
                         theme = theme,
                         language = language,
-                        useSystemColor = preferences.getBoolean(KEY_SYSTEM_COLOR, true),
+                        useSystemColor = preferences.getBoolean(
+                            KEY_SYSTEM_COLOR,
+                            AppearanceSettings().useSystemColor,
+                        ),
                         pureBlack = preferences.getBoolean(KEY_PURE_BLACK, false),
                     ),
                     pageSize = pageSize,
+                    galleryTagPrefixes = galleryTagPrefixes,
+                    includedTagPrefixes = includedTagPrefixes,
+                    hiddenTagPrefixes = hiddenTagPrefixes,
+                    showMissingMediaIcon = preferences.getBoolean(KEY_MISSING_MEDIA_ICON, false),
                     showLoadedRange = preferences.getBoolean(KEY_SHOW_RANGE, true),
                     showTilePosition = preferences.getBoolean(KEY_TILE_POSITION, false),
                     showCounts = preferences.getBoolean(KEY_SHOW_COUNTS, true),
+                    flutterTagSettingsJson = flutterTagSettingsJson,
                 ),
             )
         } catch (_: ClassCastException) {
@@ -61,9 +96,32 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                     .putBoolean(KEY_SYSTEM_COLOR, settings.appearance.useSystemColor)
                     .putBoolean(KEY_PURE_BLACK, settings.appearance.pureBlack)
                     .putInt(KEY_PAGE_SIZE, settings.pageSize)
+                    .putString(
+                        KEY_GALLERY_TAG_PREFIXES,
+                        GalleryTagPrefixesCodec.encodeStorage(settings.galleryTagPrefixes),
+                    )
+                    .putString(
+                        KEY_INCLUDED_TAG_PREFIXES,
+                        GalleryTagDisplayPrefixesCodec.encodeStorage(
+                            settings.includedTagPrefixes,
+                        ),
+                    )
+                    .putString(
+                        KEY_HIDDEN_TAG_PREFIXES,
+                        GalleryTagDisplayPrefixesCodec.encodeStorage(settings.hiddenTagPrefixes),
+                    )
+                    .putBoolean(KEY_MISSING_MEDIA_ICON, settings.showMissingMediaIcon)
                     .putBoolean(KEY_SHOW_RANGE, settings.showLoadedRange)
                     .putBoolean(KEY_TILE_POSITION, settings.showTilePosition)
                     .putBoolean(KEY_SHOW_COUNTS, settings.showCounts)
+                    .also {
+                        val tagSettings = settings.flutterTagSettingsJson
+                        if (tagSettings == null) {
+                            it.remove(KEY_FLUTTER_TAG_SETTINGS)
+                        } else {
+                            it.putString(KEY_FLUTTER_TAG_SETTINGS, tagSettings)
+                        }
+                    }
                     .commit()
                 if (saved) {
                     RepositoryResult.Success(Unit)
@@ -82,8 +140,13 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
         const val KEY_SYSTEM_COLOR = "use_system_color"
         const val KEY_PURE_BLACK = "pure_black"
         const val KEY_PAGE_SIZE = "page_size"
+        const val KEY_GALLERY_TAG_PREFIXES = "gallery_tag_prefixes"
+        const val KEY_INCLUDED_TAG_PREFIXES = "included_tag_prefixes"
+        const val KEY_HIDDEN_TAG_PREFIXES = "hidden_tag_prefixes"
+        const val KEY_MISSING_MEDIA_ICON = "show_missing_media_icon"
         const val KEY_SHOW_RANGE = "show_loaded_range"
         const val KEY_TILE_POSITION = "show_tile_position"
         const val KEY_SHOW_COUNTS = "show_counts"
+        const val KEY_FLUTTER_TAG_SETTINGS = "flutter_tag_settings_json"
     }
 }

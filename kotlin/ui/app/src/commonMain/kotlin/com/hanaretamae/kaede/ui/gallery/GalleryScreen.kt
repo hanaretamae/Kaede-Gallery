@@ -1,6 +1,7 @@
 package com.hanaretamae.kaede.ui.gallery
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,7 +11,9 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
@@ -18,6 +21,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
@@ -40,12 +45,18 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.hanaretamae.kaede.core.model.GalleryCategoryOption
 import com.hanaretamae.kaede.core.model.GalleryContent
 import com.hanaretamae.kaede.core.model.GalleryEntry
+import com.hanaretamae.kaede.core.model.MediaId
 import com.hanaretamae.kaede.core.model.GallerySortField
 import com.hanaretamae.kaede.core.model.MediaSummary
 import com.hanaretamae.kaede.core.model.NoteSummary
@@ -53,7 +64,12 @@ import com.hanaretamae.kaede.core.model.SortDirection
 import com.hanaretamae.kaede.core.model.VirtualFilter
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
+import com.hanaretamae.kaede.core.settings.GalleryTagDisplayPrefixesCodec
+import com.hanaretamae.kaede.core.settings.GalleryTagColorCodec
+import com.hanaretamae.kaede.core.settings.GalleryTagColorRule
+import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.combine
 
 data class GalleryStrings(
     val title: String,
@@ -73,6 +89,10 @@ data class GalleryStrings(
     val forgetVaultMessage: String,
     val forgetVaultConfirm: String,
     val cancel: String,
+    val jump: String,
+    val jumpTitle: String,
+    val positionInput: String,
+    val invalidPosition: String,
     val clearFilters: String,
     val filterSearch: String,
     val loadingTags: String,
@@ -90,7 +110,7 @@ data class GalleryStrings(
     val missingMedia: String,
     val counts: (Long, Long, Long) -> String,
     val error: (RepositoryError) -> String,
-    val count: (Long, Long) -> String,
+    val count: (Long, Long, Long) -> String,
     val totalCount: (Long) -> String,
     val optionCount: (Long) -> String,
     val virtualLabel: (VirtualFilter) -> String,
@@ -114,6 +134,10 @@ val EnglishGalleryStrings = GalleryStrings(
     forgetVaultMessage = "This removes its local index and thumbnails. Vault files are not changed.",
     forgetVaultConfirm = "Forget",
     cancel = "Cancel",
+    jump = "Jump",
+    jumpTitle = "Jump to position",
+    positionInput = "Item position",
+    invalidPosition = "Enter a valid item position.",
     clearFilters = "Clear filters",
     filterSearch = "Filter tags",
     loadingTags = "Loading tags…",
@@ -131,7 +155,9 @@ val EnglishGalleryStrings = GalleryStrings(
     missingMedia = "Media file unavailable",
     counts = { media, memo, related -> "$media media · $memo memos · $related links" },
     error = ::englishError,
-    count = { loaded, total -> "$loaded of $total items" },
+    count = { first, last, total ->
+        if (last == 0L) "0 of $total items" else "$first–$last of $total items"
+    },
     totalCount = { "$it items" },
     optionCount = { "$it" },
     virtualLabel = ::englishVirtualLabel,
@@ -155,6 +181,10 @@ val JapaneseGalleryStrings = GalleryStrings(
     forgetVaultMessage = "ローカルの索引とサムネイルを削除します。Vault内のファイルは変更しません。",
     forgetVaultConfirm = "登録解除",
     cancel = "キャンセル",
+    jump = "移動",
+    jumpTitle = "位置を指定して移動",
+    positionInput = "項目の位置",
+    invalidPosition = "有効な位置を入力してください。",
     clearFilters = "フィルターを解除",
     filterSearch = "タグを検索",
     loadingTags = "タグを読み込み中…",
@@ -172,7 +202,9 @@ val JapaneseGalleryStrings = GalleryStrings(
     missingMedia = "メディアファイルを利用できません",
     counts = { media, memo, related -> "画像 $media · メモ $memo · 関連リンク $related" },
     error = ::japaneseError,
-    count = { loaded, total -> "$loaded / $total 件" },
+    count = { first, last, total ->
+        if (last == 0L) "0 / $total 件" else "$first〜$last / $total 件"
+    },
     totalCount = { "$it 件" },
     optionCount = { "$it 件" },
     virtualLabel = ::japaneseVirtualLabel,
@@ -189,6 +221,11 @@ fun GalleryScreen(
     showTilePosition: Boolean = false,
     showLoadedRange: Boolean = true,
     showCounts: Boolean = true,
+    showMissingMediaIcon: Boolean = false,
+    includedTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
+    hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
+    tagColorRules: List<GalleryTagColorRule> = GalleryTagColorCodec.DEFAULT_RULES,
+    galleryThumbnail: @Composable (MediaId, Boolean) -> Unit = { _, _ -> },
     onRescan: (suspend () -> RepositoryResult<*>)? = null,
     onChangeVault: (() -> Unit)? = null,
     onForgetVault: (suspend () -> RepositoryResult<*>)? = null,
@@ -199,8 +236,51 @@ fun GalleryScreen(
     var confirmForget by remember(stateHolder) { mutableStateOf(false) }
     var forgetError by remember(stateHolder) { mutableStateOf<RepositoryError?>(null) }
     var tagFilterSearch by remember(stateHolder) { mutableStateOf("") }
+    var showJumpDialog by remember(stateHolder) { mutableStateOf(false) }
+    var positionDraft by remember(stateHolder) { mutableStateOf("") }
+    var positionError by remember(stateHolder) { mutableStateOf(false) }
+    var pendingJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
+    val gridState = rememberLazyGridState()
+    val jumpFocusRequester = remember { FocusRequester() }
     LaunchedEffect(stateHolder) {
         stateHolder.start()
+    }
+    LaunchedEffect(state.query) {
+        pendingJumpOffset = null
+    }
+    LaunchedEffect(showJumpDialog) {
+        if (showJumpDialog) jumpFocusRequester.requestFocus()
+    }
+    LaunchedEffect(gridState, stateHolder) {
+        combine(
+            stateHolder.state,
+            snapshotFlow {
+                gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
+            },
+        ) { current, lastVisibleIndex ->
+            current to lastVisibleIndex
+        }.collect { (current, lastVisibleIndex) ->
+            val prefetchFrom = (current.entries.size - PREFETCH_THRESHOLD).coerceAtLeast(0)
+            if (
+                current.canLoadMore &&
+                !current.loading &&
+                lastVisibleIndex >= prefetchFrom
+            ) {
+                stateHolder.loadMore()
+            }
+        }
+    }
+    LaunchedEffect(state.pageOffset, state.loading, state.entries.size, pendingJumpOffset) {
+        val targetOffset = pendingJumpOffset
+        if (targetOffset != null && !state.loading) {
+            when {
+                state.error != null -> pendingJumpOffset = null
+                state.entries.isNotEmpty() && state.pageOffset == targetOffset -> {
+                    gridState.scrollToItem(0)
+                    pendingJumpOffset = null
+                }
+            }
+        }
     }
     DisposableEffect(stateHolder) {
         onDispose(stateHolder::dispose)
@@ -255,6 +335,16 @@ fun GalleryScreen(
                     state.query.virtualFilters.size
                 TextButton(onClick = { showFilters = true }) {
                     Text(if (activeCount == 0) strings.filters else "${strings.filters} ($activeCount)")
+                }
+                TextButton(
+                    onClick = {
+                        positionDraft = ""
+                        positionError = false
+                        showJumpDialog = true
+                    },
+                    enabled = !state.loading && (state.totalCount ?: 0L) > 0,
+                ) {
+                    Text(strings.jump)
                 }
                 TextButton(
                     onClick = {
@@ -329,7 +419,12 @@ fun GalleryScreen(
                 Text(
                     text = state.totalCount?.let {
                         if (showLoadedRange) {
-                            strings.count(state.entries.size.toLong(), it)
+                            val first = if (state.entries.isEmpty()) {
+                                0L
+                            } else {
+                                state.pageOffset + 1
+                            }
+                            strings.count(first, state.pageOffset + state.entries.size, it)
                         } else {
                             strings.totalCount(it)
                         }
@@ -374,6 +469,7 @@ fun GalleryScreen(
                 }
             } else {
                 LazyVerticalGrid(
+                    state = gridState,
                     columns = GridCells.Adaptive(minSize = 176.dp),
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(12.dp),
@@ -387,9 +483,11 @@ fun GalleryScreen(
                         GalleryTile(
                             entry = entry,
                             strings = strings,
-                            position = index + 1,
+                            position = state.pageOffset + index + 1L,
                             showPosition = showTilePosition,
                             showCounts = showCounts,
+                            showMissingMediaIcon = showMissingMediaIcon,
+                            galleryThumbnail = galleryThumbnail,
                             onClick = { onEntrySelected(entry) },
                         )
                     }
@@ -447,14 +545,22 @@ fun GalleryScreen(
                     ) {
                         state.categories.forEach { category ->
                             val options = category.options.filter { option ->
+                                val visible = option.virtualFilter != null ||
+                                    isGalleryTagDisplayed(
+                                        option.fullTag,
+                                        includedTagPrefixes,
+                                        hiddenTagPrefixes,
+                                    )
                                 val label = option.virtualFilter?.let { strings.virtualLabel(it) }
                                     ?: option.name
-                                tagFilterSearch.isBlank() ||
-                                    tagOptionMatches(
-                                        category = category.displayName,
-                                        name = label,
-                                        fullTag = option.fullTag,
-                                        query = tagFilterSearch,
+                                visible && (
+                                    tagFilterSearch.isBlank() ||
+                                        tagOptionMatches(
+                                            category = category.displayName,
+                                            name = label,
+                                            fullTag = option.fullTag,
+                                            query = tagFilterSearch,
+                                        )
                                     )
                             }
                             if (options.isNotEmpty()) {
@@ -487,6 +593,12 @@ fun GalleryScreen(
                                                 ?: category.displayName,
                                             selectedMode = selectedMode,
                                             optionCount = strings.optionCount(option.count),
+                                            color = Color(
+                                                GalleryTagColorCodec.colorFor(
+                                                    option.fullTag,
+                                                    tagColorRules,
+                                                ),
+                                            ),
                                             strings = strings,
                                             onClick = {
                                                 if (virtual == null) {
@@ -533,7 +645,63 @@ fun GalleryScreen(
             },
         )
     }
+    if (showJumpDialog) {
+        AlertDialog(
+            onDismissRequest = { showJumpDialog = false },
+            title = { Text(strings.jumpTitle) },
+            text = {
+                Column {
+                    OutlinedTextField(
+                        value = positionDraft,
+                        onValueChange = {
+                            positionDraft = it.filter { char -> char in '0'..'9' }
+                            positionError = false
+                        },
+                        label = { Text(strings.positionInput) },
+                        singleLine = true,
+                        isError = positionError,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                        modifier = Modifier.focusRequester(jumpFocusRequester),
+                    )
+                    if (positionError) {
+                        Text(
+                            strings.invalidPosition,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val position = positionDraft.toLongOrNull()
+                        val total = state.totalCount
+                        if (
+                            position == null ||
+                            position < 1 ||
+                            position > MAX_GALLERY_POSITION ||
+                            (total != null && position > total)
+                        ) {
+                            positionError = true
+                        } else {
+                            pendingJumpOffset = position - 1
+                            showJumpDialog = false
+                            stateHolder.jumpTo(position)
+                        }
+                    },
+                ) { Text(strings.jump) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showJumpDialog = false }) {
+                    Text(strings.cancel)
+                }
+            },
+        )
+    }
 }
+
+private const val PREFETCH_THRESHOLD = 4
+private const val MAX_GALLERY_POSITION = 2_147_483_647L
 
 @Composable
 private fun FilterOption(
@@ -542,6 +710,7 @@ private fun FilterOption(
     category: String,
     selectedMode: String,
     optionCount: String,
+    color: Color,
     strings: GalleryStrings,
     onClick: () -> Unit,
 ) {
@@ -552,6 +721,10 @@ private fun FilterOption(
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    Modifier.padding(end = 8.dp).size(10.dp)
+                        .background(color, CircleShape),
+                )
                 Text(label, style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.weight(1f))
                 Text(optionCount, style = MaterialTheme.typography.labelMedium)
@@ -569,13 +742,28 @@ private fun FilterOption(
 private fun GalleryTile(
     entry: GalleryEntry,
     strings: GalleryStrings,
-    position: Int,
+    position: Long,
     showPosition: Boolean,
     showCounts: Boolean,
+    showMissingMediaIcon: Boolean,
+    galleryThumbnail: @Composable (MediaId, Boolean) -> Unit,
     onClick: () -> Unit,
 ) {
     Card(onClick = onClick) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            val (mediaId, isVideo) = when (entry) {
+                is NoteSummary -> entry.representativeMediaId to entry.representativeMediaIsVideo
+                is MediaSummary -> entry.id to entry.isVideo
+            }
+            if (mediaId != null) {
+                Box(
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp, max = 220.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    galleryThumbnail(mediaId, isVideo)
+                }
+                Spacer(Modifier.height(8.dp))
+            }
             if (showPosition) {
                 Surface(
                     modifier = Modifier.padding(bottom = 8.dp),
@@ -595,6 +783,15 @@ private fun GalleryTile(
                     Text(entry.title, style = MaterialTheme.typography.titleMedium)
                     Text(entry.path, style = MaterialTheme.typography.bodySmall)
                     Spacer(Modifier.height(8.dp))
+                    if (entry.representativeMediaId != null && !entry.representativeMediaExists) {
+                        Text(strings.missingMedia, color = MaterialTheme.colorScheme.error)
+                        if (showMissingMediaIcon) {
+                            Text(
+                                if (entry.representativeMediaIsVideo) strings.video else strings.image,
+                                style = MaterialTheme.typography.headlineMedium,
+                            )
+                        }
+                    }
                     if (showCounts) {
                         Text(strings.counts(entry.mediaCount, entry.memoCount, entry.relatedCount))
                     }
@@ -612,6 +809,12 @@ private fun GalleryTile(
                     if (!entry.exists) {
                         Spacer(Modifier.height(8.dp))
                         Text(strings.missingMedia, color = MaterialTheme.colorScheme.error)
+                        if (showMissingMediaIcon) {
+                            Text(
+                                if (entry.isVideo) strings.video else strings.image,
+                                style = MaterialTheme.typography.headlineMedium,
+                            )
+                        }
                     }
                 }
             }

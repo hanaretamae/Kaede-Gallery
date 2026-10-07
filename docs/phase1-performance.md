@@ -63,3 +63,82 @@ is measured against its pre-scan baseline. The synthetic platform channel does n
 Use this result as a Rust/Flutter/device baseline, not as a claim about large
 Vault throughput. The benchmark reports only aggregate metrics, never paths or
 note contents.
+
+## Current Rust core recheck
+
+Re-measured on 2026-10-07 with the current working-tree Rust core, release CLI,
+and newly generated fictional fixtures. This uses the current default gallery
+eligibility prefix (`source/art`), so only one of the generator's five tag
+patterns is gallery-index eligible. The scan traverses all generated notes;
+the `indexed` CLI count is the eligible subset, not the number of input files.
+These results therefore supersede the earlier statement that every generated
+note was indexed. Query timings include CLI startup and database opening.
+
+| Input notes | Eligible indexed | Full scan | Unchanged scan | Categories | Broad tag query | Narrow tag query | Warnings |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 7,806 | 1,561 | 1.064 s | 0.094 s | 0.027 s | 0.107 s | 0.021 s | 0 |
+| 20,000 | 4,000 | 2.286 s | 0.218 s | 0.039 s | 0.164 s | 0.027 s | 0 |
+
+Fixture generation and compilation are excluded. These are single wall-clock
+measurements on this Linux environment, without memory or UI-frame profiling.
+The 20,000-input full and unchanged scans remain within the stated few-seconds
+target. The connected-device Android benchmark could not be rerun: Flutter
+attempted to install Android Build-Tools 36 into the read-only Nix SDK.
+
+## 2026-10-07 current working-tree recheck
+
+Re-ran the Linux CLI benchmark after the KMP note-structure and Desktop video
+thumbnail changes, using newly generated fictional fixtures. Fixture generation
+and release compilation are excluded; query measurements include CLI startup and
+database opening. Each value is a single wall-clock run on this Linux
+development environment.
+
+| Input notes | Eligible indexed | Full scan | Unchanged scan | Categories | Broad tag query | Narrow tag query | Warnings |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 7,806 | 1,561 | 0.685 s | 0.057 s | 0.018 s | 0.046 s | 0.015 s | 0 |
+| 20,000 | 4,000 | 1.493 s | 0.080 s | 0.022 s | 0.087 s | 0.017 s | 0 |
+
+All scans indexed the expected gallery-eligible subset and reported zero
+warnings. These Rust CLI figures do not measure Compose rendering, Android SAF
+provider I/O, memory use, or frame timings; the KMP Android measurements below
+cover those platform-specific checks.
+
+## KMP Android SAF and Compose acceptance
+
+Measured on 2026-10-07 on the connected RMX6688 (Android 16 / API 36,
+1280x2800, active 120 Hz display) using a dedicated fictional SAF fixture:
+2,000 Markdown notes, 246,000 bytes total, all eligible, no media. The folder
+was selected through Android's system `ACTION_OPEN_DOCUMENT_TREE` picker; no
+user Vault was selected or modified. The measured SAF scan used the device's
+Documents provider and the app's normal bounded SAF batch/read path.
+
+| Scenario | Result |
+|---|---:|
+| Initial selection and full indexing, confirm-to-2,000-note gallery | 21.5 s |
+| Explicit unchanged SAF rescan, paged range reset to 1-24 of 2,000 | 12.7 s |
+| App restart with private index reuse, interactive UI visible | within 5.8 s (includes a fixed 3 s wait) |
+| Peak sampled app PSS during refresh | 135,281 KiB (132.1 MiB) |
+
+The unchanged SAF rescan exceeds the broad few-seconds target in
+`docs/design.md`; SAF metadata alone is not currently used to skip note reads.
+This is an outstanding performance gap, not a pass. A metadata-only shortcut
+was not introduced because providers may omit or coarsen modification times,
+which could silently leave edited Vault notes stale.
+
+Compose grid scrolling was measured in three runs of 12 fast vertical swipes
+through the 2,000-note lazy gallery. The app remained paged, reaching result
+offsets beyond 1,000 across the runs.
+
+| Run | Frames | Janky frames | 95th percentile | 99th percentile | Missed VSync |
+|---:|---:|---:|---:|---:|---:|
+| 1 | 1,214 | 17 (1.40%) | 9 ms | 16 ms | 0 |
+| 2 | 1,214 | 16 (1.32%) | 9 ms | 15 ms | 0 |
+| 3 | 1,219 | 7 (0.57%) | 8 ms | 12 ms | 0 |
+
+At 120 Hz the frame budget is 8.33 ms; p95 was 8-9 ms with 0.57-1.40%
+janky frames and no missed VSync. Visual interaction checks also verified
+horizontal scrolling to the trailing Vault/settings actions, unique-note
+search, opening note details, and a status-bar overlap fix in the viewer.
+The fixture had no media, so KMP thumbnail-cache hits were not applicable;
+Android video playback and thumbnail behavior were separately verified with a
+fictional media fixture.

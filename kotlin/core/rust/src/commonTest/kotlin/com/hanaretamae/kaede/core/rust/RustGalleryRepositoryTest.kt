@@ -37,6 +37,8 @@ class RustGalleryRepositoryTest {
                         memoCount = 3u,
                         relatedCount = 4u,
                         representativeMediaId = 99,
+                        representativeMediaIsVideo = true,
+                        representativeMediaExists = false,
                     ),
                 ),
                 media = emptyList(),
@@ -82,6 +84,8 @@ class RustGalleryRepositoryTest {
                 path = "notes/example.md",
                 title = "Example",
                 representativeMediaId = ModelMediaId(99),
+                representativeMediaIsVideo = true,
+                representativeMediaExists = false,
                 mediaCount = 2,
                 videoCount = 1,
                 memoCount = 3,
@@ -235,6 +239,15 @@ class RustGalleryRepositoryTest {
                     ),
                 ),
                 relatedLines = emptyList(),
+                postTextEndLines = listOf(
+                    DetailLine(
+                        text = "Ending",
+                        urls = listOf("https://example.invalid/end"),
+                        isBullet = false,
+                        indentLevel = 0u,
+                        linkedNoteId = 7,
+                    ),
+                ),
                 media = emptyList(),
             ),
         )
@@ -265,6 +278,15 @@ class RustGalleryRepositoryTest {
                         ),
                     ),
                     relatedLines = emptyList(),
+                    postTextEndLines = listOf(
+                        ModelGalleryDetailLine(
+                            text = "Ending",
+                            urls = listOf("https://example.invalid/end"),
+                            isBullet = false,
+                            indentLevel = 0,
+                            linkedNoteId = ModelNoteId(7),
+                        ),
+                    ),
                     media = emptyList(),
                 ),
             ),
@@ -297,6 +319,16 @@ class RustGalleryRepositoryTest {
             RustGalleryRepository(session).mediaLocation(ModelMediaId(5)),
         )
     }
+
+    @Test
+    fun resolvesIndexedNotePathForPlatformContentReads() = runTest {
+        val session = FakeGallerySession(notePath = "notes/fictional.md")
+
+        assertEquals(
+            RepositoryResult.Success("notes/fictional.md"),
+            RustGalleryRepository(session).notePath(ModelNoteId(42)),
+        )
+    }
 }
 
 private class FakeGallerySession(
@@ -304,6 +336,7 @@ private class FakeGallerySession(
     private val error: GalleryException? = null,
     private val categories: List<Category> = emptyList(),
     private val detail: NoteDetail? = null,
+    private val notePath: String? = null,
     private val mediaLocation: String? = null,
     private val thumbnailBytes: ByteArray? = null,
 ) : GallerySessionInterface {
@@ -314,6 +347,7 @@ private class FakeGallerySession(
 
     override fun categories(query: GalleryQuery): List<Category> = categories
     override fun mediaLocation(mediaId: Long): String? = mediaLocation
+    override fun notePath(noteId: Long): String? = notePath
     override fun noteDetail(noteId: Long): NoteDetail? = detail
     override fun noteDetailSaf(noteId: Long, content: ByteArray): NoteDetail? = detail
 

@@ -27,19 +27,38 @@ fun LanguagePreference.resolve(systemLanguage: LanguagePreference): LanguagePref
 data class AppearanceSettings(
     val theme: ThemePreference = ThemePreference.SYSTEM,
     val language: LanguagePreference = LanguagePreference.SYSTEM,
-    val useSystemColor: Boolean = true,
+    val useSystemColor: Boolean = false,
     val pureBlack: Boolean = false,
 )
 
 data class GallerySettings(
     val appearance: AppearanceSettings = AppearanceSettings(),
     val pageSize: Int = DEFAULT_PAGE_SIZE,
+    val galleryTagPrefixes: List<String> = GalleryTagPrefixesCodec.DEFAULT_PREFIXES,
+    val includedTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
+    val hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
+    val showMissingMediaIcon: Boolean = false,
     val showLoadedRange: Boolean = true,
     val showTilePosition: Boolean = false,
     val showCounts: Boolean = true,
+    val flutterTagSettingsJson: String? = null,
 ) {
     init {
         require(pageSize in MIN_PAGE_SIZE..MAX_PAGE_SIZE) { "pageSize is out of range" }
+        require(GalleryTagPrefixesCodec.isValid(galleryTagPrefixes)) {
+            "galleryTagPrefixes are invalid"
+        }
+        require(GalleryTagDisplayPrefixesCodec.isValid(includedTagPrefixes)) {
+            "includedTagPrefixes are invalid"
+        }
+        require(GalleryTagDisplayPrefixesCodec.isValid(hiddenTagPrefixes)) {
+            "hiddenTagPrefixes are invalid"
+        }
+        require(
+            flutterTagSettingsJson == null ||
+                flutterTagSettingsJson.encodeToByteArray().size <=
+                SettingsTransferCodec.MAX_BYTES - 1024,
+        ) { "flutterTagSettingsJson exceeds its size limit" }
     }
 
     companion object {

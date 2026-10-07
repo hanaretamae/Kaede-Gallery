@@ -463,6 +463,17 @@ class RustGalleryRepository implements GalleryRepository {
             ),
           )
           .toList(growable: false),
+      postTextEndLines: detail.postTextEndLines
+          .map(
+            (line) => GalleryDetailLine(
+              text: line.text,
+              urls: line.urls,
+              isBullet: line.isBullet,
+              indentLevel: line.indentLevel,
+              linkedNoteId: line.linkedNoteId,
+            ),
+          )
+          .toList(growable: false),
       media: detail.media
           .map(
             (item) => GalleryMediaItem(

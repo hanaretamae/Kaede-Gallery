@@ -28,7 +28,7 @@
 // Section: imports
 
 use flutter_rust_bridge::for_generated::byteorder::{NativeEndian, ReadBytesExt, WriteBytesExt};
-use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
 use flutter_rust_bridge::{Handler, IntoIntoDart};
 
 // Section: boilerplate
@@ -1050,6 +1050,7 @@ impl SseDecode for crate::api::NoteDetail {
         let mut var_bodyText = <String>::sse_decode(deserializer);
         let mut var_memoLines = <Vec<crate::api::DetailLine>>::sse_decode(deserializer);
         let mut var_relatedLines = <Vec<crate::api::DetailLine>>::sse_decode(deserializer);
+        let mut var_postTextEndLines = <Vec<crate::api::DetailLine>>::sse_decode(deserializer);
         let mut var_media = <Vec<crate::api::MediaItem>>::sse_decode(deserializer);
         return crate::api::NoteDetail {
             id: var_id,
@@ -1065,6 +1066,7 @@ impl SseDecode for crate::api::NoteDetail {
             body_text: var_bodyText,
             memo_lines: var_memoLines,
             related_lines: var_relatedLines,
+            post_text_end_lines: var_postTextEndLines,
             media: var_media,
         };
     }
@@ -1335,6 +1337,7 @@ impl flutter_rust_bridge::IntoDart for crate::api::NoteDetail {
             self.body_text.into_into_dart().into_dart(),
             self.memo_lines.into_into_dart().into_dart(),
             self.related_lines.into_into_dart().into_dart(),
+            self.post_text_end_lines.into_into_dart().into_dart(),
             self.media.into_into_dart().into_dart(),
         ]
         .into_dart()
@@ -1565,6 +1568,7 @@ impl SseEncode for crate::api::NoteDetail {
         <String>::sse_encode(self.body_text, serializer);
         <Vec<crate::api::DetailLine>>::sse_encode(self.memo_lines, serializer);
         <Vec<crate::api::DetailLine>>::sse_encode(self.related_lines, serializer);
+        <Vec<crate::api::DetailLine>>::sse_encode(self.post_text_end_lines, serializer);
         <Vec<crate::api::MediaItem>>::sse_encode(self.media, serializer);
     }
 }
@@ -1678,7 +1682,7 @@ mod io {
     use flutter_rust_bridge::for_generated::byteorder::{
         NativeEndian, ReadBytesExt, WriteBytesExt,
     };
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate
@@ -1702,7 +1706,7 @@ mod web {
     };
     use flutter_rust_bridge::for_generated::wasm_bindgen;
     use flutter_rust_bridge::for_generated::wasm_bindgen::prelude::*;
-    use flutter_rust_bridge::for_generated::{Lifetimeable, Lockable, transform_result_dco};
+    use flutter_rust_bridge::for_generated::{transform_result_dco, Lifetimeable, Lockable};
     use flutter_rust_bridge::{Handler, IntoIntoDart};
 
     // Section: boilerplate

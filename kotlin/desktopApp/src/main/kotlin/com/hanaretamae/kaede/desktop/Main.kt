@@ -35,6 +35,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
+import com.hanaretamae.kaede.core.model.MediaId
 import com.hanaretamae.kaede.core.repository.GallerySessionHandle
 import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryError
@@ -42,15 +43,23 @@ import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.rust.RustGallerySessionRepository
 import com.hanaretamae.kaede.core.rust.RustVaultSelectionRepository
 import com.hanaretamae.kaede.core.settings.LanguagePreference
+import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
+import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import java.awt.Desktop
 import java.io.ByteArrayInputStream
 import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.StandardCopyOption
+import java.nio.file.StandardOpenOption
+import java.nio.file.attribute.PosixFilePermissions
 import java.net.URI
 import java.net.URISyntaxException
 import java.nio.file.Path
+import java.util.UUID
 import javax.imageio.ImageIO
 import javax.swing.JFileChooser
 import javax.swing.JOptionPane
@@ -61,6 +70,7 @@ import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicReference
 
 private const val DESKTOP_VIEWER_THUMBNAIL_SIZE = 1_024
+private const val DESKTOP_GALLERY_THUMBNAIL_SIZE = 512
 
 fun main() = application {
     val windowState = rememberWindowState(
@@ -112,6 +122,35 @@ private fun DesktopApplication() {
                 is RepositoryResult.Failure -> {
                     loading = false
                     error = errorText(forgotten.error)
+                    return
+                }
+                is RepositoryResult.Success -> Unit
+            }
+        }
+        val gallerySettings = when (val loaded = settingsRepository.load()) {
+            is RepositoryResult.Failure -> {
+                loading = false
+                error = errorText(loaded.error)
+                return
+            }
+            is RepositoryResult.Success -> loaded.value
+        }
+        val galleryTagSettingsFile = Path.of(privateData, "gallery-tag-settings.json")
+        if (
+            gallerySettings.galleryTagPrefixes != GalleryTagPrefixesCodec.DEFAULT_PREFIXES ||
+            gallerySettings.flutterTagSettingsJson != null ||
+            Files.exists(galleryTagSettingsFile, LinkOption.NOFOLLOW_LINKS)
+        ) {
+            when (
+                val written = persistRustTagSettings(
+                    Path.of(privateData),
+                    gallerySettings.galleryTagPrefixes,
+                    gallerySettings.flutterTagSettingsJson,
+                )
+            ) {
+                is RepositoryResult.Failure -> {
+                    loading = false
+                    error = errorText(written.error)
                     return
                 }
                 is RepositoryResult.Success -> Unit
@@ -183,6 +222,9 @@ private fun DesktopApplication() {
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
+            galleryThumbnail = { mediaId, isVideo ->
+                DesktopGalleryThumbnail(activeSession.gallery, mediaId, isVideo)
+            },
             mediaContent = { mediaState ->
                 DesktopMediaContent(
                     repository = activeSession.gallery,
@@ -225,6 +267,18 @@ private fun DesktopApplication() {
                 exportSettingsFile(content, vaultPath)
             },
             onRescan = activeSession::rescan,
+            onRustTagSettingsChanged = { settings ->
+                when (
+                    val written = persistRustTagSettings(
+                        Path.of(privateData),
+                        settings.galleryTagPrefixes,
+                        settings.flutterTagSettingsJson,
+                    )
+                ) {
+                    is RepositoryResult.Failure -> written
+                    is RepositoryResult.Success -> activeSession.rescan()
+                }
+            },
             onChangeVault = {
                 val chosen = chooseVaultDirectory()
                 if (chosen != null) scope.launch { openVault(chosen) }
@@ -373,6 +427,68 @@ private fun DesktopMediaContent(
     }
 }
 
+@Composable
+private fun DesktopGalleryThumbnail(
+    repository: GalleryRepository,
+    mediaId: MediaId,
+    isVideo: Boolean,
+) {
+    val imageState by produceState(
+        initialValue = DesktopImageState(),
+        repository,
+        mediaId,
+        isVideo,
+    ) {
+        value = withContext(Dispatchers.IO) {
+            val bytes = if (isVideo) {
+                when (val result = repository.mediaLocation(mediaId)) {
+                    is RepositoryResult.Failure -> null
+                    is RepositoryResult.Success ->
+                        result.value?.let(DesktopVideoThumbnail::extract)
+                }
+            } else {
+                when (val result = repository.thumbnail(mediaId, DESKTOP_GALLERY_THUMBNAIL_SIZE)) {
+                    is RepositoryResult.Failure -> null
+                    is RepositoryResult.Success -> result.value
+                }
+            }
+            if (bytes == null) {
+                DesktopImageState(
+                    error = if (isVideo) "Video thumbnail unavailable." else null,
+                )
+            } else {
+                try {
+                    val decoded = ByteArrayInputStream(bytes).use(ImageIO::read)
+                    DesktopImageState(
+                        bitmap = decoded?.toComposeImageBitmap(),
+                        error = if (decoded == null && isVideo) {
+                            "Video thumbnail unavailable."
+                        } else {
+                            null
+                        },
+                    )
+                } catch (_: IOException) {
+                    DesktopImageState(
+                        error = if (isVideo) "Video thumbnail unavailable." else null,
+                    )
+                }
+            }
+        }
+    }
+    when {
+        imageState.bitmap != null -> Image(
+            bitmap = requireNotNull(imageState.bitmap),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().height(180.dp),
+        )
+        imageState.error != null -> Text(
+            requireNotNull(imageState.error),
+            style = MaterialTheme.typography.bodySmall,
+        )
+    }
+}
+
 private data class DesktopImageState(
     val bitmap: ImageBitmap? = null,
     val error: String? = null,
@@ -459,6 +575,77 @@ private fun privateDataDirectory(): Path {
             ?: Path.of(System.getProperty("user.home"), ".local", "share")
     }
     return base.resolve("KaedeGallery").toAbsolutePath().normalize()
+}
+
+private suspend fun persistRustTagSettings(
+    privateDataDirectory: Path,
+    prefixes: List<String>,
+    flutterTagSettingsJson: String?,
+): RepositoryResult<Unit> = withContext(Dispatchers.IO) {
+    var temporary: Path? = null
+    try {
+        val directory = privateDataDirectory.toAbsolutePath().normalize()
+        if (Files.exists(directory, LinkOption.NOFOLLOW_LINKS)) {
+            if (
+                Files.isSymbolicLink(directory) ||
+                !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
+            ) {
+                return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+            }
+        } else {
+            Files.createDirectories(directory)
+        }
+        if (
+            Files.isSymbolicLink(directory) ||
+            !Files.isDirectory(directory, LinkOption.NOFOLLOW_LINKS)
+        ) {
+            return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+        }
+        val target = directory.resolve("gallery-tag-settings.json")
+        if (
+            Files.exists(target, LinkOption.NOFOLLOW_LINKS) &&
+            (Files.isSymbolicLink(target) || !Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS))
+        ) {
+            return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+        }
+        val content = try {
+            GalleryTagCategoryCodec.encodeRustSettings(prefixes, flutterTagSettingsJson)
+                .toByteArray(Charsets.UTF_8)
+        } catch (_: IllegalArgumentException) {
+            return@withContext RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        if (content.size > GalleryTagPrefixesCodec.MAX_ENCODED_LENGTH) {
+            return@withContext RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        val temp = Files.createTempFile(directory, ".tag-settings-", ".tmp")
+        temporary = temp
+        try {
+            Files.setPosixFilePermissions(
+                temp,
+                PosixFilePermissions.fromString("rw-------"),
+            )
+            Files.setPosixFilePermissions(
+                directory,
+                PosixFilePermissions.fromString("rwx------"),
+            )
+        } catch (_: UnsupportedOperationException) {
+        }
+        Files.write(temp, content, StandardOpenOption.WRITE)
+        Files.move(
+            temp,
+            target,
+            StandardCopyOption.ATOMIC_MOVE,
+            StandardCopyOption.REPLACE_EXISTING,
+        )
+        temporary = null
+        RepositoryResult.Success(Unit)
+    } catch (_: IOException) {
+        temporary?.let(Files::deleteIfExists)
+        RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+    } catch (_: SecurityException) {
+        temporary?.let(Files::deleteIfExists)
+        RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+    }
 }
 
 private fun errorText(error: RepositoryError): String = when (error) {

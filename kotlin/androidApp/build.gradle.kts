@@ -16,6 +16,12 @@ android {
         versionName = "1.0.0"
     }
 
+    buildTypes {
+        debug {
+            applicationIdSuffix = ".kmpdebug"
+        }
+    }
+
     buildFeatures {
         compose = true
     }

@@ -112,6 +112,8 @@ pub struct NoteSummary {
     pub memo_count: u64,
     pub related_count: u64,
     pub representative_media_id: Option<i64>,
+    pub representative_media_is_video: bool,
+    pub representative_media_exists: bool,
 }
 
 #[derive(Debug, Clone, uniffi::Record)]
@@ -189,6 +191,7 @@ pub struct NoteDetail {
     pub body_text: String,
     pub memo_lines: Vec<DetailLine>,
     pub related_lines: Vec<DetailLine>,
+    pub post_text_end_lines: Vec<DetailLine>,
     pub media: Vec<MediaSummary>,
 }
 
@@ -718,6 +721,14 @@ impl GallerySession {
             .map_err(GalleryError::from)
     }
 
+    pub fn note_path(&self, note_id: i64) -> Result<Option<String>, GalleryError> {
+        self.gallery
+            .lock()
+            .map_err(|_| GalleryError::OperationFailed)?
+            .note_path(note_id)
+            .map_err(GalleryError::from)
+    }
+
     pub fn note_detail_saf(
         &self,
         note_id: i64,
@@ -821,6 +832,8 @@ fn to_note_summary(note: CoreNoteSummary) -> NoteSummary {
         memo_count: note.memo_count as u64,
         related_count: note.related_count as u64,
         representative_media_id: note.representative_media_id,
+        representative_media_is_video: note.representative_media_is_video,
+        representative_media_exists: note.representative_media_exists,
     }
 }
 
@@ -886,6 +899,11 @@ fn to_note_detail(note: CoreNoteDetail) -> NoteDetail {
         body_text: note.body_text,
         memo_lines: note.memo_lines.into_iter().map(to_detail_line).collect(),
         related_lines: note.related_lines.into_iter().map(to_detail_line).collect(),
+        post_text_end_lines: note
+            .post_text_end_lines
+            .into_iter()
+            .map(to_detail_line)
+            .collect(),
         media: note.media.into_iter().map(to_media_summary).collect(),
     }
 }
@@ -945,6 +963,12 @@ mod tests {
         assert_eq!(page.total_count, 1);
         assert_eq!(page.notes.len(), 1);
         assert_eq!(page.notes[0].title, "Fictional Note");
+        assert_eq!(
+            session
+                .note_path(page.notes[0].id)
+                .expect("resolve fictional path"),
+            Some("fictional-note.md".to_owned()),
+        );
         assert_eq!(fs::read_to_string(note_path).expect("read fixture"), note);
 
         drop(session);

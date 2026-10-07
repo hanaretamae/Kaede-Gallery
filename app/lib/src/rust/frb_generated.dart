@@ -1211,8 +1211,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
   NoteDetail dco_decode_note_detail(dynamic raw) {
     // Codec=Dco (DartCObject based), see doc to use other codecs
     final arr = raw as List<dynamic>;
-    if (arr.length != 14)
-      throw Exception('unexpected arr length: expect 14 but see ${arr.length}');
+    if (arr.length != 15)
+      throw Exception('unexpected arr length: expect 15 but see ${arr.length}');
     return NoteDetail(
       id: dco_decode_u_32(arr[0]),
       path: dco_decode_String(arr[1]),
@@ -1227,7 +1227,8 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       bodyText: dco_decode_String(arr[10]),
       memoLines: dco_decode_list_detail_line(arr[11]),
       relatedLines: dco_decode_list_detail_line(arr[12]),
-      media: dco_decode_list_media_item(arr[13]),
+      postTextEndLines: dco_decode_list_detail_line(arr[13]),
+      media: dco_decode_list_media_item(arr[14]),
     );
   }
 
@@ -1534,6 +1535,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     var var_bodyText = sse_decode_String(deserializer);
     var var_memoLines = sse_decode_list_detail_line(deserializer);
     var var_relatedLines = sse_decode_list_detail_line(deserializer);
+    var var_postTextEndLines = sse_decode_list_detail_line(deserializer);
     var var_media = sse_decode_list_media_item(deserializer);
     return NoteDetail(
       id: var_id,
@@ -1549,6 +1551,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
       bodyText: var_bodyText,
       memoLines: var_memoLines,
       relatedLines: var_relatedLines,
+      postTextEndLines: var_postTextEndLines,
       media: var_media,
     );
   }
@@ -1860,6 +1863,7 @@ class RustLibApiImpl extends RustLibApiImplPlatform implements RustLibApi {
     sse_encode_String(self.bodyText, serializer);
     sse_encode_list_detail_line(self.memoLines, serializer);
     sse_encode_list_detail_line(self.relatedLines, serializer);
+    sse_encode_list_detail_line(self.postTextEndLines, serializer);
     sse_encode_list_media_item(self.media, serializer);
   }
 

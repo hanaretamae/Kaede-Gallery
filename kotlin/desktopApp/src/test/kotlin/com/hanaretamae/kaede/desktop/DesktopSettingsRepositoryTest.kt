@@ -45,9 +45,15 @@ class DesktopSettingsRepositoryTest {
                     pureBlack = true,
                 ),
                 pageSize = 72,
+                galleryTagPrefixes = listOf("collection/", "portfolio"),
+                includedTagPrefixes = listOf("source"),
+                hiddenTagPrefixes = listOf("private"),
+                showMissingMediaIcon = true,
                 showLoadedRange = false,
                 showTilePosition = true,
                 showCounts = false,
+                flutterTagSettingsJson =
+                    """{"includedPrefixes":["source"],"hiddenPrefixes":["private"],"colors":[]}""",
             )
 
             assertIs<RepositoryResult.Success<Unit>>(repository.save(expected))

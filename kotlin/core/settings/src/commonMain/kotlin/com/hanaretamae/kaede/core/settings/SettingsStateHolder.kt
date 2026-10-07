@@ -88,6 +88,127 @@ class SettingsStateHolder(
         update { it.copy(pageSize = pageSize) }
     }
 
+    fun setGalleryTagPrefixes(prefixes: List<String>) {
+        if (!GalleryTagPrefixesCodec.isValid(prefixes)) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            return
+        }
+        update { it.copy(galleryTagPrefixes = prefixes.toList()) }
+    }
+
+    suspend fun saveGalleryTagPrefixes(prefixes: List<String>): RepositoryResult<Unit> {
+        if (!GalleryTagPrefixesCodec.isValid(prefixes)) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            return RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        return saveMutex.withLock {
+            val current = mutableState.value.settings
+                ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            persistLocked(current.copy(galleryTagPrefixes = prefixes.toList()))
+        }
+    }
+
+    suspend fun saveTagDisplayPrefixes(
+        includedPrefixes: List<String>,
+        hiddenPrefixes: List<String>,
+    ): RepositoryResult<Unit> {
+        if (
+            !GalleryTagDisplayPrefixesCodec.isValid(includedPrefixes) ||
+            !GalleryTagDisplayPrefixesCodec.isValid(hiddenPrefixes)
+        ) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            return RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        return saveMutex.withLock {
+            val current = mutableState.value.settings
+                ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            persistLocked(
+                current.copy(
+                    includedTagPrefixes = includedPrefixes.toList(),
+                    hiddenTagPrefixes = hiddenPrefixes.toList(),
+                ),
+            )
+        }
+    }
+
+    suspend fun saveTagColorRules(rules: List<GalleryTagColorRule>): RepositoryResult<Unit> {
+        if (!GalleryTagColorCodec.isValid(rules)) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            return RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        return saveMutex.withLock {
+            val current = mutableState.value.settings
+                ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val updated = try {
+                current.copy(
+                    flutterTagSettingsJson = GalleryTagColorCodec.update(
+                        current.flutterTagSettingsJson,
+                        rules,
+                    ),
+                )
+            } catch (_: IllegalArgumentException) {
+                mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+                return@withLock RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+            }
+            persistLocked(updated)
+        }
+    }
+
+    suspend fun saveTagCategorySettings(
+        categorySettings: GalleryTagCategorySettings,
+    ): RepositoryResult<Unit> {
+        if (!GalleryTagCategoryCodec.isValid(categorySettings)) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            return RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        return saveMutex.withLock {
+            val current = mutableState.value.settings
+                ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val updated = try {
+                current.copy(
+                    flutterTagSettingsJson = GalleryTagCategoryCodec.update(
+                        current.flutterTagSettingsJson,
+                        categorySettings,
+                    ),
+                )
+            } catch (_: IllegalArgumentException) {
+                mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+                return@withLock RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+            }
+            persistLocked(updated)
+        }
+    }
+
+    suspend fun saveNoteStructureSettings(
+        noteStructure: GalleryNoteStructureSettings,
+    ): RepositoryResult<Unit> {
+        return saveMutex.withLock {
+            val current = mutableState.value.settings
+                ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val settings = noteStructure.copy(galleryTagPrefixes = current.galleryTagPrefixes)
+            if (!GalleryNoteStructureCodec.isValid(settings)) {
+                mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+                return@withLock RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+            }
+            val updated = try {
+                current.copy(
+                    flutterTagSettingsJson = GalleryNoteStructureCodec.update(
+                        current.flutterTagSettingsJson,
+                        settings,
+                    ),
+                )
+            } catch (_: IllegalArgumentException) {
+                mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+                return@withLock RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+            }
+            persistLocked(updated)
+        }
+    }
+
+    fun reportError(error: RepositoryError) {
+        mutableState.value = mutableState.value.copy(error = error)
+    }
+
     fun setShowLoadedRange(enabled: Boolean) {
         update { it.copy(showLoadedRange = enabled) }
     }
@@ -100,12 +221,23 @@ class SettingsStateHolder(
         update { it.copy(showCounts = enabled) }
     }
 
+    fun setShowMissingMediaIcon(enabled: Boolean) {
+        update { it.copy(showMissingMediaIcon = enabled) }
+    }
+
     fun reset() {
         update { GallerySettings() }
     }
 
-    fun exportSerialized(): String? =
-        mutableState.value.settings?.let(SettingsTransferCodec::encode)
+    fun exportSerialized(): String? {
+        val settings = mutableState.value.settings ?: return null
+        return try {
+            SettingsTransferCodec.encode(settings)
+        } catch (_: IllegalArgumentException) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            null
+        }
+    }
 
     fun importSerialized(content: String) {
         val imported = SettingsTransferCodec.decode(content)
@@ -152,9 +284,9 @@ class SettingsStateHolder(
         }
     }
 
-    private suspend fun persistLocked(updated: GallerySettings) {
+    private suspend fun persistLocked(updated: GallerySettings): RepositoryResult<Unit> {
         mutableState.value = mutableState.value.copy(saving = true, error = null)
-        when (val result = repository.save(updated)) {
+        return when (val result = repository.save(updated)) {
             is RepositoryResult.Success -> {
                 pendingSettings = null
                 mutableState.value = mutableState.value.copy(
@@ -163,6 +295,7 @@ class SettingsStateHolder(
                     hasUnsavedChanges = false,
                     error = null,
                 )
+                result
             }
             is RepositoryResult.Failure -> {
                 pendingSettings = updated
@@ -172,6 +305,7 @@ class SettingsStateHolder(
                     hasUnsavedChanges = true,
                     error = result.error,
                 )
+                result
             }
         }
     }

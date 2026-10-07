@@ -4,8 +4,11 @@ import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.GallerySettings
+import com.hanaretamae.kaede.core.settings.GalleryTagDisplayPrefixesCodec
+import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.SettingsRepository
+import com.hanaretamae.kaede.core.settings.SettingsTransferCodec
 import com.hanaretamae.kaede.core.settings.ThemePreference
 import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
@@ -97,6 +100,42 @@ class DesktopSettingsRepository(
                 ) ?: return@withContext RepositoryResult.Failure(
                     RepositoryError.OPERATION_FAILED,
                 )
+                val showMissingMediaIcon = properties.strictBoolean(
+                    KEY_MISSING_MEDIA_ICON,
+                    defaults.showMissingMediaIcon,
+                ) ?: return@withContext RepositoryResult.Failure(
+                    RepositoryError.OPERATION_FAILED,
+                )
+                val flutterTagSettingsJson = properties.getProperty(KEY_FLUTTER_TAG_SETTINGS)
+                    ?.takeIf {
+                        it.encodeToByteArray().size <= SettingsTransferCodec.MAX_BYTES - 1024
+                    }
+                    ?: properties.getProperty(KEY_FLUTTER_TAG_SETTINGS)?.let {
+                        return@withContext RepositoryResult.Failure(
+                            RepositoryError.OPERATION_FAILED,
+                        )
+                    }
+                val galleryTagPrefixes = properties.getProperty(
+                    KEY_GALLERY_TAG_PREFIXES,
+                    GalleryTagPrefixesCodec.encodeStorage(defaults.galleryTagPrefixes),
+                ).let(GalleryTagPrefixesCodec::decodeStorage)
+                    ?: return@withContext RepositoryResult.Failure(
+                        RepositoryError.OPERATION_FAILED,
+                    )
+                val includedTagPrefixes = properties.getProperty(
+                    KEY_INCLUDED_TAG_PREFIXES,
+                    GalleryTagDisplayPrefixesCodec.encodeStorage(defaults.includedTagPrefixes),
+                ).let(GalleryTagDisplayPrefixesCodec::decodeStorage)
+                    ?: return@withContext RepositoryResult.Failure(
+                        RepositoryError.OPERATION_FAILED,
+                    )
+                val hiddenTagPrefixes = properties.getProperty(
+                    KEY_HIDDEN_TAG_PREFIXES,
+                    GalleryTagDisplayPrefixesCodec.encodeStorage(defaults.hiddenTagPrefixes),
+                ).let(GalleryTagDisplayPrefixesCodec::decodeStorage)
+                    ?: return@withContext RepositoryResult.Failure(
+                        RepositoryError.OPERATION_FAILED,
+                    )
                 if (pageSize !in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE) {
                     return@withContext RepositoryResult.Failure(
                         RepositoryError.OPERATION_FAILED,
@@ -111,9 +150,14 @@ class DesktopSettingsRepository(
                             pureBlack = pureBlack,
                         ),
                         pageSize = pageSize,
+                        galleryTagPrefixes = galleryTagPrefixes,
+                        includedTagPrefixes = includedTagPrefixes,
+                        hiddenTagPrefixes = hiddenTagPrefixes,
+                        showMissingMediaIcon = showMissingMediaIcon,
                         showLoadedRange = showRange,
                         showTilePosition = showTilePosition,
                         showCounts = showCounts,
+                        flutterTagSettingsJson = flutterTagSettingsJson,
                     ),
                 )
             } catch (_: SecurityException) {
@@ -149,9 +193,32 @@ class DesktopSettingsRepository(
                             )
                             setProperty(KEY_PURE_BLACK, settings.appearance.pureBlack.toString())
                             setProperty(KEY_PAGE_SIZE, settings.pageSize.toString())
+                            setProperty(
+                                KEY_GALLERY_TAG_PREFIXES,
+                                GalleryTagPrefixesCodec.encodeStorage(settings.galleryTagPrefixes),
+                            )
+                            setProperty(
+                                KEY_INCLUDED_TAG_PREFIXES,
+                                GalleryTagDisplayPrefixesCodec.encodeStorage(
+                                    settings.includedTagPrefixes,
+                                ),
+                            )
+                            setProperty(
+                                KEY_HIDDEN_TAG_PREFIXES,
+                                GalleryTagDisplayPrefixesCodec.encodeStorage(
+                                    settings.hiddenTagPrefixes,
+                                ),
+                            )
+                            setProperty(
+                                KEY_MISSING_MEDIA_ICON,
+                                settings.showMissingMediaIcon.toString(),
+                            )
                             setProperty(KEY_SHOW_RANGE, settings.showLoadedRange.toString())
                             setProperty(KEY_TILE_POSITION, settings.showTilePosition.toString())
                             setProperty(KEY_SHOW_COUNTS, settings.showCounts.toString())
+                            settings.flutterTagSettingsJson?.let {
+                                setProperty(KEY_FLUTTER_TAG_SETTINGS, it)
+                            }
                         }
                         createPrivateFile(temporary)
                         Files.newOutputStream(temporary).use { output ->
@@ -209,15 +276,20 @@ class DesktopSettingsRepository(
     }
 
     private companion object {
-        const val MAX_SETTINGS_BYTES = 16 * 1024L
+        const val MAX_SETTINGS_BYTES = 128 * 1024L
         const val KEY_THEME = "theme"
         const val KEY_LANGUAGE = "language"
         const val KEY_SYSTEM_COLOR = "use_system_color"
         const val KEY_PURE_BLACK = "pure_black"
         const val KEY_PAGE_SIZE = "page_size"
+        const val KEY_GALLERY_TAG_PREFIXES = "gallery_tag_prefixes"
+        const val KEY_INCLUDED_TAG_PREFIXES = "included_tag_prefixes"
+        const val KEY_HIDDEN_TAG_PREFIXES = "hidden_tag_prefixes"
+        const val KEY_MISSING_MEDIA_ICON = "show_missing_media_icon"
         const val KEY_SHOW_RANGE = "show_loaded_range"
         const val KEY_TILE_POSITION = "show_tile_position"
         const val KEY_SHOW_COUNTS = "show_counts"
+        const val KEY_FLUTTER_TAG_SETTINGS = "flutter_tag_settings_json"
     }
 }
 

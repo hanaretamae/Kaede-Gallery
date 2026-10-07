@@ -5,7 +5,9 @@ import android.content.Context
 import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
 import android.net.Uri
+import android.os.Build
 import android.provider.DocumentsContract
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -242,6 +244,45 @@ class AndroidSafVaultScanner(context: Context) {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             },
         )
+    }
+
+    suspend fun decodeVideoFrame(
+        treeUri: Uri,
+        relativePath: String,
+        maxDimension: Int,
+    ): Bitmap? = withContext(Dispatchers.IO) {
+        if (
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 ||
+            maxDimension !in 1..MAX_IMAGE_DIMENSION
+        ) {
+            return@withContext null
+        }
+        val uri = resolveMedia(treeUri, relativePath)
+        val descriptor = try {
+            resolver.openFileDescriptor(uri, "r") ?: return@withContext null
+        } catch (_: SecurityException) {
+            throw SafAccessException()
+        } catch (_: IOException) {
+            throw SafAccessException()
+        }
+        descriptor.use { file ->
+            val retriever = MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(file.fileDescriptor)
+                retriever.getScaledFrameAtTime(
+                    0,
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    maxDimension,
+                    maxDimension,
+                )
+            } catch (_: IllegalArgumentException) {
+                null
+            } catch (_: IllegalStateException) {
+                null
+            } finally {
+                retriever.release()
+            }
+        }
     }
 
     private fun readBatches(

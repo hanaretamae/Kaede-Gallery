@@ -51,6 +51,79 @@ class GalleryStateHolderTest {
     }
 
     @Test
+    fun jumpsToPositionAndLoadsSubsequentPageAtCorrectOffset() = runTest {
+        val repository = FakeGalleryRepository { query ->
+            RepositoryResult.Success(
+                GalleryPage(
+                    entries = listOf(note(query.offset + 1)),
+                    totalCount = 12,
+                    offset = query.offset,
+                ),
+            )
+        }
+        val holder = GalleryStateHolder(repository, this)
+
+        holder.start()
+        advanceUntilIdle()
+        holder.jumpTo(10)
+        advanceUntilIdle()
+
+        assertEquals(listOf(0L, 9L), repository.queries.map { it.offset })
+        assertEquals(9L, holder.state.value.pageOffset)
+        assertEquals(NoteId(10), (holder.state.value.entries.single() as NoteSummary).id)
+        assertTrue(holder.state.value.canLoadMore)
+
+        holder.loadMore()
+        advanceUntilIdle()
+
+        assertEquals(10L, repository.queries.last().offset)
+        assertEquals(10L, holder.state.value.pageOffset)
+        assertEquals(NoteId(11), (holder.state.value.entries.last() as NoteSummary).id)
+    }
+
+    @Test
+    fun rejectsJumpOutsideKnownResultRange() = runTest {
+        val repository = FakeGalleryRepository {
+            RepositoryResult.Success(
+                GalleryPage((1L..4L).map(::note), totalCount = 4, offset = it.offset),
+            )
+        }
+        val holder = GalleryStateHolder(repository, this)
+        holder.start()
+        advanceUntilIdle()
+
+        holder.jumpTo(5)
+
+        assertEquals(1, repository.queries.size)
+        assertEquals(RepositoryError.INVALID_REQUEST, holder.state.value.error)
+    }
+
+    @Test
+    fun rejectsJumpWhenResultCountShrinksAfterThePositionWasValidated() = runTest {
+        var currentTotal = 12L
+        val repository = FakeGalleryRepository { query ->
+            RepositoryResult.Success(
+                GalleryPage(
+                    entries = (query.offset + 1..currentTotal).map(::note),
+                    totalCount = currentTotal,
+                    offset = query.offset,
+                ),
+            )
+        }
+        val holder = GalleryStateHolder(repository, this)
+        holder.start()
+        advanceUntilIdle()
+
+        currentTotal = 4
+        holder.jumpTo(10)
+        advanceUntilIdle()
+
+        assertEquals(RepositoryError.INVALID_REQUEST, holder.state.value.error)
+        assertFalse(holder.state.value.loading)
+        assertTrue(holder.state.value.entries.isEmpty())
+    }
+
+    @Test
     fun debouncesSearchAndResetsPaging() = runTest {
         val repository = FakeGalleryRepository { query ->
             RepositoryResult.Success(
@@ -178,6 +251,9 @@ private class FakeGalleryRepository(
         noteId: NoteId,
         safContent: ByteArray?,
     ): RepositoryResult<GalleryNoteDetail?> = RepositoryResult.Success(null)
+
+    override suspend fun notePath(noteId: NoteId): RepositoryResult<String?> =
+        RepositoryResult.Success(null)
 
     override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> =
         RepositoryResult.Success(null)

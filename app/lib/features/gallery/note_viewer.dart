@@ -1585,7 +1585,6 @@ class _NoteDetailsPanel extends ConsumerWidget {
               .where(
                 (block) =>
                     block != GalleryNoteBlock.media &&
-                    block != GalleryNoteBlock.postTextEnd &&
                     !hiddenBlocks.contains(block),
               )
               .map<Widget?>(
@@ -1594,8 +1593,7 @@ class _NoteDetailsPanel extends ConsumerWidget {
                     showAuthor && author?.isNotEmpty == true
                         ? _AuthorDetail(author: author!, url: note.authorUrl)
                         : null,
-                  GalleryNoteBlock.media ||
-                  GalleryNoteBlock.postTextEnd => null,
+                  GalleryNoteBlock.media => null,
                   GalleryNoteBlock.postText =>
                     postText.isNotEmpty ? _PostTextCard(text: postText) : null,
                   GalleryNoteBlock.memo =>
@@ -1611,6 +1609,13 @@ class _NoteDetailsPanel extends ConsumerWidget {
                         ? _DetailLines(
                             title: context.l10n.related,
                             lines: note.relatedLines,
+                          )
+                        : null,
+                  GalleryNoteBlock.postTextEnd =>
+                    note.postTextEndLines.isNotEmpty
+                        ? _DetailLines(
+                            title: context.l10n.document,
+                            lines: note.postTextEndLines,
                           )
                         : null,
                 },

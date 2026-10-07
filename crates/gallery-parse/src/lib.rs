@@ -102,6 +102,9 @@ pub struct ParsedNote {
     pub related_lines: Vec<Vec<InlineToken>>,
     pub related_bullets: Vec<bool>,
     pub related_indent_levels: Vec<u8>,
+    pub post_text_end_lines: Vec<Vec<InlineToken>>,
+    pub post_text_end_bullets: Vec<bool>,
+    pub post_text_end_indent_levels: Vec<u8>,
     pub body_text: String,
 }
 
@@ -326,6 +329,9 @@ fn parse_note_inner(
         related_lines: sections.related,
         related_bullets: sections.related_bullets,
         related_indent_levels: sections.related_indent_levels,
+        post_text_end_lines: sections.post_text_end,
+        post_text_end_bullets: sections.post_text_end_bullets,
+        post_text_end_indent_levels: sections.post_text_end_indent_levels,
         body_text: clean_markdown_text(post_text(body_without_title, settings), settings),
     })
 }
@@ -445,6 +451,12 @@ impl Default for TagCategorySettings {
 }
 
 pub fn parse_tag_category_settings(input: &str) -> Result<TagCategorySettings, ParseError> {
+    Ok(parse_optional_tag_category_settings(input)?.unwrap_or_default())
+}
+
+pub fn parse_optional_tag_category_settings(
+    input: &str,
+) -> Result<Option<TagCategorySettings>, ParseError> {
     if input.len() > MAX_SETTINGS_BYTES {
         return Err(ParseError::SettingsTooLarge);
     }
@@ -454,11 +466,14 @@ pub fn parse_tag_category_settings(input: &str) -> Result<TagCategorySettings, P
     #[derive(Deserialize, Default)]
     #[serde(default, rename_all = "camelCase")]
     struct SettingsFile {
-        tag_categories: TagCategorySettings,
+        tag_categories: Option<TagCategorySettings>,
     }
-    let settings = serde_yaml::from_str::<SettingsFile>(input)
+    let Some(settings) = serde_yaml::from_str::<SettingsFile>(input)
         .map_err(|_| ParseError::InvalidFrontmatter)?
-        .tag_categories;
+        .tag_categories
+    else {
+        return Ok(None);
+    };
     if settings.categories.len() > MAX_TAG_CATEGORIES
         || settings.other.name.trim().is_empty()
         || settings.other.name.len() > 128
@@ -476,7 +491,7 @@ pub fn parse_tag_category_settings(input: &str) -> Result<TagCategorySettings, P
             return Err(ParseError::InvalidFrontmatter);
         }
     }
-    Ok(settings)
+    Ok(Some(settings))
 }
 
 fn first_frontmatter_value<'a>(
@@ -672,6 +687,9 @@ struct Sections {
     related: Vec<Vec<InlineToken>>,
     related_bullets: Vec<bool>,
     related_indent_levels: Vec<u8>,
+    post_text_end: Vec<Vec<InlineToken>>,
+    post_text_end_bullets: Vec<bool>,
+    post_text_end_indent_levels: Vec<u8>,
 }
 
 fn extract_sections(body: &str, settings: &NoteStructureSettings) -> Sections {
@@ -685,10 +703,16 @@ fn extract_sections(body: &str, settings: &NoteStructureSettings) -> Sections {
                 .related_headings
                 .iter()
                 .any(|heading| heading == name);
+            let post_text_end_matches = settings
+                .post_text_end_headings
+                .iter()
+                .any(|heading| heading == name);
             current = if memo_matches {
                 Some("memo")
             } else if related_matches {
                 Some("related")
+            } else if post_text_end_matches {
+                Some("postTextEnd")
             } else {
                 None
             };
@@ -718,18 +742,28 @@ fn extract_sections(body: &str, settings: &NoteStructureSettings) -> Sections {
         {
             continue;
         }
-        if section == "memo" {
-            sections.memo.push(tokenize_inline(line));
-            sections.memo_bullets.push(is_bullet);
-            sections
-                .memo_indent_levels
-                .push((indentation / 2).min(8) as u8);
-        } else {
-            sections.related.push(tokenize_inline(line));
-            sections.related_bullets.push(is_bullet);
-            sections
-                .related_indent_levels
-                .push((indentation / 2).min(8) as u8);
+        match section {
+            "memo" => {
+                sections.memo.push(tokenize_inline(line));
+                sections.memo_bullets.push(is_bullet);
+                sections
+                    .memo_indent_levels
+                    .push((indentation / 2).min(8) as u8);
+            }
+            "related" => {
+                sections.related.push(tokenize_inline(line));
+                sections.related_bullets.push(is_bullet);
+                sections
+                    .related_indent_levels
+                    .push((indentation / 2).min(8) as u8);
+            }
+            _ => {
+                sections.post_text_end.push(tokenize_inline(line));
+                sections.post_text_end_bullets.push(is_bullet);
+                sections
+                    .post_text_end_indent_levels
+                    .push((indentation / 2).min(8) as u8);
+            }
         }
     }
     sections
@@ -1161,7 +1195,7 @@ mod tests {
 
     #[test]
     fn parses_bom_crlf_video_cover_and_sections() {
-        let input = "\u{feff}---\r\nurl: https://example.invalid/post\r\ntags:\r\n  - source/service/example\r\ncover: ../media/clip.mp4\r\npublished: 2026-04-23T16:51:02\r\n---\r\n# Fictional author\r\nFictional **post text**\r\n\r\n# 文書\r\n## 関連\r\n- [related note](https://example.invalid/note)\r\n## 覚書\r\n-\r\n- remember this\r\n![](<image%20one.webp>)\r\n";
+        let input = "\u{feff}---\r\nurl: https://example.invalid/post\r\ntags:\r\n  - source/service/example\r\ncover: ../media/clip.mp4\r\npublished: 2026-04-23T16:51:02\r\n---\r\n# Fictional author\r\nFictional **post text**\r\n\r\n# 文書\r\n- fictional ending text with [source](https://example.invalid/source)\r\n## 関連\r\n- [related note](https://example.invalid/note)\r\n## 覚書\r\n-\r\n- remember this\r\n![](<image%20one.webp>)\r\n";
         let note = parse_note(input).expect("valid note");
         assert_eq!(note.title, "Fictional author");
         assert_eq!(note.author, None);
@@ -1182,6 +1216,18 @@ mod tests {
             }]]
         );
         assert_eq!(note.related_bullets, [true]);
+        assert_eq!(
+            note.post_text_end_lines,
+            [vec![
+                InlineToken::Text("fictional ending text with ".to_owned()),
+                InlineToken::ExternalLink {
+                    label: "source".to_owned(),
+                    url: "https://example.invalid/source".to_owned(),
+                },
+            ]],
+        );
+        assert_eq!(note.post_text_end_bullets, [true]);
+        assert_eq!(note.post_text_end_indent_levels, [0]);
         assert_eq!(note.published.as_deref(), Some("2026-04-23T16:51:02"));
     }
 

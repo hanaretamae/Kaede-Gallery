@@ -2096,6 +2096,7 @@ void main() {
     expect(find.text('Fir3born🤔🔞🇮🇹-on-X-経験的証拠。.md'), findsOneWidget);
     expect(find.text('覚書の内容'), findsOneWidget);
     expect(find.text('関連ノート'), findsOneWidget);
+    expect(find.text('本文終端の内容'), findsOneWidget);
     expect(find.text('Obsidian でノートを開く'), findsNothing);
     expect(_m3eIconButton('Obsidian でノートを開く'), findsOneWidget);
     expect(_m3eIconButton('ページ URL をコピー'), findsOneWidget);
@@ -2363,10 +2364,41 @@ void main() {
     expect(find.text('投稿者'), findsOneWidget);
     expect(find.text('@noone_oO'), findsOneWidget);
     expect(find.text('ONEちゃん'), findsOneWidget);
+    expect(find.text('本文終端の内容'), findsOneWidget);
     expect(
       tester.getTopLeft(find.text('ONEちゃん')).dy,
       lessThan(tester.getTopLeft(find.text('@noone_oO')).dy),
     );
+    expect(
+      tester.getTopLeft(find.text('関連ノート')).dy,
+      lessThan(tester.getTopLeft(find.text('覚書の内容')).dy),
+    );
+    expect(
+      tester.getTopLeft(find.text('覚書の内容')).dy,
+      lessThan(tester.getTopLeft(find.text('本文終端の内容')).dy),
+    );
+  });
+
+  testWidgets('hides the post-text-end block when configured', (tester) async {
+    await tester.pumpWidget(
+      ProviderScope(
+        overrides: [
+          _hiddenPostTextEndSettingsOverride,
+          galleryRepositoryProvider.overrideWithValue(
+            _FakeRepository(savedPath: '/fictional-vault'),
+          ),
+          vaultPlatformProvider.overrideWithValue(_FakeVaultPlatform()),
+        ],
+        child: const VaultGalleryApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(m3e.M3ECard).first);
+    await tester.pumpAndSettle();
+    await tester.tapAt(const Offset(400, 200));
+    await tester.pumpAndSettle();
+
+    expect(find.text('本文終端の内容'), findsNothing);
   });
 
   testWidgets('tag and note searches are independent and tags support AND', (
@@ -2723,6 +2755,9 @@ final _reorderedTagSettingsOverride = galleryTagSettingsProvider.overrideWith(
   _ReorderedGalleryTagSettingsController.new,
 );
 
+final _hiddenPostTextEndSettingsOverride = galleryTagSettingsProvider
+    .overrideWith(_HiddenPostTextEndSettingsController.new);
+
 class _FakeGalleryTagSettingsController extends GalleryTagSettingsController {
   @override
   Future<GalleryTagSettings> build() async =>
@@ -2776,6 +2811,17 @@ class _ReorderedGalleryTagSettingsController
         GalleryNoteBlock.memo,
         GalleryNoteBlock.postTextEnd,
       ],
+    ),
+  );
+}
+
+class _HiddenPostTextEndSettingsController
+    extends _FakeGalleryTagSettingsController {
+  @override
+  Future<GalleryTagSettings> build() async => const GalleryTagSettings(
+    hiddenPrefixes: [],
+    noteStructure: GalleryNoteStructureSettings(
+      hiddenBlocks: [GalleryNoteBlock.postTextEnd],
     ),
   );
 }
@@ -3150,6 +3196,7 @@ class _FakeRepository implements GalleryRepository {
           linkedNoteId: 2,
         ),
       ],
+      postTextEndLines: const [GalleryDetailLine(text: '本文終端の内容', urls: [])],
       media: const [
         GalleryMediaItem(id: 1, noteId: 1, isVideo: false, exists: true),
         GalleryMediaItem(id: 2, noteId: 1, isVideo: false, exists: true),

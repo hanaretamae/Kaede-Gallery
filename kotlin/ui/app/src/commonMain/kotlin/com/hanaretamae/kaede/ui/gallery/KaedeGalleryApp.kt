@@ -20,9 +20,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import com.hanaretamae.kaede.core.model.GalleryEntry
 import com.hanaretamae.kaede.core.model.GalleryQuery
+import com.hanaretamae.kaede.core.model.MediaId
+import com.hanaretamae.kaede.core.model.NoteId
+import com.hanaretamae.kaede.core.model.NoteSummary
 import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryResult
+import com.hanaretamae.kaede.core.settings.GallerySettings
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
+import com.hanaretamae.kaede.core.settings.GalleryTagColorCodec
+import com.hanaretamae.kaede.core.settings.GalleryNoteStructureCodec
+import com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings
 import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.platformSystemLanguagePreference
 import com.hanaretamae.kaede.core.settings.SettingsRepository
@@ -34,6 +41,7 @@ import com.hanaretamae.kaede.core.settings.ThemePreference
 fun KaedeGalleryApp(
     repository: GalleryRepository,
     settingsRepository: SettingsRepository,
+    galleryThumbnail: @Composable (MediaId, Boolean) -> Unit = { _, _ -> },
     mediaContent: @Composable (GalleryViewerMediaState) -> Unit,
     onExternalLink: (String) -> Unit,
     systemLanguage: LanguagePreference = platformSystemLanguagePreference(),
@@ -45,6 +53,7 @@ fun KaedeGalleryApp(
     onRescan: (suspend () -> RepositoryResult<*>)? = null,
     onChangeVault: (() -> Unit)? = null,
     onForgetVault: (suspend () -> RepositoryResult<*>)? = null,
+    onRustTagSettingsChanged: (suspend (GallerySettings) -> RepositoryResult<*>)? = null,
     onImportSettings: (((String) -> Unit) -> Unit)? = null,
     onExportSettings: ((String) -> Unit)? = null,
 ) {
@@ -53,7 +62,7 @@ fun KaedeGalleryApp(
         SettingsStateHolder(settingsRepository, scope)
     }
     val settingsState by settingsStateHolder.state.collectAsState()
-    var selectedEntry by remember { mutableStateOf<GalleryEntry?>(null) }
+    var selectedEntries by remember { mutableStateOf<List<GalleryEntry>>(emptyList()) }
     var showSettings by remember { mutableStateOf(false) }
     LaunchedEffect(settingsStateHolder) { settingsStateHolder.load() }
     DisposableEffect(settingsStateHolder) {
@@ -61,6 +70,51 @@ fun KaedeGalleryApp(
     }
 
     val settings = settingsState.settings
+    val tagColorRules = remember(settings?.flutterTagSettingsJson) {
+        try {
+            GalleryTagColorCodec.decodeRules(settings?.flutterTagSettingsJson)
+        } catch (_: IllegalArgumentException) {
+            emptyList()
+        }
+    }
+    val noteStructure = remember(settings?.flutterTagSettingsJson, settings?.galleryTagPrefixes) {
+        val prefixes = settings?.galleryTagPrefixes ?: GalleryNoteStructureSettings().galleryTagPrefixes
+        try {
+            GalleryNoteStructureCodec.decodeSettings(settings?.flutterTagSettingsJson, prefixes)
+        } catch (_: IllegalArgumentException) {
+            GalleryNoteStructureSettings(galleryTagPrefixes = prefixes)
+        }
+    }
+    var appliedRustTagSettings by remember(repository) {
+        mutableStateOf<Pair<List<String>, String?>?>(null)
+    }
+    LaunchedEffect(
+        settings?.galleryTagPrefixes,
+        settings?.flutterTagSettingsJson,
+        settingsState.saving,
+        settingsState.hasUnsavedChanges,
+        settingsState.error,
+        onRustTagSettingsChanged,
+    ) {
+        val currentSettings = settings ?: return@LaunchedEffect
+        if (settingsState.saving || settingsState.hasUnsavedChanges || settingsState.error != null) {
+            return@LaunchedEffect
+        }
+        val currentRustTagSettings =
+            currentSettings.galleryTagPrefixes.toList() to currentSettings.flutterTagSettingsJson
+        val applied = appliedRustTagSettings
+        if (applied == null) {
+            appliedRustTagSettings = currentRustTagSettings
+        } else if (applied != currentRustTagSettings) {
+            val apply = onRustTagSettingsChanged ?: return@LaunchedEffect
+            when (val result = apply(currentSettings)) {
+                is RepositoryResult.Success<*> -> {
+                    appliedRustTagSettings = currentRustTagSettings
+                }
+                is RepositoryResult.Failure -> settingsStateHolder.reportError(result.error)
+            }
+        }
+    }
     val language = (settings?.appearance?.language ?: LanguagePreference.SYSTEM)
         .resolve(systemLanguage)
     val japanese = language == LanguagePreference.JAPANESE
@@ -115,32 +169,54 @@ fun KaedeGalleryApp(
                     onImportSettings = onImportSettings,
                     onExportSettings = onExportSettings,
                 )
-                selectedEntry != null -> {
-                    val entry = requireNotNull(selectedEntry)
+                selectedEntries.isNotEmpty() -> {
+                    val entry = selectedEntries.last()
                     val viewerStateHolder = remember(repository, scope, entry) {
                         GalleryViewerStateHolder(repository, scope, entry)
                     }
                     GalleryViewerScreen(
                         stateHolder = viewerStateHolder,
-                        onClose = { selectedEntry = null },
+                        onClose = { selectedEntries = selectedEntries.dropLast(1) },
                         strings = activeViewerStrings,
                         mediaContent = mediaContent,
                         onExternalLink = onExternalLink,
+                        onOpenNote = { noteId ->
+                            selectedEntries = selectedEntries + noteId.asNoteEntry()
+                        },
+                        tagColorRules = tagColorRules,
+                        noteStructure = noteStructure,
                     )
                 }
                 else -> GalleryScreen(
                     stateHolder = galleryStateHolder,
-                    onEntrySelected = { selectedEntry = it },
+                    onEntrySelected = { selectedEntries = selectedEntries + it },
                     onSettings = { showSettings = true },
                     strings = activeGalleryStrings,
                     showTilePosition = settings.showTilePosition,
                     showLoadedRange = settings.showLoadedRange,
                     showCounts = settings.showCounts,
+                    showMissingMediaIcon = settings.showMissingMediaIcon,
+                    includedTagPrefixes = settings.includedTagPrefixes,
+                    hiddenTagPrefixes = settings.hiddenTagPrefixes,
+                    tagColorRules = tagColorRules,
+                    galleryThumbnail = galleryThumbnail,
                     onRescan = onRescan,
                     onChangeVault = onChangeVault,
                     onForgetVault = onForgetVault,
                 )
             }
         }
+
     }
 }
+
+private fun NoteId.asNoteEntry() = NoteSummary(
+    id = this,
+    path = "",
+    title = "",
+    representativeMediaId = null,
+    mediaCount = 0,
+    videoCount = 0,
+    memoCount = 0,
+    relatedCount = 0,
+)

@@ -52,16 +52,22 @@ native unsafe boundary.
 
 The Compose Desktop Windows build uses the plugin's JVM host target, which
 builds a Windows-host Rust library rather than the separate `mingwX64` static
-cinterop target. Keep the legacy Flutter MSVC distribution untouched. The
-Windows CI workflow is responsible for verifying the KMP host ABI and
-distributable; do not infer compatibility until that job succeeds.
+cinterop target. The Windows CI workflow has successfully built and tested the
+KMP host ABI and distributable on the migration branch. This verifies build
+and packaging, not execution on physical Windows hardware. Keep the legacy
+Flutter MSVC distribution untouched.
 
 Linux Compose Desktop renders local video in an AWT canvas hosted by the
 application window, with mpv's native video child window embedded into that
 canvas. The launcher passes the validated local media path as a separate
 process argument and disables mpv configuration, scripts, network helpers,
-and automatic sidecar loading. Linux users need an `mpv` executable with X11
-window embedding support on `PATH`; video playback is not provided on Windows.
+and automatic sidecar loading. Linux users need an `mpv` executable with X11 window embedding support on
+`PATH`; video playback is not provided on Windows. Linux and Windows gallery
+video tiles use `ffmpeg` on `PATH` to extract a single local frame. The
+extractor validates the indexed media location, disables network input
+protocols, caps the output at 512 pixels and 4 MiB, limits execution to
+10 seconds, and runs at most two extractions concurrently. Android continues to
+use its SAF-backed native thumbnail path.
 
 ## Coarse-grained repository operations
 
@@ -103,8 +109,11 @@ The Kotlin repository should present operations equivalent to:
   Android, returning only aggregate counts and sanitized status/errors.
 - `queryGalleryPage(request)` returning a bounded page of note or media
   summaries, total count, and category options needed for that request.
-- `getNoteDetail(noteId)` returning one bounded note detail, memo/related
-  lines, and media metadata.
+- `getNotePath(noteId)` returning the indexed, Vault-relative note path for
+  platform reads of linked notes that were not present in the current gallery
+  page. The path is still validated by the platform adapter before opening.
+- `getNoteDetail(noteId)` returning one bounded note detail, memo/related/
+  post-text-end lines, and media metadata.
 - `getMediaLocation(mediaId)` returning a validated filesystem path or a
   normalized SAF-relative path, never an unchecked caller-provided path.
 - `getThumbnail(mediaId, size)` returning at most one bounded thumbnail per

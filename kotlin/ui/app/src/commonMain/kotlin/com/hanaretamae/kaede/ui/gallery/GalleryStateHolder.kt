@@ -18,6 +18,7 @@ import kotlinx.coroutines.launch
 data class GalleryUiState(
     val query: GalleryQuery = GalleryQuery(),
     val entries: List<GalleryEntry> = emptyList(),
+    val pageOffset: Long = 0,
     val categories: List<GalleryCategory> = emptyList(),
     val totalCount: Long? = null,
     val loading: Boolean = false,
@@ -28,7 +29,7 @@ data class GalleryUiState(
     val rescanError: RepositoryError? = null,
 ) {
     val canLoadMore: Boolean
-        get() = totalCount?.let { entries.size.toLong() < it } == true
+        get() = totalCount?.let { pageOffset + entries.size.toLong() < it } == true
 }
 
 class GalleryStateHolder(
@@ -59,6 +60,7 @@ class GalleryStateHolder(
         mutableState.value = mutableState.value.copy(
             query = normalized,
             entries = emptyList(),
+            pageOffset = 0,
             totalCount = null,
             loading = false,
             error = null,
@@ -82,6 +84,7 @@ class GalleryStateHolder(
         categoriesJob?.cancel()
         mutableState.value = mutableState.value.copy(
             entries = emptyList(),
+            pageOffset = 0,
             totalCount = null,
             loading = false,
             error = null,
@@ -118,6 +121,28 @@ class GalleryStateHolder(
     fun loadMore() {
         if (mutableState.value.loading || !mutableState.value.canLoadMore) return
         requestPage(reset = false)
+    }
+
+    fun jumpTo(position: Long) {
+        if (position !in 1..MAX_GALLERY_POSITION || mutableState.value.loading) return
+        val offset = position - 1
+        val totalCount = mutableState.value.totalCount
+        if (totalCount != null && offset >= totalCount) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            return
+        }
+        revision++
+        requestJob?.cancel()
+        categoriesJob?.cancel()
+        searchJob?.cancel()
+        mutableState.value = mutableState.value.copy(
+            entries = emptyList(),
+            totalCount = null,
+            loading = false,
+            error = null,
+        )
+        requestCategories()
+        requestPage(reset = true, requestedOffset = offset)
     }
 
     fun cycleTagSelection(tag: String) {
@@ -166,11 +191,15 @@ class GalleryStateHolder(
         rescanJob?.cancel()
     }
 
-    private fun requestPage(reset: Boolean) {
+    private fun requestPage(reset: Boolean, requestedOffset: Long? = null) {
         if (mutableState.value.loading) return
         val requestRevision = revision
         val current = mutableState.value
-        val offset = if (reset) 0L else current.entries.size.toLong()
+        val offset = when {
+            requestedOffset != null -> requestedOffset
+            reset -> 0L
+            else -> current.pageOffset + current.entries.size.toLong()
+        }
         val query = current.query.copy(offset = offset)
         mutableState.value = current.copy(loading = true, error = null)
         requestJob = scope.launch {
@@ -180,18 +209,28 @@ class GalleryStateHolder(
             when (result) {
                 is RepositoryResult.Success -> {
                     val page = result.value
+                    val invalidJump = requestedOffset != null && page.entries.isEmpty()
                     if (
+                        invalidJump ||
                         page.offset != offset ||
                         page.entries.size > query.pageSize ||
                         page.totalCount < page.offset ||
                         page.totalCount - page.offset < page.entries.size ||
                         (page.entries.isEmpty() && page.totalCount > page.offset)
                     ) {
-                        mutableState.value = latest.copy(loading = false, error = RepositoryError.OPERATION_FAILED)
+                        mutableState.value = latest.copy(
+                            loading = false,
+                            error = if (invalidJump) {
+                                RepositoryError.INVALID_REQUEST
+                            } else {
+                                RepositoryError.OPERATION_FAILED
+                            },
+                        )
                     } else {
                         val entries = if (reset) page.entries else latest.entries + page.entries
                         mutableState.value = latest.copy(
                             entries = entries,
+                            pageOffset = offset,
                             totalCount = page.totalCount,
                             loading = false,
                             error = null,
@@ -236,5 +275,6 @@ class GalleryStateHolder(
 
     private companion object {
         const val SEARCH_DEBOUNCE_MILLIS = 250L
+        const val MAX_GALLERY_POSITION = 2_147_483_647L
     }
 }

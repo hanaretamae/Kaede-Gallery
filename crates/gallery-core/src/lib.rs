@@ -3,7 +3,8 @@
 use gallery_parse::{
     InlineToken, LinkResolutionMode, MediaKind, NoteStructureSettings, ParsedNote,
     TagCategorySettings, expanded_tags, parse_note, parse_note_for_link_target,
-    parse_note_structure_settings, parse_tag_category_settings,
+    parse_note_structure_settings, parse_optional_tag_category_settings,
+    parse_tag_category_settings,
 };
 use image::{ImageDecoder, ImageFormat, ImageReader, Limits};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
@@ -127,6 +128,8 @@ pub struct NoteSummary {
     pub memo_count: usize,
     pub related_count: usize,
     pub representative_media_id: Option<i64>,
+    pub representative_media_is_video: bool,
+    pub representative_media_exists: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -165,6 +168,7 @@ pub struct NoteDetail {
     pub body_text: String,
     pub memo_lines: Vec<DetailLine>,
     pub related_lines: Vec<DetailLine>,
+    pub post_text_end_lines: Vec<DetailLine>,
     pub media: Vec<MediaSummary>,
 }
 
@@ -186,6 +190,7 @@ struct NoteInsertContext<'a> {
 
 pub struct Gallery {
     root: PathBuf,
+    database_path: PathBuf,
     saf: bool,
     connection: Connection,
     tag_categories: TagCategorySettings,
@@ -535,6 +540,7 @@ impl Gallery {
 
         Ok(Self {
             root,
+            database_path: database_path.to_path_buf(),
             saf,
             connection,
             tag_categories,
@@ -546,6 +552,7 @@ impl Gallery {
         if self.saf {
             return Err(CoreError::InvalidVault);
         }
+        self.reload_tag_settings()?;
         let (files, traversal_warnings) = collect_notes(&self.root)?;
         let mut traversal_complete = traversal_warnings == 0;
         let mut warnings = traversal_warnings;
@@ -750,6 +757,34 @@ impl Gallery {
         })
     }
 
+    fn reload_tag_settings(&mut self) -> Result<(), CoreError> {
+        let (note_structure, tag_categories) = load_tag_settings(&self.database_path)?;
+        let fingerprint = format!("{note_structure:?}");
+        let previous = self
+            .connection
+            .query_row(
+                "SELECT value FROM meta WHERE key='note_structure'",
+                [],
+                |row| row.get::<_, String>(0),
+            )
+            .optional()
+            .map_err(|_| CoreError::Database)?;
+        if previous.as_deref() != Some(&fingerprint) {
+            self.connection
+                .execute("DELETE FROM scan_state", [])
+                .map_err(|_| CoreError::Database)?;
+            self.connection
+                .execute(
+                    "INSERT OR REPLACE INTO meta(key,value) VALUES ('note_structure',?1)",
+                    [&fingerprint],
+                )
+                .map_err(|_| CoreError::Database)?;
+        }
+        self.note_structure = note_structure;
+        self.tag_categories = tag_categories;
+        Ok(())
+    }
+
     pub fn scan_saf(
         &mut self,
         documents: Vec<SafNoteDocument>,
@@ -769,6 +804,7 @@ impl Gallery {
         if !self.saf || file_paths.len() > MAX_SAF_DOCUMENTS {
             return Err(CoreError::InvalidVault);
         }
+        self.reload_tag_settings()?;
 
         let mut available_files = BTreeSet::new();
         let mut path_bytes = 0_usize;
@@ -1212,6 +1248,21 @@ impl Gallery {
                      FROM notes WHERE id=?1",
                     [id],
                     |row| {
+                        let representative_media = self
+                            .connection
+                            .query_row(
+                                "SELECT id, kind, exists_flag FROM media
+                                 WHERE note_id=?1 ORDER BY ord LIMIT 1",
+                                [id],
+                                |media_row| {
+                                    Ok((
+                                        media_row.get::<_, i64>(0)?,
+                                        media_row.get::<_, String>(1)? == "video",
+                                        media_row.get::<_, bool>(2)?,
+                                    ))
+                                },
+                            )
+                            .optional()?;
                         Ok(NoteSummary {
                             id,
                             path: row.get(0)?,
@@ -1220,14 +1271,13 @@ impl Gallery {
                             video_count: row.get::<_, i64>(3)? as usize,
                             memo_count: row.get::<_, i64>(4)? as usize,
                             related_count: row.get::<_, i64>(5)? as usize,
-                            representative_media_id: self
-                                .connection
-                                .query_row(
-                                    "SELECT id FROM media WHERE note_id=?1 ORDER BY ord LIMIT 1",
-                                    [id],
-                                    |media_row| media_row.get(0),
-                                )
-                                .optional()?,
+                            representative_media_id: representative_media.map(|(id, _, _)| id),
+                            representative_media_is_video: representative_media
+                                .map(|(_, is_video, _)| is_video)
+                                .unwrap_or(false),
+                            representative_media_exists: representative_media
+                                .map(|(_, _, exists)| exists)
+                                .unwrap_or(false),
                         })
                     },
                 )
@@ -1965,6 +2015,22 @@ impl Gallery {
                 .iter()
                 .zip(parsed.related_bullets.iter())
                 .zip(parsed.related_indent_levels.iter())
+                .map(|((line, is_bullet), indent_level)| {
+                    detail_line(
+                        &self.connection,
+                        &indexed_path,
+                        line,
+                        *is_bullet,
+                        *indent_level,
+                        self.note_structure.link_resolution,
+                    )
+                })
+                .collect::<Result<Vec<_>, _>>()?,
+            post_text_end_lines: parsed
+                .post_text_end_lines
+                .iter()
+                .zip(parsed.post_text_end_bullets.iter())
+                .zip(parsed.post_text_end_indent_levels.iter())
                 .map(|((line, is_bullet), indent_level)| {
                     detail_line(
                         &self.connection,
@@ -2848,23 +2914,47 @@ fn ignored_name(name: &str) -> bool {
 fn load_tag_settings(
     database_path: &Path,
 ) -> Result<(NoteStructureSettings, TagCategorySettings), CoreError> {
-    let Some(contents) = read_tag_settings_file(database_path)? else {
-        return Ok((
-            NoteStructureSettings::default(),
-            TagCategorySettings::default(),
-        ));
-    };
-    Ok((
-        parse_note_structure_settings(&contents).map_err(|_| CoreError::Database)?,
-        parse_tag_category_settings(&contents).map_err(|_| CoreError::Database)?,
-    ))
+    let (mut note_structure, mut tag_categories) =
+        if let Some(contents) = read_tag_settings_file(database_path)? {
+            (
+                parse_note_structure_settings(&contents).map_err(|_| CoreError::Database)?,
+                parse_tag_category_settings(&contents).map_err(|_| CoreError::Database)?,
+            )
+        } else {
+            (
+                NoteStructureSettings::default(),
+                TagCategorySettings::default(),
+            )
+        };
+    if let Some(contents) = read_gallery_tag_settings_file(database_path)? {
+        let gallery_settings =
+            parse_note_structure_settings(&contents).map_err(|_| CoreError::Database)?;
+        note_structure.gallery_tag_prefixes = gallery_settings.gallery_tag_prefixes;
+        if let Some(categories) =
+            parse_optional_tag_category_settings(&contents).map_err(|_| CoreError::Database)?
+        {
+            tag_categories = categories;
+        }
+    }
+    Ok((note_structure, tag_categories))
 }
 
 fn read_tag_settings_file(database_path: &Path) -> Result<Option<String>, CoreError> {
+    read_private_settings_file(database_path, "tag-settings.json")
+}
+
+fn read_gallery_tag_settings_file(database_path: &Path) -> Result<Option<String>, CoreError> {
+    read_private_settings_file(database_path, "gallery-tag-settings.json")
+}
+
+fn read_private_settings_file(
+    database_path: &Path,
+    file_name: &str,
+) -> Result<Option<String>, CoreError> {
     let settings_path = database_path
         .parent()
         .ok_or(CoreError::Database)?
-        .join("tag-settings.json");
+        .join(file_name);
     let metadata = match fs::symlink_metadata(&settings_path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -3319,7 +3409,7 @@ mod tests {
         fs::create_dir_all(&app_data).expect("create app data");
         fs::write(
             root.join("custom.md"),
-            "---\ntags: [collection/example]\n---\n# Custom note\nA fictional post.\n## Later\n- keep the blue subtle\n## Sources\n- [study](https://example.invalid/study)\n## End of post\nThis is not post text.\n",
+            "---\ntags: [collection/example]\n---\n# Custom note\nA fictional post.\n## Later\n- keep the blue subtle\n## Sources\n- [study](https://example.invalid/study)\n## End of post\n- This is not post text. [source](https://example.invalid/end-source)\n",
         )
         .expect("write fictional note");
         fs::write(
@@ -3338,6 +3428,15 @@ mod tests {
         assert_eq!(detail.body_text, "A fictional post.");
         assert_eq!(detail.memo_lines[0].text, "keep the blue subtle");
         assert_eq!(detail.related_lines[0].text, "study");
+        assert_eq!(
+            detail.post_text_end_lines[0].text,
+            "This is not post text. source"
+        );
+        assert_eq!(
+            detail.post_text_end_lines[0].urls,
+            ["https://example.invalid/end-source"]
+        );
+        assert!(detail.post_text_end_lines[0].is_bullet);
 
         let memo_notes = gallery
             .query_filtered_page(&[], &[VirtualFilter::HasMemo], 0, 10)
@@ -3365,6 +3464,100 @@ mod tests {
                 .len(),
             0
         );
+        fs::remove_dir_all(root).expect("remove vault");
+        fs::remove_dir_all(app_data).expect("remove app data");
+    }
+
+    #[test]
+    fn rescanning_reloads_gallery_tag_prefixes() {
+        let root = temp_dir();
+        let app_data = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::create_dir_all(&app_data).expect("create app data");
+        fs::write(
+            root.join("fictional.md"),
+            "---\ntags: [source/art]\n---\n# Fictional\n",
+        )
+        .expect("write fictional note");
+        let base_settings_path = app_data.join("tag-settings.json");
+        let base_settings =
+            r#"{"noteStructure":{"galleryTagPrefixes":["source/"],"memoHeadings":["Keep"]}}"#;
+        fs::write(&base_settings_path, base_settings).expect("write base settings");
+        let settings_path = app_data.join("gallery-tag-settings.json");
+        fs::write(
+            &settings_path,
+            r#"{"noteStructure":{"galleryTagPrefixes":["source/"]}}"#,
+        )
+        .expect("write initial settings");
+        let database = app_data.join("index.sqlite");
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("initial scan");
+        assert_eq!(gallery.query(&[], 10).expect("initial query").len(), 1);
+        assert_eq!(gallery.note_structure.memo_headings, ["Keep"]);
+
+        fs::write(
+            &settings_path,
+            r#"{"noteStructure":{"galleryTagPrefixes":["collection/"]}}"#,
+        )
+        .expect("change settings");
+        gallery.scan().expect("rescan with changed settings");
+        assert!(gallery.query(&[], 10).expect("changed query").is_empty());
+        assert_eq!(gallery.note_structure.memo_headings, ["Keep"]);
+
+        fs::write(
+            &settings_path,
+            r#"{"noteStructure":{"galleryTagPrefixes":["source/"]}}"#,
+        )
+        .expect("restore settings");
+        gallery.scan().expect("rescan with restored settings");
+        assert_eq!(gallery.query(&[], 10).expect("restored query").len(), 1);
+        assert_eq!(
+            fs::read_to_string(base_settings_path).expect("read base settings"),
+            base_settings,
+        );
+
+        drop(gallery);
+        fs::remove_dir_all(root).expect("remove vault");
+        fs::remove_dir_all(app_data).expect("remove app data");
+    }
+
+    #[test]
+    fn gallery_tag_settings_override_categories_without_replacing_base_note_structure() {
+        let root = temp_dir();
+        let app_data = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::create_dir_all(&app_data).expect("create app data");
+        fs::write(
+            root.join("fictional.md"),
+            "---\ntags: [source/art]\n---\n# Fictional\n",
+        )
+        .expect("write fictional note");
+        let base_settings = r#"{"noteStructure":{"memoHeadings":["Keep"]},"tagCategories":{"categories":[{"name":"Base","path":"source/*"}]}}"#;
+        fs::write(app_data.join("tag-settings.json"), base_settings).expect("write base settings");
+        let gallery_settings_path = app_data.join("gallery-tag-settings.json");
+        fs::write(
+            &gallery_settings_path,
+            r#"{"noteStructure":{"galleryTagPrefixes":["source/art"]},"tagCategories":{"categories":[{"name":"Edited","path":"source/*","splitDeep":true}],"other":{"enabled":false,"name":"Other","splitDeep":false}}}"#,
+        )
+        .expect("write gallery settings");
+        let database = app_data.join("index.sqlite");
+        let mut gallery = Gallery::open(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+
+        assert_eq!(gallery.note_structure.memo_headings, ["Keep"]);
+        let categories = gallery.categories().expect("categories");
+        assert!(
+            categories
+                .iter()
+                .any(|category| category.display_name == "Edited")
+        );
+        assert!(
+            !categories
+                .iter()
+                .any(|category| category.display_name == "Base")
+        );
+
+        drop(gallery);
         fs::remove_dir_all(root).expect("remove vault");
         fs::remove_dir_all(app_data).expect("remove app data");
     }
@@ -4062,6 +4255,32 @@ mod tests {
         fs::write(&path, "---\ntags: [source/rating/safe]\n---\n# Valid\n").expect("repair note");
         assert_eq!(gallery.scan().expect("retry scan").notes_indexed, 1);
         assert_eq!(gallery.warning_count().expect("warnings"), 0);
+        drop(gallery);
+        fs::remove_file(database).expect("remove db");
+        fs::remove_dir_all(root).expect("remove vault");
+    }
+
+    #[test]
+    fn note_summary_identifies_video_representative_media() {
+        let root = temp_dir();
+        fs::create_dir_all(&root).expect("create vault");
+        fs::write(
+            root.join("video.md"),
+            "---\ntags: [source/test]\ncover: clip.mp4\n---\n# Video\n",
+        )
+        .expect("write note");
+        let database = root.parent().expect("parent").join(format!(
+            "gallery-{}.sqlite",
+            root.file_name().expect("name").to_string_lossy()
+        ));
+        let mut gallery = open_gallery(&root, &database).expect("open");
+        gallery.scan().expect("scan");
+
+        let note = gallery.query(&[], 1).expect("query").remove(0);
+
+        assert!(note.representative_media_is_video);
+        assert!(note.representative_media_id.is_some());
+        assert!(!note.representative_media_exists);
         drop(gallery);
         fs::remove_file(database).expect("remove db");
         fs::remove_dir_all(root).expect("remove vault");

@@ -14,6 +14,7 @@ interface GalleryRepository {
         noteId: NoteId,
         safContent: ByteArray? = null,
     ): RepositoryResult<GalleryNoteDetail?>
+    suspend fun notePath(noteId: NoteId): RepositoryResult<String?>
     suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?>
     suspend fun thumbnail(mediaId: MediaId, size: Int): RepositoryResult<ByteArray?>
 }

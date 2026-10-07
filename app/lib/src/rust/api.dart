@@ -395,6 +395,7 @@ class NoteDetail {
   final String bodyText;
   final List<DetailLine> memoLines;
   final List<DetailLine> relatedLines;
+  final List<DetailLine> postTextEndLines;
   final List<MediaItem> media;
 
   const NoteDetail({
@@ -411,6 +412,7 @@ class NoteDetail {
     required this.bodyText,
     required this.memoLines,
     required this.relatedLines,
+    required this.postTextEndLines,
     required this.media,
   });
 
@@ -429,6 +431,7 @@ class NoteDetail {
       bodyText.hashCode ^
       memoLines.hashCode ^
       relatedLines.hashCode ^
+      postTextEndLines.hashCode ^
       media.hashCode;
 
   @override
@@ -449,6 +452,7 @@ class NoteDetail {
           bodyText == other.bodyText &&
           memoLines == other.memoLines &&
           relatedLines == other.relatedLines &&
+          postTextEndLines == other.postTextEndLines &&
           media == other.media;
 }
 

@@ -6,6 +6,7 @@ import android.content.ContextWrapper
 import android.provider.DocumentsContract
 import android.net.Uri
 import android.os.Bundle
+import android.system.Os
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
@@ -64,6 +66,8 @@ import com.hanaretamae.kaede.core.rust.RustGallerySessionRepository
 import com.hanaretamae.kaede.core.rust.RustVaultSelectionRepository
 import com.hanaretamae.kaede.core.settings.AndroidSettingsRepository
 import com.hanaretamae.kaede.core.settings.LanguagePreference
+import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
+import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import com.hanaretamae.kaede.ui.gallery.androidDynamicColorScheme
@@ -74,6 +78,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.io.ByteArrayOutputStream
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
 import java.nio.ByteBuffer
 import java.nio.charset.CodingErrorAction
 import java.util.concurrent.ConcurrentHashMap
@@ -323,6 +330,36 @@ private fun AndroidGalleryRoot() {
                 return
             }
         }
+        val gallerySettings = when (val loaded = settingsRepository.load()) {
+            is RepositoryResult.Failure -> {
+                error = errorText(loaded.error)
+                loading = false
+                return
+            }
+            is RepositoryResult.Success -> loaded.value
+        }
+        val galleryTagSettingsFile = File(privateDataDirectory, "gallery-tag-settings.json")
+        if (
+            gallerySettings.galleryTagPrefixes != GalleryTagPrefixesCodec.DEFAULT_PREFIXES ||
+            gallerySettings.flutterTagSettingsJson != null ||
+            galleryTagSettingsFile.exists()
+        ) {
+            when (
+                val written = persistRustTagSettings(
+                    context,
+                    privateDataDirectory,
+                    gallerySettings.galleryTagPrefixes,
+                    gallerySettings.flutterTagSettingsJson,
+                )
+            ) {
+                is RepositoryResult.Failure -> {
+                    error = errorText(written.error)
+                    loading = false
+                    return
+                }
+                is RepositoryResult.Success -> Unit
+            }
+        }
         val opened = sessionRepository.openSaf(
             privateDataDirectory = privateDataDirectory,
             vaultUri = vaultUri,
@@ -471,6 +508,15 @@ private fun AndroidGalleryRoot() {
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
+            galleryThumbnail = { mediaId, isVideo ->
+                AndroidGalleryThumbnail(
+                    scanner = scanner,
+                    treeUri = vaultUri,
+                    repository = activeSession.gallery,
+                    mediaId = mediaId,
+                    isVideo = isVideo,
+                )
+            },
             mediaContent = { state ->
                 AndroidMediaContent(
                     scanner = scanner,
@@ -510,6 +556,26 @@ private fun AndroidGalleryRoot() {
             },
             dynamicColorSchemeProvider = { theme ->
                 androidDynamicColorScheme(context, theme)
+            },
+            onRustTagSettingsChanged = { settings ->
+                when (
+                    val written = persistRustTagSettings(
+                        context,
+                        privateDataDirectory,
+                        settings.galleryTagPrefixes,
+                        settings.flutterTagSettingsJson,
+                    )
+                ) {
+                    is RepositoryResult.Failure -> written
+                    is RepositoryResult.Success -> try {
+                        val snapshot = scanner.snapshot(vaultUri)
+                        activeSession.rescanSaf(snapshot.filePaths, snapshot.batches)
+                    } catch (_: IOException) {
+                        RepositoryResult.Failure(RepositoryError.VAULT_UNAVAILABLE)
+                    } catch (_: SecurityException) {
+                        RepositoryResult.Failure(RepositoryError.VAULT_UNAVAILABLE)
+                    }
+                }
             },
             onRescan = {
                 try {
@@ -650,6 +716,48 @@ private fun AndroidMediaContent(
 }
 
 @Composable
+private fun AndroidGalleryThumbnail(
+    scanner: AndroidSafVaultScanner,
+    treeUri: Uri,
+    repository: GalleryRepository,
+    mediaId: MediaId,
+    isVideo: Boolean,
+) {
+    val bitmap by produceState<android.graphics.Bitmap?>(
+        initialValue = null,
+        scanner,
+        treeUri,
+        repository,
+        mediaId,
+    ) {
+        value = try {
+            when (val location = repository.mediaLocation(mediaId)) {
+                is RepositoryResult.Failure -> null
+                is RepositoryResult.Success -> location.value?.let {
+                    if (isVideo) {
+                        scanner.decodeVideoFrame(treeUri, it, MAX_GALLERY_THUMBNAIL_SIZE)
+                    } else {
+                        scanner.decodeImage(treeUri, it, MAX_GALLERY_THUMBNAIL_SIZE)
+                    }
+                }
+            }
+        } catch (_: IOException) {
+            null
+        } catch (_: SecurityException) {
+            null
+        }
+    }
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!.asImageBitmap(),
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            modifier = Modifier.fillMaxWidth().height(180.dp),
+        )
+    }
+}
+
+@Composable
 private fun AndroidVideoPlayer(uri: Uri) {
     val context = LocalContext.current
     val player = remember(uri) {
@@ -679,6 +787,7 @@ private fun errorText(error: RepositoryError): String = when (error) {
 }
 
 private const val MAX_VIEWER_IMAGE_SIZE = 2_048
+private const val MAX_GALLERY_THUMBNAIL_SIZE = 512
 
 private class AndroidSessionHandle(
     private val delegate: GallerySessionHandle,
@@ -711,8 +820,11 @@ private class AndroidSessionHandle(
             safContent: ByteArray?,
         ): RepositoryResult<GalleryNoteDetail?> {
             if (safContent != null) return delegate.gallery.noteDetail(noteId, safContent)
-            val path = notePathsById[noteId]
-                ?: return RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val path = notePathsById[noteId] ?: when (val resolved = delegate.gallery.notePath(noteId)) {
+                is RepositoryResult.Failure -> return resolved
+                is RepositoryResult.Success -> resolved.value
+                    ?: return RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            }.also { notePathsById[noteId] = it }
             val content = try {
                 scanner.readNoteContent(treeUri, path)
             } catch (_: AndroidSafVaultScanner.SafAccessException) {
@@ -720,6 +832,9 @@ private class AndroidSessionHandle(
             }
             return delegate.gallery.noteDetail(noteId, content)
         }
+
+        override suspend fun notePath(noteId: NoteId): RepositoryResult<String?> =
+            delegate.gallery.notePath(noteId)
 
         override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> =
             delegate.gallery.mediaLocation(mediaId)
@@ -755,4 +870,66 @@ private tailrec fun Context.findActivity(): ComponentActivity? = when (this) {
     is ComponentActivity -> this
     is ContextWrapper -> baseContext.findActivity()
     else -> null
+}
+
+private suspend fun persistRustTagSettings(
+    context: Context,
+    privateDataDirectory: String,
+    prefixes: List<String>,
+    flutterTagSettingsJson: String?,
+): RepositoryResult<Unit> = withContext(Dispatchers.IO) {
+    var temporary: File? = null
+    try {
+        val filesRoot = context.filesDir.canonicalFile
+        val expectedDirectory = File(filesRoot, "kaede-gallery")
+        val directory = File(privateDataDirectory).canonicalFile
+        if (directory != expectedDirectory) {
+            return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+        }
+        if (!directory.exists() && !directory.mkdir()) {
+            return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+        }
+        if (
+            !directory.isDirectory ||
+            directory.canonicalFile != expectedDirectory ||
+            directory.canonicalFile.parentFile != filesRoot
+        ) {
+            return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+        }
+        val target = File(directory, "gallery-tag-settings.json")
+        if (
+            target.exists() &&
+            (!target.isFile || target.canonicalFile != target.absoluteFile)
+        ) {
+            return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+        }
+        val content = try {
+            GalleryTagCategoryCodec.encodeRustSettings(prefixes, flutterTagSettingsJson)
+                .toByteArray(Charsets.UTF_8)
+        } catch (_: IllegalArgumentException) {
+            return@withContext RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        if (content.size > GalleryTagPrefixesCodec.MAX_ENCODED_LENGTH) {
+            return@withContext RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+        }
+        temporary = File(directory, ".tag-settings-${UUID.randomUUID()}.tmp")
+        if (!temporary.createNewFile()) {
+            return@withContext RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+        }
+        FileOutputStream(temporary).use { output ->
+            output.write(content)
+            output.fd.sync()
+        }
+        Os.rename(temporary.absolutePath, target.absolutePath)
+        temporary = null
+        RepositoryResult.Success(Unit)
+    } catch (_: IOException) {
+        RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+    } catch (_: SecurityException) {
+        RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+    } catch (_: android.system.ErrnoException) {
+        RepositoryResult.Failure(RepositoryError.STORAGE_UNAVAILABLE)
+    } finally {
+        temporary?.delete()
+    }
 }

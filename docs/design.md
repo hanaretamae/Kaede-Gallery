@@ -86,20 +86,31 @@ implementations as finished.
 
 The repository currently contains the KMP model, repository, Rust binding
 adapter, and initial shared Gallery/Search/Filter screens with paging and
-filter state. A shared Gallery-to-note-detail route and same-note media
+filter state, including indexed position jumps. A shared Gallery-to-note-detail
+route, related-note navigation, note dates and tags, and same-note media
 navigation are also present; the common viewer delegates media rendering to a
 platform capability. Linux image display is implemented in `desktopApp`;
 Android has an application module with SAF selection, bounded staged scans,
 private-index reuse on launch, explicit rescan, bounded image decoding, and a
-Media3 video player. It also provides a confirmed forget-Vault action that
-removes the private index and releases the persisted read grant. Its debug APK
-and Android arm64/x86_64 native libraries build successfully; it has not been
-exercised against a real DocumentsProvider or device, so Android acceptance is
-still pending. Linux/JVM Compose Desktop packaging is available; a Windows x64
-CI job has been added to verify the JVM FFI ABI and application packaging.
-Common
-appearance and gallery-pagination settings models, state, controls, and
-Android and desktop private-settings adapters are present. Both platforms now
+Media3 video player. API 36 device smoke tests verified fixture selection and
+reading, indexed position and linked-note navigation, private-index reuse,
+gallery-target-prefix editing and rescan, and visible image tile previews. On
+2026-10-07, KMP was also exercised through Android's Documents provider with a
+dedicated 2,000-note fictional fixture; search, note details, grid paging, and
+horizontal action scrolling worked. Viewer controls now respect the status-bar
+safe area. Compose scrolling was measured at the device's active 120 Hz mode;
+results and the longer-than-target explicit SAF rescan are recorded in
+`docs/phase1-performance.md`. Android visual/interaction acceptance is
+complete for these fixture scenarios, but SAF rescan performance still needs
+improvement against the few-seconds target. The app also provides a
+confirmed forget-Vault action that removes the private index and releases the
+persisted read grant. Its debug APK and Android arm64/x86_64 native libraries
+build successfully.
+Linux/JVM Compose Desktop packaging is available; a Windows x64 CI job has been
+added to verify the JVM FFI ABI and application packaging.
+Common appearance, gallery-pagination, and gallery-target-prefix settings
+models, state, controls, and Android and desktop private-settings adapters are
+present. Both platforms now
 support versioned, size-bounded settings-file import/export with Vault-safe
 destination checks. Theme selection,
 pure-black surfaces, platform system-locale fallback, and Android dynamic-color
@@ -112,17 +123,114 @@ desktop offer a confirmed forget-Vault action.
 The `desktopApp` Compose Desktop module provides a Linux/JVM entrypoint,
 directory selection, private settings persistence, Rust filesystem indexing,
 index reuse on launch, an explicit rescan action, and bounded-resolution image
-display. Linux video is rendered in an embedded native child window from a
-separate `mpv` process; Linux runtime requires `mpv` on `PATH`. Launch disables
-mpv user configuration, scripts, subtitle/audio auto-loading, and automatic
-sidecar loading. A basic localized About section now links to the project and
-license. Windows ABI compatibility and packaging verification, parity
-checks, and performance acceptance remain unfinished. A Windows x64 CI job now
-builds/tests the JVM FFI host target and Compose Desktop distributable; its
-first successful run is still required before considering that target
-verified.
-Keep Flutter and its release paths until those gaps are verified; the current
-Compose UI is not yet a replacement.
+display. Shared gallery tiles now load bounded image previews through the
+platform boundary. Android also extracts scaled video frames through the SAF
+read-only file descriptor on API 27 and later; older Android releases do not
+support video tile thumbnails. Linux Desktop extracts one bounded PNG frame
+through FFmpeg for gallery tiles. The same extractor supports Windows when an
+`ffmpeg` executable is available on `PATH`; Windows runtime behavior has not
+yet been verified. A fictional H.264 video was selected from a dedicated SAF
+fixture on an API 36 device; the viewer played it and the gallery tile displayed
+its magenta video frame. The 2026-10-07 KMP fixture run completes visual
+acceptance for gallery/search/note-detail surfaces; media playback and
+thumbnail behavior were separately smoke-tested on API 36.
+Linux video is rendered in an embedded native child window from a
+separate `mpv` process; Linux runtime requires `mpv` and `ffmpeg` on `PATH`.
+Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
+and automatic sidecar loading. Desktop video thumbnails limit ffmpeg to local
+file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
+timeout, and two concurrent extraction processes. A basic localized About
+section now links to the project and license. The Windows x64 CI job passed for
+the last committed migration revision; it has not yet run on the current
+changes. This verifies the Windows build and packaging path, not execution on
+physical Windows hardware. Android visual/interaction checks are complete for
+the documented fixture scenarios, while the measured SAF rescan exceeds the
+few-seconds performance target and full cross-platform parity remains
+unfinished. Keep Flutter and its release paths until those gaps are verified;
+the current Compose UI is not yet a replacement.
+KMP now supports editing Flutter-compatible tag color and filter-category
+rules. The most-specific color prefix is applied to filter options and viewer
+tags; category changes are written to private Rust settings and rescan the
+index while preserving base note-structure settings. Transfer continues to
+preserve the complete tag-settings JSON. Note-structure aliases and note-detail
+block order/visibility are editable and applied to the KMP viewer. The parser
+now exposes bounded, link-aware post-text-end lines through both Rust FFI
+surfaces and both viewer models, and Flutter and KMP render the block according
+to configured order and visibility. This resolves the former design/Flutter
+contradiction in favor of the documented viewer contract. Visual acceptance
+on API 36 is recorded below; Rust parser/core/FFI tests, KMP JVM adapter/viewer tests, the
+Android debug APK build, and a connected API 36 launch smoke test pass for this
+change. Flutter analysis and full Flutter widget tests pass with the installed
+Rust and Flutter SDK links. The recorded 7,806-note and 20,000-note
+measurements cover Rust CLI operations only. Android SAF and Compose
+frame-time measurements for the 2,000-note KMP fixture are recorded in
+`docs/phase1-performance.md`; measured explicit SAF rescan time remains above
+the few-seconds target. Windows CI must pass on the current changes; physical
+Windows runtime testing is intentionally outside this acceptance plan.
+
+KMP settings transfer now reads and writes Flutter's version-1 JSON appearance
+and tag-settings structure while retaining unexposed note-structure fields
+verbatim as bounded JSON; supported gallery settings are updated in
+place, and the prior line-oriented KMP format remains readable. Settings tests
+cover this transfer compatibility, strict validation, bounds, and legacy
+imports. KMP exposes Flutter's tag color and category rules, persists category
+changes to the private Rust settings document on Android and desktop, and
+preserves unrelated note-structure values when applying them. Fresh KMP exports
+use Flutter's default tag-color rules and system-accent default, avoiding
+changes to those settings on a
+Flutter import. KMP also exposes Flutter's included and hidden tag-prefix
+rules, persists them in private settings, includes them in transfer JSON, and
+applies them to available filter options; oversized exports are reported rather
+than written.
+KMP's note-structure editor also updates heading/frontmatter aliases, link
+resolution, quoted-post-text behavior, note-detail block order, and visibility.
+The viewer applies order and visibility to author, post text, memo, related,
+and post-text-end blocks; fixed frontmatter fields remain ahead of those
+blocks. Media continues to use the platform viewer surface, matching Flutter's
+separation.
+The 2026-10-07 tag-color/category follow-up adds a localized category editor,
+strict path/size validation, Flutter JSON round-trip coverage, and private Rust
+settings updates on Android and desktop. Category updates preserve other
+note-structure fields and rescan the index; a Rust regression test confirms the
+new categories override only category rules from the base settings file.
+
+The note-structure follow-up adds validated Flutter-compatible block ordering
+and hidden-block settings to KMP transfer and persistence, plus settings
+controls and matching viewer behavior for author, post text, memo, and related
+blocks. It preserves the Flutter legacy default orders and continues to keep
+fixed frontmatter and platform media rendering outside the reorderable content
+blocks. Settings and shared-UI JVM tests, Desktop tests, Android compilation,
+and debug APK assembly passed; the updated APK was installed and launched on
+the connected API 36 device. This launch check does not replace visual or
+fixture-based acceptance.
+
+The 2026-10-07 follow-up added a bounded Linux FFmpeg video-tile thumbnail
+extractor and a fictional-video extraction test. Kotlin settings/shared-UI and
+desktop tests, Android debug APK assembly, and Linux Desktop distribution
+packaging pass. The APK was installed and launched on the connected API 36
+device; this was a startup smoke check, not a visual/settings interaction test.
+The Rust workspace tests, formatting, Clippy, Flutter tests, and Flutter
+analysis pass. Current Linux CLI scans of fictional 7,806- and 20,000-note
+fixtures indexed the expected eligible subsets with zero warnings; the
+measurements are recorded in `docs/phase1-performance.md` and do not replace
+Android SAF or Compose frame-time acceptance. Windows CI has not verified the
+current uncommitted migration changes.
+
+The settings-transfer follow-up passed all 13 settings tests, shared UI JVM
+tests, desktop tests, Android Kotlin compilation and debug APK assembly; Rust
+formatting and workspace tests also pass. The updated APK was installed and
+launched on the connected API 36 device with its activity resumed. A later
+API 36 smoke test selected only the synthetic SAF fixture, exported a valid
+version-1 settings file to the device's Documents directory outside the
+fixture Vault, imported a modified page size (31), then restored the exported
+value (24). The generated export file was removed after verification; no Vault
+file was written. A separate video fixture test used only a synthetic note and
+generated H.264 clip on device storage; it confirmed SAF video playback and
+thumbnail decoding/rendering.
+The tag-color/category follow-up passed settings and shared-UI tests, the Rust
+workspace suite and Clippy, desktop tests, and Android debug APK assembly. That
+APK was installed and launched on the connected API 36 device; no Vault was
+selected for this smoke launch.
 
 Latest local verification (2026-10-07): Rust workspace tests, formatting,
 Clippy, and dependency policy checks pass. Kotlin/JVM tests and compilation,
@@ -132,9 +240,29 @@ debug APK, and the Linux Compose Desktop distribution build pass. The Android
 build uses the installed Rust 1.98.1 Android target libraries and Android NDK
 clang for native cross-compilation; the Nix-packaged Rust compiler alone does
 not include those target libraries. All 62 Flutter tests also pass. These
-checks validate compilation and packaging, not Android device behavior,
-Windows ABI compatibility, or parity/performance acceptance. The bounded SAF
-staging integration tests verify cancellation preserves the committed index
+checks validate compilation and packaging; shared UI state-holder tests cover
+indexed position jumps and loading pages after a jump. A manual Android API 36
+device smoke test selected only `testdata/dummy-vault` through the system folder
+picker, loaded the fixture gallery, rendered SAF-backed note details and an
+image, verified indexed position navigation, opened a parseable but
+gallery-ineligible linked note from the detail view, then force-stopped/restarted
+the app and confirmed the private index was reused. A subsequent device test
+saved an empty gallery-target prefix, rescanned to zero eligible notes, restored
+defaults, and confirmed both fixture notes and image tile previews returned.
+On 2026-10-07, a separate fictional SAF fixture verified Android H.264 playback
+and exposed a note-tile bug: note summaries had no representative-media kind,
+so video covers were sent to the image decoder. Rust summaries and the UniFFI
+record now carry representative-media kind and availability; note tiles select
+the correct decoder and show the same missing-media state as media tiles. The
+same device fixture rendered its magenta video thumbnail.
+The Android private-settings writer was corrected to validate the canonical
+app-private path; the update and rescan succeeded on-device. The fixture hashes
+matched the original fictional fixture before and after these tests. This is a
+basic device smoke test, not full Android
+acceptance or parity/performance acceptance. Windows x64 JVM-host FFI and
+distributable packaging passed CI for the last committed migration revision;
+current uncommitted changes have not been validated by Windows CI. The bounded
+SAF staging integration tests verify cancellation preserves the committed index
 and removes its temporary scan file. Settings transfer codec and state tests
 cover round-trip, malformed input, bounds, and failed imports; desktop transfer
 tests also verify vault-contained export is rejected before creating a file.
@@ -363,12 +491,15 @@ tag-color prefixes. These settings are stored in private app data, never in the
 Vault. Filter-prefix settings limit the UI's available tag controls; note tags
 are still indexed so the gallery can query them and display their metadata.
 Tag settings and appearance settings can be exported together as JSON.
-The same tag-settings JSON contains configurable gallery-target tag prefixes,
-Markdown heading aliases for memo, related items, and the end of post text, and
-Frontmatter key aliases for tags, title, URL, dates, and cover media. Defaults
-retain the current behavior. Changing parsing settings invalidates scan state
-and reparses notes so virtual filters and details agree. Markdown and Wikilink
-resolution can be set to shortest-path, note-relative, or Vault-root-relative;
+Flutter's private `tag-settings.json` contains configurable gallery-target tag
+prefixes, Markdown heading aliases for memo, related items, and the end of post
+text, and Frontmatter key aliases for tags, title, URL, dates, and cover media.
+The KMP settings editor stores its target-prefix override separately in private
+`gallery-tag-settings.json`, so it does not discard the remaining parser and
+category settings. Defaults retain the current behavior. Changing parsing
+settings invalidates scan state and reparses notes so virtual filters and details
+agree. Markdown and Wikilink resolution can be set to shortest-path,
+note-relative, or Vault-root-relative;
 links are only resolved against parseable indexed notes inside the Vault.
 Obsidian basename wikilinks also resolve by nearest matching filename, then
 exact note title. Filename and eligible-note indexes keep link resolution and

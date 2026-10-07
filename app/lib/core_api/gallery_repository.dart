@@ -158,6 +158,7 @@ class GalleryNoteDetail {
     required this.bodyText,
     required this.memoLines,
     required this.relatedLines,
+    this.postTextEndLines = const [],
     required this.media,
     this.url,
     this.published,
@@ -178,6 +179,7 @@ class GalleryNoteDetail {
   final String bodyText;
   final List<GalleryDetailLine> memoLines;
   final List<GalleryDetailLine> relatedLines;
+  final List<GalleryDetailLine> postTextEndLines;
   final List<GalleryMediaItem> media;
 }
 

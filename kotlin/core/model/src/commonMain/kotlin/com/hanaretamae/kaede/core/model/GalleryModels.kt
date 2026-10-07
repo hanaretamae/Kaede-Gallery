@@ -62,6 +62,8 @@ data class NoteSummary(
     val path: String,
     val title: String,
     val representativeMediaId: MediaId?,
+    val representativeMediaIsVideo: Boolean = false,
+    val representativeMediaExists: Boolean = true,
     override val mediaCount: Long,
     val videoCount: Long,
     override val memoCount: Long,
@@ -131,4 +133,5 @@ data class GalleryNoteDetail(
     val memoLines: List<GalleryDetailLine>,
     val relatedLines: List<GalleryDetailLine>,
     val media: List<MediaSummary>,
+    val postTextEndLines: List<GalleryDetailLine> = emptyList(),
 )

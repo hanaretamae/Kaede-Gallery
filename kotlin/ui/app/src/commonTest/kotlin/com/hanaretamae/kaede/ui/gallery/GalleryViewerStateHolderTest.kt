@@ -100,6 +100,9 @@ private class ViewerRepository(
         safContent: ByteArray?,
     ) = RepositoryResult.Success(detail)
 
+    override suspend fun notePath(noteId: NoteId): RepositoryResult<String?> =
+        RepositoryResult.Success(null)
+
     override suspend fun mediaLocation(mediaId: MediaId) =
         RepositoryResult.Success(locations[mediaId])
 

@@ -102,6 +102,16 @@ class RustGalleryRepository(
         }
     }
 
+    override suspend fun notePath(
+        noteId: ModelNoteId,
+    ): RepositoryResult<String?> = withContext(Dispatchers.IO) {
+        try {
+            RepositoryResult.Success(session.notePath(noteId.value))
+        } catch (error: GalleryException) {
+            RepositoryResult.Failure(error.toRepositoryError())
+        }
+    }
+
     override suspend fun mediaLocation(
         mediaId: ModelMediaId,
     ): RepositoryResult<String?> = withContext(Dispatchers.IO) {
@@ -166,6 +176,8 @@ private fun NoteSummary.toModel(): ModelNoteSummary? = ModelNoteSummary(
     path = path,
     title = title,
     representativeMediaId = representativeMediaId?.let(::ModelMediaId),
+    representativeMediaIsVideo = representativeMediaIsVideo,
+    representativeMediaExists = representativeMediaExists,
     mediaCount = mediaCount.toLongOrNull() ?: return null,
     videoCount = videoCount.toLongOrNull() ?: return null,
     memoCount = memoCount.toLongOrNull() ?: return null,
@@ -221,6 +233,7 @@ private fun NoteDetail.toModel(): ModelGalleryNoteDetail? {
         bodyText = bodyText,
         memoLines = memoLines.map { it.toModel() },
         relatedLines = relatedLines.map { it.toModel() },
+        postTextEndLines = postTextEndLines.map { it.toModel() },
         media = mappedMedia,
     )
 }

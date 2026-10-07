@@ -95,6 +95,7 @@ pub struct NoteDetail {
     pub body_text: String,
     pub memo_lines: Vec<DetailLine>,
     pub related_lines: Vec<DetailLine>,
+    pub post_text_end_lines: Vec<DetailLine>,
     pub media: Vec<MediaItem>,
 }
 
@@ -420,6 +421,11 @@ fn note_detail(note: CoreNoteDetail) -> NoteDetail {
         body_text: note.body_text,
         memo_lines: note.memo_lines.into_iter().map(detail_line).collect(),
         related_lines: note.related_lines.into_iter().map(detail_line).collect(),
+        post_text_end_lines: note
+            .post_text_end_lines
+            .into_iter()
+            .map(detail_line)
+            .collect(),
         media: note.media.into_iter().map(media_item).collect(),
     }
 }

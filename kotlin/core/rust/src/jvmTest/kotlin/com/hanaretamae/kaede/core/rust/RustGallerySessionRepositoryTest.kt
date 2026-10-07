@@ -2,6 +2,7 @@ package com.hanaretamae.kaede.core.rust
 
 import com.hanaretamae.kaede.core.model.GalleryQuery
 import com.hanaretamae.kaede.core.model.GalleryPage
+import com.hanaretamae.kaede.core.model.NoteSummary
 import com.hanaretamae.kaede.core.repository.GallerySessionHandle
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.repository.SafScanNote
@@ -56,8 +57,13 @@ class RustGallerySessionRepositoryTest {
                     selectionRepository.loadSelected(privateData.toString()),
                 )
                 assertEquals(savedSelection, selected.value)
-                assertIs<RepositoryResult.Success<*>>(
+                val page = assertIs<RepositoryResult.Success<GalleryPage>>(
                     handle.gallery.queryPage(GalleryQuery(pageSize = 10)),
+                ).value
+                val note = assertIs<NoteSummary>(page.entries.single())
+                assertEquals(
+                    RepositoryResult.Success("fictional.md"),
+                    handle.gallery.notePath(note.id),
                 )
                 assertIs<RepositoryResult.Success<*>>(handle.rescan())
             } finally {
