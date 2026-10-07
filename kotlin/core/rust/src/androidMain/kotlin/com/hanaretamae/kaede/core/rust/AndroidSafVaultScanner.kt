@@ -152,8 +152,7 @@ class AndroidSafVaultScanner(context: Context) {
 
         Log.d(
             LOG_TAG,
-            "SAF enumeration completed: entries=${filePaths.size}, notes=${notes.size}, " +
-                "durationMs=${SystemClock.elapsedRealtime() - startedAt}",
+            "SAF enumeration durationMs=${SystemClock.elapsedRealtime() - startedAt}",
         )
         AndroidSafScanSnapshot(
             filePaths = filePaths,
@@ -351,8 +350,7 @@ class AndroidSafVaultScanner(context: Context) {
         } finally {
             Log.d(
                 LOG_TAG,
-                "SAF note reads completed: notes=${documents.size}, bytes=$scannedContentBytes, " +
-                    "durationMs=${SystemClock.elapsedRealtime() - startedAt}",
+                "SAF note-read durationMs=${SystemClock.elapsedRealtime() - startedAt}",
             )
         }
     }
