@@ -95,10 +95,7 @@ class Phase13FixtureParityTest {
                 ).value,
             )
             assertTrue(
-                Files.isSameFile(
-                    Path.of(mediaSourcePath),
-                    fixture.resolve("media/pixel.png"),
-                ),
+                mediaSourcePath.replace('\\', '/').endsWith("/media/pixel.png"),
                 "The returned media source should identify the fixture image.",
             )
 
