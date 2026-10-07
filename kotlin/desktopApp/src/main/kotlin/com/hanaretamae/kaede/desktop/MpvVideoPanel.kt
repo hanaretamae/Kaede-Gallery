@@ -15,6 +15,11 @@ import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 
 internal object MpvVideoCommand {
+    fun supportsEmbeddedPlayback(osName: String): Boolean {
+        val normalizedName = osName.lowercase()
+        return normalizedName.contains("linux") || normalizedName.contains("windows")
+    }
+
     fun arguments(windowId: Long, mediaPath: String): List<String> = listOf(
         "mpv",
         "--no-config",
@@ -57,8 +62,8 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
             status.text = "Video location is unavailable."
             return
         }
-        if (!System.getProperty("os.name").lowercase().contains("linux")) {
-            status.text = "Embedded mpv playback is available on Linux only."
+        if (!MpvVideoCommand.supportsEmbeddedPlayback(System.getProperty("os.name"))) {
+            status.text = "Embedded mpv playback is available on Linux and Windows."
             return
         }
         val path = try {

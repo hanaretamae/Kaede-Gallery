@@ -37,9 +37,12 @@ target uses GNU Windows ABI, whereas this repository's Flutter bridge targets
 than assuming the generated library can replace the current Windows bridge.
 The desktop Compose app uses the JVM host target, so Windows must instead
 verify the plugin's Windows-host Rust/JVM integration and runtime packaging.
-The added Windows CI workflow is the first automated check of that path; the
-migration phase remains incomplete until it passes and target limitations are
-reviewed. Keep the core minimum Rust version unchanged unless an explicit
+The added Windows CI workflow has passed on the migration branch, verifying
+the JVM host ABI tests and Windows distributable packaging. Physical Windows
+runtime and embedded video playback remain unverified by design; this
+acceptance plan uses CI rather than a Windows device run. The separate
+`mingwX64` target is not the application's Windows desktop integration and is
+not treated as a supported application ABI. Keep the core minimum Rust version unchanged unless an explicit
 compatibility review justifies a change; isolate any higher toolchain
 requirement to the FFI crate. If target compatibility or supply-chain review
 fails, compare a small owned C ABI facade rather than weakening core
@@ -57,13 +60,14 @@ KMP host ABI and distributable on the migration branch. This verifies build
 and packaging, not execution on physical Windows hardware. Keep the legacy
 Flutter MSVC distribution untouched.
 
-Linux Compose Desktop renders local video in an AWT canvas hosted by the
-application window, with mpv's native video child window embedded into that
-canvas. The launcher passes the validated local media path as a separate
+Linux and Windows Compose Desktop render local video in an AWT canvas hosted
+by the application window, with mpv's native video child window embedded into
+that canvas. The launcher passes the validated local media path as a separate
 process argument and disables mpv configuration, scripts, network helpers,
-and automatic sidecar loading. Linux users need an `mpv` executable with X11 window embedding support on
-`PATH`; video playback is not provided on Windows. Linux and Windows gallery
-video tiles use `ffmpeg` on `PATH` to extract a single local frame. The
+and automatic sidecar loading. Desktop users need an `mpv` executable with
+native window embedding support on `PATH`; this integration is build-tested
+on Windows CI but has not been exercised on physical Windows hardware. Linux
+and Windows gallery video tiles use `ffmpeg` on `PATH` to extract a single local frame. The
 extractor validates the indexed media location, disables network input
 protocols, caps the output at 512 pixels and 4 MiB, limits execution to
 10 seconds, and runs at most two extractions concurrently. Android continues to

@@ -122,7 +122,7 @@ initial scan, index reuse on launch, rescan, and disposal are wrapped by typed
 Kotlin repositories; an integration test exercises initial scans, index reuse,
 and explicit rescan against a temporary fictional Vault. Both Android and
 desktop offer a confirmed forget-Vault action.
-The `desktopApp` Compose Desktop module provides a Linux/JVM entrypoint,
+The `desktopApp` Compose Desktop module provides Linux and Windows/JVM entrypoints,
 directory selection, private settings persistence, Rust filesystem indexing,
 index reuse on launch, an explicit rescan action, and bounded-resolution image
 display. Shared gallery tiles now load bounded image previews through the
@@ -136,16 +136,18 @@ fixture on an API 36 device; the viewer played it and the gallery tile displayed
 its magenta video frame. The 2026-10-07 KMP fixture run completes visual
 acceptance for gallery/search/note-detail surfaces; media playback and
 thumbnail behavior were separately smoke-tested on API 36.
-Linux video is rendered in an embedded native child window from a
-separate `mpv` process; Linux runtime requires `mpv` and `ffmpeg` on `PATH`.
+Linux and Windows video are rendered in an embedded native child window from a
+separate `mpv` process; desktop runtime requires `mpv` and `ffmpeg` on `PATH`.
 Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
 and automatic sidecar loading. Desktop video thumbnails limit ffmpeg to local
 file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
 timeout, and two concurrent extraction processes. A basic localized About
-section now links to the project and license. Windows x64 CI passed for commit
-`0064076` ([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37549717569)).
+section now links to the project and license. Windows x64 CI passed for the
+current migration branch at commit `e479c08`
+([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37557684852)).
 This verifies the Windows build and packaging path, not execution on physical
-Windows hardware. Android visual/interaction checks are complete for the
+Windows hardware or runtime availability of native mpv embedding there.
+Android visual/interaction checks are complete for the
 documented fixture scenarios, while full cross-platform parity remains
 unfinished. Keep Flutter and its release paths until those gaps are verified;
 the current Compose UI is not yet a replacement.
@@ -564,10 +566,10 @@ form one category, and the defaults are ソース, 人数, アートスタイル
 split tags three or more levels below its root into per-parent groups (off by
 default). An optional その他 category collects tags matching no rule and is
 omitted when empty; it has the same split option. Categories without visible
-options are not shown. Category-wide options and
-virtual-content filters are planned for the UI/API phase. The interpretation
-of category-wide selection remains the design document's stated assumption:
-“has any tag in this category.”
+options are not shown. Selecting a category-root option matches notes with any
+tag in that category. The content category also provides virtual filters for
+multiple media, video, memo, and related links; these filter options are
+separate from persisted tag-category rules.
 
 ## Storage, safety, and failure handling
 
