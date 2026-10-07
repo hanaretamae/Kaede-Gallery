@@ -306,7 +306,7 @@ class AndroidSafVaultScanner(context: Context) {
                 )
                 var reservedBatchBytes = 0L
                 val reads = coroutineScope {
-                    val readLimit = Semaphore(MAX_CONCURRENT_READS)
+                    val readLimit = Semaphore(AndroidSafLimits.MAX_CONCURRENT_NOTE_READS)
                     batch.map { document ->
                         val expectedBytes = if (document.size > 0) {
                             document.size
@@ -485,7 +485,6 @@ class AndroidSafVaultScanner(context: Context) {
         const val MAX_NOTE_BYTES = 2 * 1024 * 1024
         const val MAX_BATCH_NOTES = 128
         const val MAX_BATCH_BYTES = 16L * 1024 * 1024
-        const val MAX_CONCURRENT_READS = 4
         const val MAX_SCAN_BYTES = 128L * 1024 * 1024
         const val MAX_MEDIA_BYTES = 64 * 1024 * 1024
         const val MAX_IMAGE_DIMENSION = 16_384

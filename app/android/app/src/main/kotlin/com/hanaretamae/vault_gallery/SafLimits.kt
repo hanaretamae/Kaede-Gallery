@@ -7,6 +7,6 @@ internal object SafLimits {
     const val MAX_NOTE_BYTES = 2097152
     const val MAX_READ_BATCH_NOTES = 128
     const val MAX_READ_BATCH_BYTES = 16777216
-    const val MAX_CONCURRENT_NOTE_READS = 4
+    const val MAX_CONCURRENT_NOTE_READS = 16
     const val MAX_SCAN_NOTE_BYTES = 134217728
 }

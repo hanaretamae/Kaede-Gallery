@@ -133,7 +133,7 @@ enumeration, and bounded document reads. The native adapter must validate the
 selected tree and relative document paths before opening content. Rust
 revalidates every submitted relative path and enforces the existing shared
 limits: 100,000 entries, depth 64, 32 MiB aggregate relative-path bytes,
-2 MiB per note, 128 notes / 16 MiB per read batch, four concurrent note
+2 MiB per note, 128 notes / 16 MiB per read batch, 16 concurrent note
 reads, and 128 MiB total note content per scan.
 
 The current Flutter adapter gathers the bounded scan data before one

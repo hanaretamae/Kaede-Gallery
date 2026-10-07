@@ -6,5 +6,5 @@ pub const MAX_SAF_AGGREGATE_PATH_BYTES: usize = 33554432;
 pub const MAX_SAF_NOTE_BYTES: usize = 2097152;
 pub const MAX_SAF_READ_BATCH_NOTES: usize = 128;
 pub const MAX_SAF_READ_BATCH_BYTES: usize = 16777216;
-pub const MAX_SAF_CONCURRENT_NOTE_READS: usize = 4;
+pub const MAX_SAF_CONCURRENT_NOTE_READS: usize = 16;
 pub const MAX_SAF_SCAN_NOTE_BYTES: usize = 134217728;

@@ -7,6 +7,6 @@ abstract final class SafLimits {
   static const maxNoteBytes = 2097152;
   static const maxReadBatchNotes = 128;
   static const maxReadBatchBytes = 16777216;
-  static const maxConcurrentNoteReads = 4;
+  static const maxConcurrentNoteReads = 16;
   static const maxScanNoteBytes = 134217728;
 }

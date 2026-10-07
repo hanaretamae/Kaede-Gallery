@@ -117,21 +117,27 @@ Documents provider and the app's normal bounded SAF batch/read path.
 | Initial selection and full indexing, confirm-to-2,000-note gallery | 21.5 s |
 | Explicit unchanged SAF rescan, before scanner scheduling change | 12.7 s |
 | Explicit unchanged SAF rescan, after scheduling change (3 runs) | 6.68-6.78 s |
+| Explicit unchanged SAF rescan, with shared limit of 16 reads (3 runs) | 3.59-3.95 s |
 | App restart with private index reuse, interactive UI visible | within 5.8 s (includes a fixed 3 s wait) |
 | Peak sampled app PSS during refresh | 135,281 KiB (132.1 MiB) |
 
 The original scanner awaited reads in groups of four, leaving the next group
-idle until the slowest read in the current group finished. It now keeps a
-bounded four-read semaphore across all reads in each 128-note batch, avoiding
-those group barriers without exceeding the SAF concurrency contract. Three
-follow-up unchanged rescans completed in 6.695 s, 6.678 s, and 6.781 s; their
-note-read stage took 5.327 s, 5.327 s, and 5.419 s, respectively, while tree
-enumeration took 0.950 s, 0.946 s, and 0.958 s. This is about a 47% reduction
-from the previously measured 12.7 s rescan, but remains above the broad
-few-seconds target in `docs/design.md`; it is an outstanding performance gap,
-not a pass. Each explicit rescan still reads all note content. A metadata-only
-shortcut was not introduced because providers may omit or coarsen modification
-times, which could silently leave edited Vault notes stale.
+idle until the slowest read in the current group finished. It first changed to
+a bounded four-read semaphore across each 128-note batch, avoiding those group
+barriers. On the same fixture, three unchanged rescans completed in 6.695 s,
+6.678 s, and 6.781 s; note reads took 5.327 s, 5.327 s, and 5.419 s, and tree
+enumeration took 0.950 s, 0.946 s, and 0.958 s.
+
+A controlled local benchmark increased the shared reader cap to 16 while
+retaining the per-note, per-batch, and per-scan byte limits. Three unchanged
+rescans then completed in 3.736 s, 3.951 s, and 3.592 s; note reads took
+2.412 s, 2.565 s, and 2.282 s, while enumeration took 0.907 s, 0.985 s, and
+0.910 s. The fixture remained exactly 2,000 notes and 246,000 bytes. This
+meets the broad few-seconds target on this device and Documents provider, but
+is not a guarantee for other SAF providers or devices. Each explicit rescan
+still reads all note content. A metadata-only shortcut was not introduced
+because providers may omit or coarsen modification times, which could silently
+leave edited Vault notes stale.
 
 Compose grid scrolling was measured in three runs of 12 fast vertical swipes
 through the 2,000-note lazy gallery. The app remained paged, reaching result
