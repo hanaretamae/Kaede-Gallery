@@ -140,11 +140,11 @@ Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
 and automatic sidecar loading. Desktop video thumbnails limit ffmpeg to local
 file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
 timeout, and two concurrent extraction processes. A basic localized About
-section now links to the project and license. The Windows x64 CI job passed for
-the last committed migration revision; it has not yet run on the current
-changes. This verifies the Windows build and packaging path, not execution on
-physical Windows hardware. Android visual/interaction checks are complete for
-the documented fixture scenarios, while the measured SAF rescan exceeds the
+section now links to the project and license. Windows x64 CI passed for commit
+`0064076` ([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37549717569)).
+This verifies the Windows build and packaging path, not execution on physical
+Windows hardware. Android visual/interaction checks are complete for the
+documented fixture scenarios, while the measured SAF rescan exceeds the
 few-seconds performance target and full cross-platform parity remains
 unfinished. Keep Flutter and its release paths until those gaps are verified;
 the current Compose UI is not yet a replacement.
@@ -165,8 +165,9 @@ Rust and Flutter SDK links. The recorded 7,806-note and 20,000-note
 measurements cover Rust CLI operations only. Android SAF and Compose
 frame-time measurements for the 2,000-note KMP fixture are recorded in
 `docs/phase1-performance.md`; measured explicit SAF rescan time remains above
-the few-seconds target. Windows CI must pass on the current changes; physical
-Windows runtime testing is intentionally outside this acceptance plan.
+the few-seconds target. Windows x64 CI passed on commit `0064076` (see the
+workflow run linked above); physical Windows runtime testing is intentionally
+outside this acceptance plan.
 
 KMP settings transfer now reads and writes Flutter's version-1 JSON appearance
 and tag-settings structure while retaining unexposed note-structure fields
@@ -213,8 +214,8 @@ The Rust workspace tests, formatting, Clippy, Flutter tests, and Flutter
 analysis pass. Current Linux CLI scans of fictional 7,806- and 20,000-note
 fixtures indexed the expected eligible subsets with zero warnings; the
 measurements are recorded in `docs/phase1-performance.md` and do not replace
-Android SAF or Compose frame-time acceptance. Windows CI has not verified the
-current uncommitted migration changes.
+Android SAF or Compose frame-time acceptance. At the time of this checkpoint,
+Windows CI had not yet verified the then-uncommitted migration changes.
 
 The settings-transfer follow-up passed all 13 settings tests, shared UI JVM
 tests, desktop tests, Android Kotlin compilation and debug APK assembly; Rust
@@ -260,8 +261,9 @@ app-private path; the update and rescan succeeded on-device. The fixture hashes
 matched the original fictional fixture before and after these tests. This is a
 basic device smoke test, not full Android
 acceptance or parity/performance acceptance. Windows x64 JVM-host FFI and
-distributable packaging passed CI for the last committed migration revision;
-current uncommitted changes have not been validated by Windows CI. The bounded
+distributable packaging had passed CI for the migration revision at this
+checkpoint; later migration changes were subsequently verified by the workflow
+run linked above. The bounded
 SAF staging integration tests verify cancellation preserves the committed index
 and removes its temporary scan file. Settings transfer codec and state tests
 cover round-trip, malformed input, bounds, and failed imports; desktop transfer
