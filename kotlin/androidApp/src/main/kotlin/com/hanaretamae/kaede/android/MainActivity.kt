@@ -6,7 +6,9 @@ import android.content.ContextWrapper
 import android.provider.DocumentsContract
 import android.net.Uri
 import android.os.Bundle
+import android.os.SystemClock
 import android.system.Os
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -578,6 +580,7 @@ private fun AndroidGalleryRoot() {
                 }
             },
             onRescan = {
+                val startedAt = SystemClock.elapsedRealtime()
                 try {
                     val snapshot = scanner.snapshot(vaultUri)
                     activeSession.rescanSaf(snapshot.filePaths, snapshot.batches)
@@ -585,6 +588,12 @@ private fun AndroidGalleryRoot() {
                     RepositoryResult.Failure(RepositoryError.VAULT_UNAVAILABLE)
                 } catch (_: SecurityException) {
                     RepositoryResult.Failure(RepositoryError.VAULT_UNAVAILABLE)
+                } finally {
+                    Log.d(
+                        "KaedeGallerySAF",
+                        "SAF rescan completed: " +
+                            "durationMs=${SystemClock.elapsedRealtime() - startedAt}",
+                    )
                 }
             },
             onChangeVault = { vaultPicker.launch(null) },

@@ -8,13 +8,17 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.os.SystemClock
 import android.provider.DocumentsContract
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.IOException
@@ -38,6 +42,7 @@ class AndroidSafVaultScanner(context: Context) {
     }
 
     suspend fun snapshot(treeUri: Uri): AndroidSafScanSnapshot = withContext(Dispatchers.IO) {
+        val startedAt = SystemClock.elapsedRealtime()
         validateTreeUri(treeUri)
         val treeDocumentId = try {
             DocumentsContract.getTreeDocumentId(treeUri)
@@ -145,6 +150,11 @@ class AndroidSafVaultScanner(context: Context) {
             }
         }
 
+        Log.d(
+            LOG_TAG,
+            "SAF enumeration completed: entries=${filePaths.size}, notes=${notes.size}, " +
+                "durationMs=${SystemClock.elapsedRealtime() - startedAt}",
+        )
         AndroidSafScanSnapshot(
             filePaths = filePaths,
             batches = readBatches(notes),
@@ -288,15 +298,17 @@ class AndroidSafVaultScanner(context: Context) {
     private fun readBatches(
         documents: List<NoteDocument>,
     ): Flow<List<com.hanaretamae.kaede.core.repository.SafScanNote>> = flow {
+        val startedAt = SystemClock.elapsedRealtime()
         var scannedContentBytes = 0L
-        for (batch in documents.chunked(MAX_BATCH_NOTES)) {
-            val result = ArrayList<com.hanaretamae.kaede.core.repository.SafScanNote>(
-                batch.size,
-            )
-            var reservedBatchBytes = 0L
-            for (group in batch.chunked(MAX_CONCURRENT_READS)) {
+        try {
+            for (batch in documents.chunked(MAX_BATCH_NOTES)) {
+                val result = ArrayList<com.hanaretamae.kaede.core.repository.SafScanNote>(
+                    batch.size,
+                )
+                var reservedBatchBytes = 0L
                 val reads = coroutineScope {
-                    group.map { document ->
+                    val readLimit = Semaphore(MAX_CONCURRENT_READS)
+                    batch.map { document ->
                         val expectedBytes = if (document.size > 0) {
                             document.size
                         } else {
@@ -306,12 +318,19 @@ class AndroidSafVaultScanner(context: Context) {
                             MAX_BATCH_BYTES - reservedBatchBytes,
                             MAX_SCAN_BYTES - scannedContentBytes,
                         ).coerceAtLeast(0)
-                        val allocation = minOf(expectedBytes, MAX_NOTE_BYTES.toLong(), remaining)
+                        val allocation = minOf(
+                            expectedBytes,
+                            MAX_NOTE_BYTES.toLong(),
+                            remaining,
+                        )
                         reservedBatchBytes += allocation
                         async(Dispatchers.IO) {
-                            readNote(document, allocation)
+                            readLimit.withPermit {
+                                readNote(document, allocation)
+                            }
                         }
-                    }.awaitAll()
+                    }
+                        .awaitAll()
                 }
                 for (read in reads) {
                     val content = read.content
@@ -327,8 +346,14 @@ class AndroidSafVaultScanner(context: Context) {
                         ),
                     )
                 }
+                emit(result)
             }
-            emit(result)
+        } finally {
+            Log.d(
+                LOG_TAG,
+                "SAF note reads completed: notes=${documents.size}, bytes=$scannedContentBytes, " +
+                    "durationMs=${SystemClock.elapsedRealtime() - startedAt}",
+            )
         }
     }
 
@@ -454,6 +479,7 @@ class AndroidSafVaultScanner(context: Context) {
     class SafAccessException : IOException("The selected folder could not be read.")
 
     private companion object {
+        const val LOG_TAG = "KaedeGallerySAF"
         const val MAX_DOCUMENTS = 100_000
         const val MAX_DEPTH = 64
         const val MAX_PATH_BYTES = 4_096

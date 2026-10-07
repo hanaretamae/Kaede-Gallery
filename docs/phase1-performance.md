@@ -115,15 +115,23 @@ Documents provider and the app's normal bounded SAF batch/read path.
 | Scenario | Result |
 |---|---:|
 | Initial selection and full indexing, confirm-to-2,000-note gallery | 21.5 s |
-| Explicit unchanged SAF rescan, paged range reset to 1-24 of 2,000 | 12.7 s |
+| Explicit unchanged SAF rescan, before scanner scheduling change | 12.7 s |
+| Explicit unchanged SAF rescan, after scheduling change (3 runs) | 6.68-6.78 s |
 | App restart with private index reuse, interactive UI visible | within 5.8 s (includes a fixed 3 s wait) |
 | Peak sampled app PSS during refresh | 135,281 KiB (132.1 MiB) |
 
-The unchanged SAF rescan exceeds the broad few-seconds target in
-`docs/design.md`; SAF metadata alone is not currently used to skip note reads.
-This is an outstanding performance gap, not a pass. A metadata-only shortcut
-was not introduced because providers may omit or coarsen modification times,
-which could silently leave edited Vault notes stale.
+The original scanner awaited reads in groups of four, leaving the next group
+idle until the slowest read in the current group finished. It now keeps a
+bounded four-read semaphore across all reads in each 128-note batch, avoiding
+those group barriers without exceeding the SAF concurrency contract. Three
+follow-up unchanged rescans completed in 6.695 s, 6.678 s, and 6.781 s; their
+note-read stage took 5.327 s, 5.327 s, and 5.419 s, respectively, while tree
+enumeration took 0.950 s, 0.946 s, and 0.958 s. This is about a 47% reduction
+from the previously measured 12.7 s rescan, but remains above the broad
+few-seconds target in `docs/design.md`; it is an outstanding performance gap,
+not a pass. Each explicit rescan still reads all note content. A metadata-only
+shortcut was not introduced because providers may omit or coarsen modification
+times, which could silently leave edited Vault notes stale.
 
 Compose grid scrolling was measured in three runs of 12 fast vertical swipes
 through the 2,000-note lazy gallery. The app remained paged, reaching result

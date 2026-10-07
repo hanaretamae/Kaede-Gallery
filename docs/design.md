@@ -101,8 +101,9 @@ horizontal action scrolling worked. Viewer controls now respect the status-bar
 safe area. Compose scrolling was measured at the device's active 120 Hz mode;
 results and the longer-than-target explicit SAF rescan are recorded in
 `docs/phase1-performance.md`. Android visual/interaction acceptance is
-complete for these fixture scenarios, but SAF rescan performance still needs
-improvement against the few-seconds target. The app also provides a
+complete for these fixture scenarios. A bounded SAF reader scheduling change
+reduced the measured 2,000-note unchanged rescan from 12.7 s to about 6.7 s,
+but that remains above the few-seconds target. The app also provides a
 confirmed forget-Vault action that removes the private index and releases the
 persisted read grant. Its debug APK and Android arm64/x86_64 native libraries
 build successfully.
@@ -165,7 +166,8 @@ Rust and Flutter SDK links. The recorded 7,806-note and 20,000-note
 measurements cover Rust CLI operations only. Android SAF and Compose
 frame-time measurements for the 2,000-note KMP fixture are recorded in
 `docs/phase1-performance.md`; measured explicit SAF rescan time remains above
-the few-seconds target. Windows x64 CI passed on commit `0064076` (see the
+the few-seconds target even after a bounded-concurrency scheduling
+optimization. Windows x64 CI passed on commit `0064076` (see the
 workflow run linked above); physical Windows runtime testing is intentionally
 outside this acceptance plan.
 
