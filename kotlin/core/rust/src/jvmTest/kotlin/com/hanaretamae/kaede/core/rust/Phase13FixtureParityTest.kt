@@ -89,11 +89,17 @@ class Phase13FixtureParityTest {
             assertEquals("note-000000.md", image.notePath)
             assertEquals(false, image.isVideo)
             assertEquals(true, image.exists)
-            assertEquals(
-                fixture.resolve("media/pixel.png").toRealPath().toString(),
+            val mediaSourcePath = assertNotNull(
                 assertIs<RepositoryResult.Success<String?>>(
                     openedHandle.gallery.mediaLocation(image.id),
                 ).value,
+            )
+            assertTrue(
+                Files.isSameFile(
+                    Path.of(mediaSourcePath),
+                    fixture.resolve("media/pixel.png"),
+                ),
+                "The returned media source should identify the fixture image.",
             )
 
             val filteredPage = assertIs<RepositoryResult.Success<GalleryPage>>(
