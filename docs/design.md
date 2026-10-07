@@ -88,6 +88,77 @@ Implementation for shared UI, settings, Android, and desktop is present;
 phase 13 remains the parity and acceptance gate. Do not treat passing builds
 or partial target acceptance as proof of complete migration.
 
+### Phase 13 acceptance status
+
+Acceptance compares observable behavior on the same fictional Vault and settings
+fixtures; it does not require pixel-identical rendering. The Flutter app and
+its tests remain the reference until every required behavior below is covered
+by a KMP test or a recorded target-specific interaction check.
+
+**Owner-approved exception (2026-10-07):** GNOME wallpaper interaction testing
+is excluded from Phase 13 acceptance and may be checked or fixed after this
+phase. Do not change the host desktop wallpaper during development or
+acceptance. This exception applies only to the GNOME wallpaper interaction; it
+does not waive other Linux desktop, Android, Windows, or parity checks.
+
+| Area                                                                         | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            | Status                                                                                                                                                                                          |
+| ---------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Rust parsing, indexing, filtering, and FFI                                   | Workspace tests pass against fictional data; Vault immutability and bounded SAF scan behavior are covered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | Verified                                                                                                                                                                                        |
+| Shared gallery, search, filters, paging, settings transfer, and note details | KMP state, codec, and UI tests pass; Android API 36 fixture checks cover gallery/search/detail navigation and settings transfer. A disposable 30-note fictional SAF fixture confirmed indexed jumps, backward paging, and filter clearing. Settings-transfer fixtures cover Flutter `showItemCount`, the separate KMP tile-count preference, and older KMP v1 exports. The details panel now follows Flutter's 40%-to-82% expansion over 220dp and unzoomed media-area vertical drags forward to its scroll state. A post-change API 36 check with an unzoomed fictional image confirmed vertical swipes over media expand and collapse the details panel; JVM tests cover the exact density-scaled threshold and hidden/fullscreen/video/zoom suppression. New Flutter and KMP repository-adapter tests independently read the same read-only `testdata/dummy-vault` with temporary private index/cache data and assert matching 12-note/1-warning scans, `note-000000.md` details/image, and `source/rating/safe` filtering. Both tests pass in the pinned Nix development shell. This establishes repository-boundary fixture parity, not side-by-side UI/runtime parity; Android Flutter runtime comparison remains blocked by Digital Wellbeing / Screen Time. | Repository fixture parity verified; live Flutter/KMP UI parity remains pending                                                                                                                  |
+| Android SAF, media, and performance                                          | API 36 fixture checks cover SAF selection, image and video display, navigation, and private-index reuse; the 2,000-note scan and scroll measurements are recorded in `docs/phase1-performance.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  | Verified for the recorded device, provider, and scenarios only                                                                                                                                  |
+| Linux Compose Desktop                                                        | An earlier packaged-launcher Xvfb smoke test with fresh private app data covered fictional Vault selection, gallery, note detail, fullscreen, file-manager reveal, and external image open. Linux Vault selection now calls `org.freedesktop.portal.FileChooser.OpenFile` with directory mode; on the current Niri host, the portal returned a request handle and displayed its GTK picker. The automated attempt to select `testdata/dummy-vault` was inconclusive because `wtype` key events did not reach the native portal window, so end-to-end selection through Compose remains unverified. JVM tests cover request construction, request/response parsing, and local-directory validation. Direct calls against fictional `media/pixel.png` returned a portal request from `xdg-open` and `()` from `FileManager1.ShowItems`; process inspection showed Koko opening the fixture and Dolphin launched with `--select` for that path. These direct handler calls exercise the current non-GNOME dispatch, but were not clicks through the Compose Desktop UI. GNOME wallpaper interaction is explicitly waived for Phase 13 by the owner-approved exception above; no host wallpaper was changed.                                                            | Direct current non-GNOME handler calls verified; Compose UI interaction pending; GNOME wallpaper check waived                                                                                   |
+| Windows Compose Desktop                                                      | [CI run 12](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37559730491) verifies the earlier Windows-host JVM and distributable path. The current Explorer-selection changes have JVM argument coverage, but Windows-host CI has not yet run for this working-tree revision. Physical-device execution remains outside this acceptance plan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | Prior CI baseline; current Windows-host verification pending                                                                                                                                    |
+| Viewer and platform media actions                                            | Shared KMP viewer retains media-only/detail/fullscreen transitions and forwards unzoomed media-area vertical gestures to the note details. On API 36 with a fictional SAF fixture, typed Open displayed image handlers; wildcard Reveal opened Files at the media folder with `pixel.png` selected; the wallpaper intent displayed the destination confirmation, which was canceled without applying a wallpaper. The offline license screen opened bundled Apache-2.0 text. Desktop resolves media canonically inside the Vault, uses Linux `FileManager1.ShowItems` and Windows Explorer selection, and exposes GNOME wallpaper setting. JVM tests cover image eligibility, Vault containment, desktop resource contents, and file-manager arguments. On Niri, direct current Linux media-handler calls opened the fictional image in Koko and launched Dolphin with the item selected; the Compose Desktop UI click path was not exercised. The final Android details-gesture threshold/visibility guard was rechecked on API 36 with an unzoomed image and fictional fixture. GNOME wallpaper interaction is waived for Phase 13; it was not exercised and no wallpaper was changed.                                                                            | Android interactions verified on the recorded API 36 fixture; Linux handler calls directly verified but Compose UI click path and live Flutter/KMP parity pending; GNOME wallpaper check waived |
+
+On 2026-10-07, Rust workspace tests, Flutter's 64 widget tests and analysis,
+KMP Rust/settings/UI/desktop JVM tests, Linux Compose Desktop packaging, and
+the earlier Android acceptance assembly passed. A fresh `:androidApp:assembleDebug`
+also passed with the installed Rustup 1.98.1 compiler and Android targets. The
+default Nix `RUSTC` failed that Android build because its standard library is
+host-only (`can't find crate for core`/`std`). KMP JVM tests cover the
+density-scaled detail-panel geometry, license catalog, and bundled Desktop
+license resources; the Android APK and Desktop package contain the offline
+license assets. On API 36, the KMP acceptance app
+was exercised with two disposable fictional SAF fixtures. The short fixture
+verified typed image Open, SAF Reveal selecting `pixel.png`, and the wallpaper
+destination prompt (canceled before application). An earlier long fictional note showed media-area swipes expanding and collapsing
+the panel, but that check preceded the final threshold conversion and guard. A
+fresh API 36 check on the final acceptance APK used a disposable copy of
+`testdata/dummy-vault`; on `Fictional note 000004`, a vertical swipe over the
+unzoomed image visibly expanded the details panel and the reverse swipe
+collapsed it. The exact 220dp threshold and hidden/fullscreen/video/zoom guards
+remain covered by JVM tests. The offline license page loaded the bundled
+Apache-2.0 text. The installed acceptance app and device fixture were removed
+after the check; the separate Flutter release package was not changed.
+
+A Flutter arm64 debug APK was built using a temporary acceptance application ID
+and a writable SDK view of the installed Nix Build Tools. Runtime parity could
+not be recorded: Android's Digital Wellbeing / Screen Time restriction blocked
+the acceptance app during the launch/picker flow, so no Flutter gallery or
+viewer comparison was captured. No real Vault was selected or modified. The
+earlier Linux Xvfb fixture run covered Vault selection,
+gallery, detail, fullscreen, file-manager reveal, and external image opening;
+it did not exercise the new GNOME wallpaper action; that interaction is
+explicitly waived for Phase 13 by the owner-approved exception above. No
+GNOME or Android wallpaper was applied. Windows physical-device testing is not
+required by the current plan. KMP's in-app license list is available offline
+but groups Maven dependencies rather than matching Flutter's per-package
+registry granularity. `cargo fmt --all -- --check` with the Nix rustfmt reported
+import-order differences in generated `crates/gallery-bridge/src/frb_generated.rs`;
+no Rust files were changed here. New same-fixture Flutter/KMP repository tests
+close repository-boundary fixture parity, but not side-by-side UI/runtime parity.
+Direct current Linux non-GNOME handlers are verified on Niri, but Compose Desktop
+UI interaction and portal-based Vault selection are still unverified. The portal
+GTK dialog was observed, but this Niri session did not accept the available
+synthetic keyboard input. Current-revision Windows-host CI is also pending. The pinned Nix development shell provides Flutter, Rust/Cargo, JDK 17, GitHub CLI, KeePassXC, `xdotool`, `wtype`, and `xwd`; it exports explicit `RUSTC`/`RUSTDOC` paths so UniFFI binding generation works under Gradle, but those Nix compiler paths are host-only for Rust Android cross-builds. The installed Rustup 1.98.1 targets were used for the successful current Android debug APK assembly. The 2026-10-07 Flutter and KMP results above are Linux-host results, not Windows-host CI. GitHub CLI authentication is available through the system keyring; Windows-host CI for this revision has not yet run. Phase 13 cannot be closed, so Phase 14 (Flutter removal) remains deferred.
+
+The API 36 viewer follow-up also verified that a note opens with its media
+controls and details hidden, a media tap reveals the note details, toolbar
+actions can be horizontally reached on the device, and full-screen entry and
+Escape return to the expected presentation. Escape from the detail view returns
+to media-only mode. This closes the Flutter/KMP viewer visibility mismatch but
+does not close the broader cross-implementation parity gate.
+
 ### Current KMP implementation status
 
 The repository currently contains the KMP model, repository, Rust binding
@@ -201,6 +272,36 @@ The viewer applies order and visibility to author, post text, memo, related,
 and post-text-end blocks; fixed frontmatter fields remain ahead of those
 blocks. Media continues to use the platform viewer surface, matching Flutter's
 separation.
+The KMP viewer now offers an explicit Open in Obsidian action. Android builds
+the URI from the selected SAF Vault name and validated relative note path;
+Desktop resolves the note canonically inside the selected Vault before
+launching the absolute-path URI. Desktop tests cover URI encoding, traversal,
+and symlink escapes. The action is visible in the API 36 note-detail toolbar;
+the URI was not dispatched because an installed Obsidian handler was not part
+of this fixture check.
+The KMP viewer toolbar also now derives Flutter-compatible filename title and
+author fallbacks, validates HTTP(S) URLs without credentials, and exposes
+author-profile, original-page, and copy-URL actions for valid X/Twitter status
+links. Shared tests cover URL validation, profile extraction, and metadata
+fallbacks. An API 36 fictional-note interaction verified the derived title and
+author, all three toolbar actions, and the localized copy confirmation. External
+profile and post URLs were not dispatched during the check.
+
+The current parity follow-up maps Flutter's `pagination.showItemCount` to the
+KMP loaded-range display without conflating it with tile counts, while retaining
+imports of earlier KMP v1 transfer files. Scan warning counts refresh after
+successful rescans and the Vault settings expose a privacy-safe warning
+explanation. Android media actions now distinguish typed Open, wildcard SAF
+Reveal, and supported image wallpaper intents; Linux GNOME wallpaper and
+Windows Explorer item selection have corresponding desktop integrations. API 36
+fixture interactions confirm Android Open, Reveal, and wallpaper dispatch
+through the target chooser/UI without applying a wallpaper. KMP also provides an
+offline license list for Apache-2.0, JNA's Apache/LGPL alternatives, and the
+Rust/UniFFI report. The list is intentionally grouped and does not yet match
+Flutter's per-package dependency registry. The owner-approved Phase 13
+exception waives GNOME wallpaper interaction testing; the final Android viewer
+gesture path has been rechecked on API 36, with its geometry and suppression
+guards covered by JVM tests.
 The 2026-10-07 tag-color/category follow-up adds a localized category editor,
 strict path/size validation, Flutter JSON round-trip coverage, and private Rust
 settings updates on Android and desktop. Category updates preserve other

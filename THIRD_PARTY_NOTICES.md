@@ -7,8 +7,9 @@ are also shown there and shipped in `app/assets/licenses/`; Windows ZIPs and
 Nix packages include the same files. The release includes a
 `kaede-gallery-third-party-licenses.tar.gz` archive for APK recipients.
 
-Rust dependency notices are generated from the `gallery-bridge` Cargo
-dependency graph for Android, Windows x86_64/ARM64, and Linux x86_64/ARM64.
+Rust dependency notices are generated from the shipped `gallery-bridge` and
+`gallery-ffi` Cargo dependency graphs for Android, Windows x86_64/ARM64, and Linux
+x86_64/ARM64.
 The report includes selected SPDX license texts, the package names and
 versions using them, and any dependency `NOTICE` or copyright files. The
 accepted license expressions are maintained in `about.toml` and `deny.toml`.
@@ -17,11 +18,11 @@ Regenerate the report after changing Rust dependencies with
 
 ## Video playback and thumbnail libraries
 
-| Target | Libraries | License | License text |
-| --- | --- | --- | --- |
-| Android APK | libmpv and FFmpeg (`media-kit/libmpv-android-video-build` v1.1.7 `default` build; mpv uses `-Dgpl=false`) | LGPL-2.1-or-later | `LGPL-2.1.txt` |
-| Windows ZIP | libmpv and FFmpeg (`media-kit/libmpv-win32-video-build`, 2023-09-24) | LGPL-3.0-or-later | `LGPL-3.0.txt` |
-| Linux bundle | mpv 0.41.0, FFmpeg 9.0.1, libass, and libplacebo (pinned by `flake.lock`) | FFmpeg uses `--enable-gpl --enable-version3`; the bundled application is distributed under GPL-3.0-or-later | `GPL-3.0.txt`, `LGPL-2.1.txt`, `ISC.txt` |
+| Target       | Libraries                                                                                                 | License                                                                                                     | License text                             |
+| ------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
+| Android APK  | libmpv and FFmpeg (`media-kit/libmpv-android-video-build` v1.1.7 `default` build; mpv uses `-Dgpl=false`) | LGPL-2.1-or-later                                                                                           | `LGPL-2.1.txt`                           |
+| Windows ZIP  | libmpv and FFmpeg (`media-kit/libmpv-win32-video-build`, 2023-09-24)                                      | LGPL-3.0-or-later                                                                                           | `LGPL-3.0.txt`                           |
+| Linux bundle | mpv 0.41.0, FFmpeg 9.0.1, libass, and libplacebo (pinned by `flake.lock`)                                 | FFmpeg uses `--enable-gpl --enable-version3`; the bundled application is distributed under GPL-3.0-or-later | `GPL-3.0.txt`, `LGPL-2.1.txt`, `ISC.txt` |
 
 The Android shared libraries (`.so`) and Windows `libmpv-2.dll` are dynamically
 linked and replaceable. Source/build projects are available at:
@@ -38,10 +39,18 @@ linked and replaceable. Source/build projects are available at:
 The Linux bundle's Nix package metadata identifies GPL-3.0-or-later, matching
 the license terms of the bundled application.
 
-## Kotlin Multiplatform desktop dependencies
+## Kotlin Multiplatform dependencies
+
+The KMP Android and Compose Desktop applications bundle an offline in-app
+license viewer. Its shared license assets are packaged from `app/assets/licenses/`.
+The viewer includes Apache-2.0 for the Kotlin, Compose, AndroidX, and Media3
+runtime groups and as one JNA license option, LGPL-2.1-or-later as the other
+JNA option, and the generated Rust dependency report with package names,
+versions, notices, and full license
+texts (including the MPL-2.0 UniFFI section).
 
 The Compose Desktop Linux and Windows distributions bundle JNA 5.19.1, dual
-licensed under Apache-2.0 or LGPL-2.1-or-later. Its bundled JNA JAR contains
+licensed under Apache-2.0 or LGPL-2.1-or-later. Its bundled JNA JAR also contains
 the `META-INF/LICENSE` notice and license references. Source:
 https://github.com/java-native-access/jna
 
@@ -53,13 +62,13 @@ The Windows ZIP includes the prebuilt ANGLE v1.0.1 archive used by
 notice files; the upstream license texts and copyright notices are supplied
 with this application. CMake copies these runtime libraries:
 
-| Runtime file(s) | Component and license | License text / source |
-| --- | --- | --- |
-| `libEGL.dll`, `libGLESv2.dll` | ANGLE, BSD-3-Clause | `ANGLE-LICENSE.txt`; https://github.com/google/angle |
-| `vk_swiftshader.dll` | SwiftShader, Apache-2.0 | `SwiftShader-LICENSE.txt`, `SwiftShader-AUTHORS.txt`; https://github.com/google/swiftshader |
-| `vulkan-1.dll` | Vulkan Loader, Apache-2.0 | `Vulkan-Loader-LICENSE.txt`, `Vulkan-Loader-NOTICE.txt`; https://github.com/KhronosGroup/Vulkan-Loader |
-| `zlib.dll` | zlib | `zlib-LICENSE.txt`; https://github.com/madler/zlib/tree/v1.2.13 |
-| `d3dcompiler_47.dll` | Microsoft Direct3D Compiler redistributable; not an open-source ANGLE component | `MICROSOFT-WINDOWS-SDK-REDIST.txt`; https://learn.microsoft.com/en-us/legal/windows-sdk/redist |
+| Runtime file(s)               | Component and license                                                           | License text / source                                                                                  |
+| ----------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `libEGL.dll`, `libGLESv2.dll` | ANGLE, BSD-3-Clause                                                             | `ANGLE-LICENSE.txt`; https://github.com/google/angle                                                   |
+| `vk_swiftshader.dll`          | SwiftShader, Apache-2.0                                                         | `SwiftShader-LICENSE.txt`, `SwiftShader-AUTHORS.txt`; https://github.com/google/swiftshader            |
+| `vulkan-1.dll`                | Vulkan Loader, Apache-2.0                                                       | `Vulkan-Loader-LICENSE.txt`, `Vulkan-Loader-NOTICE.txt`; https://github.com/KhronosGroup/Vulkan-Loader |
+| `zlib.dll`                    | zlib                                                                            | `zlib-LICENSE.txt`; https://github.com/madler/zlib/tree/v1.2.13                                        |
+| `d3dcompiler_47.dll`          | Microsoft Direct3D Compiler redistributable; not an open-source ANGLE component | `MICROSOFT-WINDOWS-SDK-REDIST.txt`; https://learn.microsoft.com/en-us/legal/windows-sdk/redist         |
 
 The DLL's embedded Authenticode signature identifies Microsoft Corporation.
 Microsoft lists `d3dcompiler_47.dll` as redistributable for classic Windows

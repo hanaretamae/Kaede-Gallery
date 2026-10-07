@@ -24,6 +24,7 @@ import com.hanaretamae.kaede.core.model.MediaId
 import com.hanaretamae.kaede.core.model.NoteId
 import com.hanaretamae.kaede.core.model.NoteSummary
 import com.hanaretamae.kaede.core.repository.GalleryRepository
+import com.hanaretamae.kaede.core.repository.GalleryScanSummary
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.GallerySettings
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
@@ -44,15 +45,24 @@ fun KaedeGalleryApp(
     galleryThumbnail: @Composable (MediaId, Boolean) -> Unit = { _, _ -> },
     mediaContent: @Composable (GalleryViewerMediaState) -> Unit,
     onExternalLink: (String) -> Unit,
+    loadLicenseText: (String) -> String? = { null },
     systemLanguage: LanguagePreference = platformSystemLanguagePreference(),
     dynamicColorScheme: ColorScheme? = null,
     dynamicColorSchemeProvider: (@Composable (ThemePreference) -> ColorScheme?)? = null,
     galleryStrings: GalleryStrings? = null,
     viewerStrings: GalleryViewerStrings? = null,
     settingsStrings: GallerySettingsStrings? = null,
+    onViewerFullscreenChanged: ((Boolean) -> Unit)? = null,
+    onViewerMediaOnlyChanged: ((Boolean) -> Unit)? = null,
+    onOpenMedia: ((GalleryViewerMediaState) -> Unit)? = null,
+    onRevealMedia: ((GalleryViewerMediaState) -> Unit)? = null,
+    onSetWallpaperMedia: ((GalleryViewerMediaState) -> Unit)? = null,
+    onOpenVaultNote: ((String) -> Unit)? = null,
     onRescan: (suspend () -> RepositoryResult<*>)? = null,
     onChangeVault: (() -> Unit)? = null,
     onForgetVault: (suspend () -> RepositoryResult<*>)? = null,
+    vaultName: String? = null,
+    scanWarningCount: Int? = null,
     onRustTagSettingsChanged: (suspend (GallerySettings) -> RepositoryResult<*>)? = null,
     onImportSettings: (((String) -> Unit) -> Unit)? = null,
     onExportSettings: ((String) -> Unit)? = null,
@@ -64,6 +74,29 @@ fun KaedeGalleryApp(
     val settingsState by settingsStateHolder.state.collectAsState()
     var selectedEntries by remember { mutableStateOf<List<GalleryEntry>>(emptyList()) }
     var showSettings by remember { mutableStateOf(false) }
+    var latestScanWarningCount by remember(repository) { mutableStateOf(scanWarningCount) }
+    LaunchedEffect(repository, scanWarningCount) {
+        latestScanWarningCount = scanWarningCount
+    }
+    fun recordScanSummary(result: RepositoryResult<*>): RepositoryResult<*> {
+        if (result is RepositoryResult.Success<*>) {
+            val summary = result.value as? GalleryScanSummary
+            if (summary != null) {
+                latestScanWarningCount = summary.warnings
+                    .coerceAtMost(Int.MAX_VALUE.toLong())
+                    .toInt()
+            }
+        }
+        return result
+    }
+    val rescanWithSummary: (suspend () -> RepositoryResult<*>)? = onRescan?.let { rescan ->
+        suspend { recordScanSummary(rescan()) }
+    }
+    val rustTagSettingsWithSummary:
+        (suspend (GallerySettings) -> RepositoryResult<*>)? = onRustTagSettingsChanged?.let {
+        update ->
+        suspend { settings -> recordScanSummary(update(settings)) }
+    }
     LaunchedEffect(settingsStateHolder) { settingsStateHolder.load() }
     DisposableEffect(settingsStateHolder) {
         onDispose(settingsStateHolder::dispose)
@@ -106,7 +139,7 @@ fun KaedeGalleryApp(
         if (applied == null) {
             appliedRustTagSettings = currentRustTagSettings
         } else if (applied != currentRustTagSettings) {
-            val apply = onRustTagSettingsChanged ?: return@LaunchedEffect
+            val apply = rustTagSettingsWithSummary ?: return@LaunchedEffect
             when (val result = apply(currentSettings)) {
                 is RepositoryResult.Success<*> -> {
                     appliedRustTagSettings = currentRustTagSettings
@@ -166,8 +199,14 @@ fun KaedeGalleryApp(
                     strings = activeSettingsStrings,
                     loadOnEnter = false,
                     onExternalLink = onExternalLink,
+                    loadLicenseText = loadLicenseText,
                     onImportSettings = onImportSettings,
                     onExportSettings = onExportSettings,
+                    onRescan = rescanWithSummary,
+                    onChangeVault = onChangeVault,
+                    onForgetVault = onForgetVault,
+                    vaultName = vaultName,
+                    scanWarningCount = latestScanWarningCount,
                 )
                 selectedEntries.isNotEmpty() -> {
                     val entry = selectedEntries.last()
@@ -178,6 +217,12 @@ fun KaedeGalleryApp(
                         stateHolder = viewerStateHolder,
                         onClose = { selectedEntries = selectedEntries.dropLast(1) },
                         strings = activeViewerStrings,
+                        onFullscreenChanged = onViewerFullscreenChanged,
+                        onMediaOnlyChanged = onViewerMediaOnlyChanged,
+                        onOpenMedia = onOpenMedia,
+                        onRevealMedia = onRevealMedia,
+                        onSetWallpaperMedia = onSetWallpaperMedia,
+                        onOpenVaultNote = onOpenVaultNote,
                         mediaContent = mediaContent,
                         onExternalLink = onExternalLink,
                         onOpenNote = { noteId ->
@@ -200,7 +245,7 @@ fun KaedeGalleryApp(
                     hiddenTagPrefixes = settings.hiddenTagPrefixes,
                     tagColorRules = tagColorRules,
                     galleryThumbnail = galleryThumbnail,
-                    onRescan = onRescan,
+                    onRescan = rescanWithSummary,
                     onChangeVault = onChangeVault,
                     onForgetVault = onForgetVault,
                 )

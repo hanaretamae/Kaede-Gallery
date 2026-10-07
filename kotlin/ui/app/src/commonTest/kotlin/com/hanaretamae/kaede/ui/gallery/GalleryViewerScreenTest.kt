@@ -4,6 +4,8 @@ import com.hanaretamae.kaede.core.settings.GalleryNoteBlock
 import com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 
 class GalleryViewerScreenTest {
     @Test
@@ -27,6 +29,171 @@ class GalleryViewerScreenTest {
                 GalleryNoteBlock.POST_TEXT,
             ),
             noteDetailContentBlocks(structure),
+        )
+    }
+
+    @Test
+    fun imageZoomRemainsWithinSupportedScale() {
+        assertEquals(1f, nextImageScale(1f, 0.5f))
+        assertEquals(2f, nextImageScale(1f, 2f))
+        assertEquals(5f, nextImageScale(4f, 2f))
+    }
+
+    @Test
+    fun wallpaperActionIsLimitedToSupportedImageFiles() {
+        assertTrue(galleryCanSetWallpaper("media/photo.webp", isVideo = false))
+        assertFalse(galleryCanSetWallpaper("media/clip.mp4", isVideo = false))
+        assertFalse(galleryCanSetWallpaper("media/photo.png", isVideo = true))
+        assertFalse(galleryCanSetWallpaper(null, isVideo = false))
+    }
+
+    @Test
+    fun viewerOnlyAcceptsWebUrlsWithoutCredentials() {
+        assertEquals(true, isGalleryViewerWebUrl("https://x.com/name/status/123"))
+        assertEquals(true, isGalleryViewerWebUrl("http://example.com:8080/path"))
+        assertEquals(false, isGalleryViewerWebUrl("javascript:alert(1)"))
+        assertEquals(false, isGalleryViewerWebUrl("https://user@example.com/path"))
+        assertEquals(false, isGalleryViewerWebUrl("https://example.com:99999/path"))
+    }
+
+    @Test
+    fun viewerDerivesTitleAuthorAndXProfileFromFilenameAndPostUrl() {
+        val postUrl = "https://x.com/fictional_author/status/123456"
+        val profileUrl = galleryViewerAuthorProfileUrl(null, postUrl)
+
+        assertEquals(
+            "A fictional title",
+            galleryViewerTitle("fictional_author-on-X-A fictional title.md", "Unparsed title"),
+        )
+        assertEquals("Fallback", galleryViewerTitle("plain-name.md", "Fallback"))
+        assertEquals("https://x.com/fictional_author", profileUrl)
+        assertEquals(
+            "@fictional_author",
+            galleryViewerAuthor(
+                "fictional_author-on-X-A fictional title.md",
+                null,
+                profileUrl,
+            ),
+        )
+        assertEquals(
+            null,
+            galleryViewerAuthorProfileUrl(
+                null,
+                "https://x.com.evil/fictional_author/status/123",
+            ),
+        )
+    }
+
+    @Test
+    fun viewerUsesAuthorUrlAndRespectsAuthorBlockPosition() {
+        assertEquals(
+            "https://example.com/fictional-author",
+            galleryViewerAuthorProfileUrl(
+                "https://example.com/fictional-author",
+                "https://x.com/fictional_author/status/123",
+            ),
+        )
+        assertEquals(true, galleryViewerShowsAuthorAboveMedia(GalleryNoteStructureSettings()))
+        assertEquals(
+            false,
+            galleryViewerShowsAuthorAboveMedia(
+                GalleryNoteStructureSettings(
+                    blockOrder = listOf(
+                        GalleryNoteBlock.MEDIA,
+                        GalleryNoteBlock.AUTHOR,
+                        GalleryNoteBlock.POST_TEXT,
+                        GalleryNoteBlock.POST_TEXT_END,
+                        GalleryNoteBlock.RELATED,
+                        GalleryNoteBlock.MEMO,
+                    ),
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun mediaScrollForwardingIsDisabledWhenHiddenZoomedOrFullscreen() {
+        assertTrue(
+            galleryViewerCanForwardMediaVerticalScroll(
+                detailsVisible = true,
+                fullscreen = false,
+                isVideo = false,
+                imageZoomed = false,
+            ),
+        )
+        assertFalse(
+            galleryViewerCanForwardMediaVerticalScroll(
+                detailsVisible = false,
+                fullscreen = false,
+                isVideo = false,
+                imageZoomed = false,
+            ),
+        )
+        assertFalse(
+            galleryViewerCanForwardMediaVerticalScroll(
+                detailsVisible = true,
+                fullscreen = true,
+                isVideo = false,
+                imageZoomed = false,
+            ),
+        )
+        assertFalse(
+            galleryViewerCanForwardMediaVerticalScroll(
+                detailsVisible = true,
+                fullscreen = false,
+                isVideo = true,
+                imageZoomed = false,
+            ),
+        )
+        assertFalse(
+            galleryViewerCanForwardMediaVerticalScroll(
+                detailsVisible = true,
+                fullscreen = false,
+                isVideo = false,
+                imageZoomed = true,
+            ),
+        )
+    }
+
+    @Test
+    fun detailPanelExpandsWithScrollAndKeepsMediaVisible() {
+        assertEquals(0.4f, galleryViewerDetailsPanelFraction(0), 0.001f)
+        assertEquals(0.61f, galleryViewerDetailsPanelFraction(110), 0.001f)
+        assertEquals(0.82f, galleryViewerDetailsPanelFraction(220), 0.001f)
+        assertEquals(0.82f, galleryViewerDetailsPanelFraction(440), 0.001f)
+        assertEquals(0.4f, galleryViewerDetailsPanelFraction(-10), 0.001f)
+        assertEquals(0.61f, galleryViewerDetailsPanelFraction(330, 660f), 0.001f)
+        assertEquals(0.82f, galleryViewerDetailsPanelFraction(660, 660f), 0.001f)
+    }
+
+    @Test
+    fun viewerStartsWithMediaOnlyAndMediaTapTogglesDetails() {
+        val initial = GalleryViewerPresentationState()
+
+        assertEquals(false, initial.detailsVisible)
+        assertEquals(
+            GalleryViewerPresentationState(detailsVisible = true),
+            initial.toggleMedia(),
+        )
+        assertEquals(
+            GalleryViewerPresentationState(),
+            initial.toggleMedia().toggleMedia(),
+        )
+    }
+
+    @Test
+    fun fullscreenEntryHidesDetailsAndExitRestoresThem() {
+        val details = GalleryViewerPresentationState().toggleMedia()
+        val fullscreen = details.enterFullscreen()
+
+        assertEquals(GalleryViewerPresentationState(fullscreen = true), fullscreen)
+        assertEquals(
+            details,
+            fullscreen.toggleMedia(),
+        )
+        assertEquals(
+            details,
+            fullscreen.exitFullscreen(),
         )
     }
 }

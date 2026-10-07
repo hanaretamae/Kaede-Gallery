@@ -20,7 +20,14 @@ android {
         debug {
             applicationIdSuffix = ".kmpdebug"
         }
+        create("acceptance") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".kmpacceptance"
+            matchingFallbacks += listOf("debug")
+        }
     }
+
+    sourceSets.getByName("main").assets.directories.add(rootProject.file("../app/assets").path)
 
     buildFeatures {
         compose = true

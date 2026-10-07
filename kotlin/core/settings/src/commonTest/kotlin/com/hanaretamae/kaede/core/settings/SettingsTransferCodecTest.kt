@@ -2,6 +2,7 @@ package com.hanaretamae.kaede.core.settings
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
@@ -43,6 +44,19 @@ class SettingsTransferCodecTest {
     }
 
     @Test
+    fun readsOlderKmpExportsWithoutConfusingTileCountsAndLoadedRange() {
+        val olderKmpExport = SettingsTransferCodec.encode(
+            GallerySettings(showLoadedRange = true, showCounts = false),
+        ).replace("\"showItemCount\":true", "\"showItemCount\":false")
+            .replace(",\"showCounts\":false", "")
+
+        val decoded = assertNotNull(SettingsTransferCodec.decode(olderKmpExport))
+
+        assertTrue(decoded.showLoadedRange)
+        assertFalse(decoded.showCounts)
+    }
+
+    @Test
     fun preservesFlutterSettingsThatKmpDoesNotExposeWhenImportingAndExporting() {
         val flutterJson = """
             {
@@ -79,6 +93,8 @@ class SettingsTransferCodecTest {
         assertEquals(LanguagePreference.ENGLISH, imported.appearance.language)
         assertEquals(listOf("source/art"), imported.galleryTagPrefixes)
         assertEquals(48, imported.pageSize)
+        assertEquals(false, imported.showLoadedRange)
+        assertEquals(true, imported.showCounts)
         assertEquals(true, imported.showTilePosition)
         assertEquals(true, imported.showMissingMediaIcon)
         assertEquals(listOf("source"), imported.includedTagPrefixes)
@@ -93,6 +109,7 @@ class SettingsTransferCodecTest {
             ),
         )
         val exported = SettingsTransferCodec.encode(imported)
+        assertTrue(exported.contains(""""showItemCount":false"""))
         assertTrue(exported.contains(""""hiddenPrefixes":["private"]"""))
         assertTrue(exported.contains(""""colors":[{"prefix":"source/art","color":"#4dd0e1"}]"""))
         assertTrue(exported.contains(""""titleKeys":["name"]"""))

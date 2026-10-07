@@ -22,10 +22,12 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -51,6 +53,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.hanaretamae.kaede.core.model.GalleryCategoryOption
@@ -69,6 +72,7 @@ import com.hanaretamae.kaede.core.settings.GalleryTagColorCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagColorRule
 import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 
 data class GalleryStrings(
@@ -93,7 +97,13 @@ data class GalleryStrings(
     val jumpTitle: String,
     val positionInput: String,
     val invalidPosition: String,
+    val jumpLoading: (Long) -> String,
+    val jumpFailed: String,
+    val close: String,
     val clearFilters: String,
+    val searchNotes: String,
+    val applySearch: String,
+    val clearAllSearchAndFilters: String,
     val filterSearch: String,
     val loadingTags: String,
     val noTags: String,
@@ -138,7 +148,13 @@ val EnglishGalleryStrings = GalleryStrings(
     jumpTitle = "Jump to position",
     positionInput = "Item position",
     invalidPosition = "Enter a valid item position.",
+    jumpLoading = { "Loading items around position $it…" },
+    jumpFailed = "The requested position could not be loaded.",
+    close = "Close",
     clearFilters = "Clear filters",
+    searchNotes = "Search notes",
+    applySearch = "Search",
+    clearAllSearchAndFilters = "Clear all",
     filterSearch = "Filter tags",
     loadingTags = "Loading tags…",
     noTags = "No matching tags",
@@ -185,7 +201,13 @@ val JapaneseGalleryStrings = GalleryStrings(
     jumpTitle = "位置を指定して移動",
     positionInput = "項目の位置",
     invalidPosition = "有効な位置を入力してください。",
+    jumpLoading = { "$it 件目の周辺を読み込み中…" },
+    jumpFailed = "指定位置を読み込めませんでした。",
+    close = "閉じる",
     clearFilters = "フィルターを解除",
+    searchNotes = "ノートを検索",
+    applySearch = "検索",
+    clearAllSearchAndFilters = "検索とフィルターを解除",
     filterSearch = "タグを検索",
     loadingTags = "タグを読み込み中…",
     noTags = "一致するタグがありません",
@@ -236,10 +258,16 @@ fun GalleryScreen(
     var confirmForget by remember(stateHolder) { mutableStateOf(false) }
     var forgetError by remember(stateHolder) { mutableStateOf<RepositoryError?>(null) }
     var tagFilterSearch by remember(stateHolder) { mutableStateOf("") }
+    var noteSearchDraft by remember(stateHolder, showFilters) {
+        mutableStateOf(state.query.searchText)
+    }
     var showJumpDialog by remember(stateHolder) { mutableStateOf(false) }
     var positionDraft by remember(stateHolder) { mutableStateOf("") }
     var positionError by remember(stateHolder) { mutableStateOf(false) }
     var pendingJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
+    var jumpProgressVisible by remember(stateHolder) { mutableStateOf(false) }
+    var highlightedJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
+    var visibleItemIndex by remember(stateHolder) { mutableStateOf(0) }
     val gridState = rememberLazyGridState()
     val jumpFocusRequester = remember { FocusRequester() }
     LaunchedEffect(stateHolder) {
@@ -247,6 +275,10 @@ fun GalleryScreen(
     }
     LaunchedEffect(state.query) {
         pendingJumpOffset = null
+        jumpProgressVisible = false
+        highlightedJumpOffset = null
+        visibleItemIndex = 0
+        gridState.scrollToItem(0)
     }
     LaunchedEffect(showJumpDialog) {
         if (showJumpDialog) jumpFocusRequester.requestFocus()
@@ -257,9 +289,11 @@ fun GalleryScreen(
             snapshotFlow {
                 gridState.layoutInfo.visibleItemsInfo.lastOrNull()?.index ?: -1
             },
-        ) { current, lastVisibleIndex ->
-            current to lastVisibleIndex
-        }.collect { (current, lastVisibleIndex) ->
+            snapshotFlow { gridState.firstVisibleItemIndex },
+        ) { current, lastVisibleIndex, firstVisibleIndex ->
+            Triple(current, lastVisibleIndex, firstVisibleIndex)
+        }.collect { (current, lastVisibleIndex, firstVisibleIndex) ->
+            visibleItemIndex = firstVisibleIndex
             val prefetchFrom = (current.entries.size - PREFETCH_THRESHOLD).coerceAtLeast(0)
             if (
                 current.canLoadMore &&
@@ -268,6 +302,15 @@ fun GalleryScreen(
             ) {
                 stateHolder.loadMore()
             }
+            if (
+                pendingJumpOffset == null &&
+                !jumpProgressVisible &&
+                current.pageOffset > 0 &&
+                !current.loading &&
+                firstVisibleIndex <= PREFETCH_THRESHOLD
+            ) {
+                stateHolder.loadPrevious()
+            }
         }
     }
     LaunchedEffect(state.pageOffset, state.loading, state.entries.size, pendingJumpOffset) {
@@ -275,9 +318,17 @@ fun GalleryScreen(
         if (targetOffset != null && !state.loading) {
             when {
                 state.error != null -> pendingJumpOffset = null
-                state.entries.isNotEmpty() && state.pageOffset == targetOffset -> {
-                    gridState.scrollToItem(0)
+                state.entries.isNotEmpty() &&
+                    targetOffset >= state.pageOffset &&
+                    targetOffset < state.pageOffset + state.entries.size -> {
+                    gridState.scrollToItem((targetOffset - state.pageOffset).toInt())
                     pendingJumpOffset = null
+                    jumpProgressVisible = false
+                    highlightedJumpOffset = targetOffset
+                    delay(JUMP_HIGHLIGHT_MILLIS)
+                    if (highlightedJumpOffset == targetOffset) {
+                        highlightedJumpOffset = null
+                    }
                 }
             }
         }
@@ -332,7 +383,8 @@ fun GalleryScreen(
                 val activeCount = state.query.includeTags.size +
                     state.query.andTags.size +
                     state.query.excludedTags.size +
-                    state.query.virtualFilters.size
+                    state.query.virtualFilters.size +
+                    (if (state.query.searchText.isBlank()) 0 else 1)
                 TextButton(onClick = { showFilters = true }) {
                     Text(if (activeCount == 0) strings.filters else "${strings.filters} ($activeCount)")
                 }
@@ -416,15 +468,19 @@ fun GalleryScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
+                val visibleRange = galleryVisibleRange(
+                    pageOffset = state.pageOffset,
+                    entryCount = state.entries.size,
+                    totalCount = state.totalCount ?: 0,
+                    visibleItemIndex = visibleItemIndex,
+                    pageSize = state.query.pageSize,
+                )
                 Text(
                     text = state.totalCount?.let {
                         if (showLoadedRange) {
-                            val first = if (state.entries.isEmpty()) {
-                                0L
-                            } else {
-                                state.pageOffset + 1
-                            }
-                            strings.count(first, state.pageOffset + state.entries.size, it)
+                            visibleRange?.let { range ->
+                                strings.count(range.first, range.last, it)
+                            } ?: strings.count(0, 0, it)
                         } else {
                             strings.totalCount(it)
                         }
@@ -436,6 +492,48 @@ fun GalleryScreen(
                     CircularProgressIndicator(
                         modifier = Modifier.width(20.dp).height(20.dp),
                         strokeWidth = 2.dp,
+                    )
+                }
+                if (jumpProgressVisible) {
+                    val targetOffset = pendingJumpOffset
+                    AlertDialog(
+                        onDismissRequest = {
+                            if (!state.loading) jumpProgressVisible = false
+                        },
+                        title = { Text(strings.jumpTitle) },
+                        text = {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (state.loading) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(24.dp),
+                                        strokeWidth = 2.dp,
+                                    )
+                                    Spacer(Modifier.width(16.dp))
+                                }
+                                Text(
+                                    if (state.error == null && state.loading) {
+                                        strings.jumpLoading((targetOffset ?: 0) + 1)
+                                    } else {
+                                        strings.jumpFailed
+                                    },
+                                )
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    if (state.loading) {
+                                        stateHolder.cancelJump()
+                                        pendingJumpOffset = null
+                                    } else {
+                                        stateHolder.dismissJumpError()
+                                    }
+                                    jumpProgressVisible = false
+                                },
+                            ) {
+                                Text(if (state.loading) strings.cancel else strings.close)
+                            }
+                        },
                     )
                 }
             }
@@ -488,6 +586,7 @@ fun GalleryScreen(
                             showCounts = showCounts,
                             showMissingMediaIcon = showMissingMediaIcon,
                             galleryThumbnail = galleryThumbnail,
+                            highlighted = highlightedJumpOffset == state.pageOffset + index,
                             onClick = { onEntrySelected(entry) },
                         )
                     }
@@ -521,6 +620,48 @@ fun GalleryScreen(
                     }
                 }
                 OutlinedTextField(
+                    value = noteSearchDraft,
+                    onValueChange = { noteSearchDraft = it },
+                    label = { Text(strings.searchNotes) },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(
+                        onSearch = {
+                            stateHolder.setQuery(state.query.copy(searchText = noteSearchDraft))
+                        },
+                    ),
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    TextButton(
+                        onClick = {
+                            stateHolder.setQuery(state.query.copy(searchText = noteSearchDraft))
+                        },
+                    ) {
+                        Text(strings.applySearch)
+                    }
+                    TextButton(
+                        onClick = {
+                            noteSearchDraft = ""
+                            tagFilterSearch = ""
+                            stateHolder.setQuery(
+                                state.query.copy(
+                                    searchText = "",
+                                    includeTags = emptySet(),
+                                    andTags = emptySet(),
+                                    excludedTags = emptySet(),
+                                    virtualFilters = emptySet(),
+                                ),
+                            )
+                        },
+                    ) {
+                        Text(strings.clearAllSearchAndFilters)
+                    }
+                }
+                OutlinedTextField(
                     value = tagFilterSearch,
                     onValueChange = { tagFilterSearch = it },
                     label = { Text(strings.filterSearch) },
@@ -540,7 +681,7 @@ fun GalleryScreen(
                     Text(strings.noTags, modifier = Modifier.padding(16.dp))
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxWidth().heightIn(max = 560.dp),
+                        modifier = Modifier.weight(1f).fillMaxWidth(),
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                         state.categories.forEach { category ->
@@ -565,11 +706,21 @@ fun GalleryScreen(
                             }
                             if (options.isNotEmpty()) {
                                 item(key = "category:${category.path}") {
-                                    Text(
-                                        text = category.displayName,
-                                        style = MaterialTheme.typography.titleSmall,
-                                        modifier = Modifier.padding(start = 16.dp, top = 12.dp, bottom = 4.dp),
-                                    )
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        Text(
+                                            text = category.displayName,
+                                            style = MaterialTheme.typography.titleSmall,
+                                        )
+                                        Spacer(Modifier.weight(1f))
+                                        Text(
+                                            strings.optionCount(category.count),
+                                            style = MaterialTheme.typography.labelSmall,
+                                        )
+                                    }
                                 }
                                 options.forEach { option ->
                                     val virtual = option.virtualFilter
@@ -685,6 +836,7 @@ fun GalleryScreen(
                             positionError = true
                         } else {
                             pendingJumpOffset = position - 1
+                            jumpProgressVisible = true
                             showJumpDialog = false
                             stateHolder.jumpTo(position)
                         }
@@ -702,6 +854,7 @@ fun GalleryScreen(
 
 private const val PREFETCH_THRESHOLD = 4
 private const val MAX_GALLERY_POSITION = 2_147_483_647L
+private const val JUMP_HIGHLIGHT_MILLIS = 1_500L
 
 @Composable
 private fun FilterOption(
@@ -747,9 +900,19 @@ private fun GalleryTile(
     showCounts: Boolean,
     showMissingMediaIcon: Boolean,
     galleryThumbnail: @Composable (MediaId, Boolean) -> Unit,
+    highlighted: Boolean,
     onClick: () -> Unit,
 ) {
-    Card(onClick = onClick) {
+    Card(
+        onClick = onClick,
+        colors = CardDefaults.cardColors(
+            containerColor = if (highlighted) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            },
+        ),
+    ) {
         Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
             val (mediaId, isVideo) = when (entry) {
                 is NoteSummary -> entry.representativeMediaId to entry.representativeMediaIsVideo
@@ -825,6 +988,22 @@ private fun GalleryTile(
 private fun GalleryEntry.stableKey(): String = when (this) {
     is NoteSummary -> "note:${id.value}"
     is MediaSummary -> "media:${id.value}"
+}
+
+internal fun galleryVisibleRange(
+    pageOffset: Long,
+    entryCount: Int,
+    totalCount: Long,
+    visibleItemIndex: Int,
+    pageSize: Int,
+): LongRange? {
+    if (pageOffset < 0 || entryCount <= 0 || totalCount < 0 || pageSize <= 0) return null
+    val itemIndex = visibleItemIndex.coerceIn(0, entryCount - 1)
+    val absoluteIndex = pageOffset + itemIndex
+    val pageStart = absoluteIndex / pageSize * pageSize
+    val first = pageStart + 1
+    val last = minOf(pageStart + pageSize, totalCount)
+    return if (first <= last) first..last else null
 }
 
 internal fun englishError(error: RepositoryError): String = when (error) {

@@ -52,7 +52,7 @@ object SettingsTransferCodec {
         val pagination = (tags["pagination"] as? JsonObject ?: JsonObject(emptyMap()))
             .toMutableMap()
         pagination["pageSize"] = JsonPrimitive(settings.pageSize)
-        pagination["showItemCount"] = JsonPrimitive(settings.showCounts)
+        pagination["showItemCount"] = JsonPrimitive(settings.showLoadedRange)
         pagination["showItemNumberOnTiles"] = JsonPrimitive(settings.showTilePosition)
         pagination["showMissingMediaIcon"] = JsonPrimitive(settings.showMissingMediaIcon)
         currentTags["pagination"] = JsonObject(pagination)
@@ -92,6 +92,7 @@ object SettingsTransferCodec {
                     "kmp",
                     buildJsonObject {
                         put("showLoadedRange", JsonPrimitive(settings.showLoadedRange))
+                        put("showCounts", JsonPrimitive(settings.showCounts))
                     },
                 )
             },
@@ -171,7 +172,23 @@ object SettingsTransferCodec {
             if (pageSize !in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE) {
                 return null
             }
-            val showCounts = optionalBoolean(pagination, "showItemCount", true) ?: return null
+            val kmp = root["kmp"]?.jsonObject ?: JsonObject(emptyMap())
+            val legacyKmpExport =
+                kmp["showLoadedRange"] != null && kmp["showCounts"] == null
+            val showLoadedRange = if (legacyKmpExport) {
+                optionalBoolean(kmp, "showLoadedRange", true) ?: return null
+            } else {
+                optionalBoolean(
+                    pagination,
+                    "showItemCount",
+                    optionalBoolean(kmp, "showLoadedRange", true) ?: return null,
+                ) ?: return null
+            }
+            val showCounts = optionalBoolean(
+                if (legacyKmpExport) pagination else kmp,
+                if (legacyKmpExport) "showItemCount" else "showCounts",
+                true,
+            ) ?: return null
             val showTilePosition = optionalBoolean(
                 pagination,
                 "showItemNumberOnTiles",
@@ -181,8 +198,6 @@ object SettingsTransferCodec {
             ) ?: return null
             val showMissingMediaIcon =
                 optionalBoolean(pagination, "showMissingMediaIcon", false) ?: return null
-            val kmp = root["kmp"]?.jsonObject ?: JsonObject(emptyMap())
-            val showLoadedRange = optionalBoolean(kmp, "showLoadedRange", true) ?: return null
             GallerySettings(
                 appearance = AppearanceSettings(
                     theme = theme,

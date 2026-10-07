@@ -1,10 +1,13 @@
 package com.hanaretamae.kaede.android
 
+import android.app.WallpaperManager
+import android.content.ClipData
 import android.content.Intent
 import android.content.Context
 import android.content.ContextWrapper
 import android.provider.DocumentsContract
 import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.system.Os
@@ -14,6 +17,8 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -71,6 +76,7 @@ import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
+import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import com.hanaretamae.kaede.ui.gallery.androidDynamicColorScheme
 import kotlinx.coroutines.launch
@@ -507,9 +513,65 @@ private fun AndroidGalleryRoot() {
         )
     } else {
         val vaultUri = Uri.parse(activeVault)
+        suspend fun launchMediaAction(
+            media: GalleryViewerMediaState,
+            reveal: Boolean = false,
+            wallpaper: Boolean = false,
+        ) {
+            val relativePath = media.location ?: return
+            try {
+                val uri = scanner.resolveMedia(vaultUri, relativePath)
+                val intent = createAndroidMediaIntent(
+                    context = context,
+                    uri = uri,
+                    relativePath = relativePath,
+                    reveal = reveal,
+                    wallpaper = wallpaper,
+                )
+                if (wallpaper) {
+                    activity.startActivity(intent)
+                } else {
+                    activity.startActivity(
+                        Intent.createChooser(
+                            intent,
+                            if (reveal) "Show selected media" else "Open selected media",
+                        ),
+                    )
+                }
+            } catch (_: android.content.ActivityNotFoundException) {
+                Toast.makeText(
+                    context,
+                    "No application can handle this media action.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } catch (_: IllegalArgumentException) {
+                Toast.makeText(
+                    context,
+                    "The selected media cannot be used for this action.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } catch (_: IOException) {
+                Toast.makeText(
+                    context,
+                    "The selected media could not be opened.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            } catch (_: SecurityException) {
+                Toast.makeText(
+                    context,
+                    "The selected media could not be opened.",
+                    Toast.LENGTH_LONG,
+                ).show()
+            }
+        }
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
+            vaultName = DocumentsContract.getTreeDocumentId(vaultUri)
+                .substringAfter(':', vaultUri.toString())
+                .substringAfterLast('/'),
+            scanWarningCount = activeSession.initialScan.warnings.coerceAtMost(Int.MAX_VALUE.toLong())
+                .toInt(),
             galleryThumbnail = { mediaId, isVideo ->
                 AndroidGalleryThumbnail(
                     scanner = scanner,
@@ -526,6 +588,72 @@ private fun AndroidGalleryRoot() {
                     path = state.location,
                     isVideo = state.media.isVideo,
                 )
+            },
+            onViewerFullscreenChanged = { fullscreen ->
+                val insetsController = WindowInsetsControllerCompat(
+                    activity.window,
+                    activity.window.decorView,
+                )
+                if (fullscreen) {
+                    insetsController.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    insetsController.show(WindowInsetsCompat.Type.systemBars())
+                }
+            },
+            onViewerMediaOnlyChanged = { mediaOnly ->
+                val insetsController = WindowInsetsControllerCompat(
+                    activity.window,
+                    activity.window.decorView,
+                )
+                if (mediaOnly) {
+                    insetsController.systemBarsBehavior =
+                        WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+                    insetsController.hide(WindowInsetsCompat.Type.systemBars())
+                } else {
+                    insetsController.show(WindowInsetsCompat.Type.systemBars())
+                }
+            },
+            onOpenMedia = { media -> scope.launch { launchMediaAction(media) } },
+            onRevealMedia = { media ->
+                scope.launch { launchMediaAction(media, reveal = true) }
+            },
+            onSetWallpaperMedia = { media ->
+                scope.launch { launchMediaAction(media, wallpaper = true) }
+            },
+            onOpenVaultNote = { notePath ->
+                val uri = androidObsidianOpenUri(vaultUri, notePath)
+                if (uri == null) {
+                    Toast.makeText(
+                        context,
+                        "The selected note could not be opened.",
+                        Toast.LENGTH_LONG,
+                    ).show()
+                } else {
+                    try {
+                        activity.startActivity(Intent(Intent.ACTION_VIEW, uri))
+                    } catch (_: android.content.ActivityNotFoundException) {
+                        Toast.makeText(
+                            context,
+                            "No application can open this note.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    } catch (_: SecurityException) {
+                        Toast.makeText(
+                            context,
+                            "The selected note could not be opened.",
+                            Toast.LENGTH_LONG,
+                        ).show()
+                    }
+                }
+            },
+            loadLicenseText = { assetPath ->
+                try {
+                    context.assets.open(assetPath).bufferedReader().use { it.readText() }
+                } catch (_: IOException) {
+                    null
+                }
             },
             onExternalLink = { target ->
                 val uri = Uri.parse(target)
@@ -545,6 +673,7 @@ private fun AndroidGalleryRoot() {
                             Toast.LENGTH_LONG,
                         ).show()
                     }
+
                 }
             },
             onImportSettings = { accept ->
@@ -639,6 +768,67 @@ private fun AndroidGalleryRoot() {
                 LanguagePreference.ENGLISH
             },
         )
+    }
+}
+
+internal fun androidObsidianOpenUri(vaultTreeUri: Uri, notePath: String): Uri? {
+    if (!isSafeRelativeNotePath(notePath)) return null
+    val vaultDocumentId = try {
+        DocumentsContract.getTreeDocumentId(vaultTreeUri)
+    } catch (_: IllegalArgumentException) {
+        return null
+    } catch (_: SecurityException) {
+        return null
+    }
+    val vaultName = vaultDocumentId.substringAfter(':', vaultDocumentId).substringAfterLast('/')
+    if (vaultName.isBlank()) return null
+    return Uri.Builder()
+        .scheme("obsidian")
+        .authority("open")
+        .appendQueryParameter("vault", vaultName)
+        .appendQueryParameter("file", notePath)
+        .build()
+}
+
+private fun isSafeRelativeNotePath(notePath: String): Boolean {
+    if (notePath.isBlank() || notePath.startsWith('/') || '\\' in notePath) return false
+    return notePath.split('/').none { it.isEmpty() || it == "." || it == ".." }
+}
+
+internal fun createAndroidMediaIntent(
+    context: Context,
+    uri: Uri,
+    relativePath: String,
+    reveal: Boolean,
+    wallpaper: Boolean,
+): Intent {
+    val extension = relativePath.substringAfterLast('.', "").lowercase()
+    val mimeType = android.webkit.MimeTypeMap.getSingleton()
+        .getMimeTypeFromExtension(extension)
+    if (wallpaper) {
+        require(mimeType?.startsWith("image/") == true) { "Wallpaper action requires an image" }
+        val clip = ClipData.newRawUri("", uri)
+        val cropIntent = if (Build.VERSION.SDK_INT >= 24) {
+            try {
+                WallpaperManager.getInstance(context).getCropAndSetWallpaperIntent(uri)
+            } catch (_: IllegalArgumentException) {
+                null
+            }
+        } else {
+            null
+        }
+        val intent = cropIntent ?: Intent(Intent.ACTION_ATTACH_DATA).apply {
+            setDataAndType(uri, mimeType)
+            putExtra("mimeType", mimeType)
+        }
+        return intent.apply {
+            clipData = clip
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+    }
+    return Intent(Intent.ACTION_VIEW).apply {
+        setDataAndType(uri, if (reveal) "*/*" else mimeType ?: "*/*")
+        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
     }
 }
 

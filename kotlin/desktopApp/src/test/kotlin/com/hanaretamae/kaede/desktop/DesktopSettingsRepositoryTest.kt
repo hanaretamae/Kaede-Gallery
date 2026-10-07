@@ -11,6 +11,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
@@ -27,6 +28,24 @@ class DesktopSettingsRepositoryTest {
                 repository.load(),
             )
         } finally {
+            Files.deleteIfExists(directory)
+        }
+    }
+
+    @Test
+    fun missingSettingsParentUsesDefaultsWithoutCreatingIt() = runTest {
+        val directory = Files.createTempDirectory("kaede-settings-missing-parent-test")
+        val parent = directory.resolve("private-data")
+        try {
+            val repository = DesktopSettingsRepository(parent.resolve("settings.properties"))
+
+            assertEquals(
+                RepositoryResult.Success(GallerySettings()),
+                repository.load(),
+            )
+            assertFalse(Files.exists(parent))
+        } finally {
+            Files.deleteIfExists(parent)
             Files.deleteIfExists(directory)
         }
     }

@@ -4,6 +4,10 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+sourceSets.main {
+    resources.srcDir(rootProject.file("../app/assets"))
+}
+
 dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:repository"))

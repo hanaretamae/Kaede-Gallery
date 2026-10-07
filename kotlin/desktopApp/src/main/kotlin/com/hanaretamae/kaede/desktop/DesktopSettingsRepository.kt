@@ -14,8 +14,10 @@ import java.io.IOException
 import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.NoSuchFileException
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.BasicFileAttributes
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Properties
 import java.util.UUID
@@ -28,7 +30,20 @@ class DesktopSettingsRepository(
     override suspend fun load(): RepositoryResult<GallerySettings> =
         withContext(Dispatchers.IO) {
             try {
-                if (!hasPrivateParent()) {
+                val parent = settingsFile.parent
+                    ?: return@withContext RepositoryResult.Failure(
+                        RepositoryError.STORAGE_UNAVAILABLE,
+                    )
+                val parentAttributes = try {
+                    Files.readAttributes(
+                        parent,
+                        BasicFileAttributes::class.java,
+                        LinkOption.NOFOLLOW_LINKS,
+                    )
+                } catch (_: NoSuchFileException) {
+                    return@withContext RepositoryResult.Success(GallerySettings())
+                }
+                if (!parentAttributes.isDirectory || parentAttributes.isSymbolicLink) {
                     return@withContext RepositoryResult.Failure(
                         RepositoryError.STORAGE_UNAVAILABLE,
                     )

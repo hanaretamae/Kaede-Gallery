@@ -53,12 +53,16 @@ import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
+import java.nio.file.InvalidPathException
 import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.attribute.PosixFilePermissions
 import java.net.URI
 import java.net.URISyntaxException
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.nio.file.Path
+import java.util.concurrent.TimeUnit
 import java.util.UUID
 import javax.imageio.ImageIO
 import javax.swing.JFileChooser
@@ -84,12 +88,18 @@ fun main() = application {
         title = "Kaede Gallery",
         state = windowState,
     ) {
-        DesktopApplication()
+        DesktopApplication { fullscreen ->
+            windowState.placement = if (fullscreen) {
+                WindowPlacement.Fullscreen
+            } else {
+                WindowPlacement.Floating
+            }
+        }
     }
 }
 
 @Composable
-private fun DesktopApplication() {
+private fun DesktopApplication(onFullscreenChanged: (Boolean) -> Unit) {
     val scope = rememberCoroutineScope()
     val sessionRepository = remember { RustGallerySessionRepository() }
     val vaultRepository = remember { RustVaultSelectionRepository() }
@@ -214,14 +224,19 @@ private fun DesktopApplication() {
             loading = loading,
             error = error,
             onChooseVault = {
-                val chosen = chooseVaultDirectory()
-                if (chosen != null) scope.launch { openVault(chosen) }
+                scope.launch {
+                    chooseVaultDirectory()?.let { openVault(it) }
+                }
             },
         )
     } else {
+        val selectedVaultPath = vaultPath
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
+            vaultName = Path.of(vaultPath).fileName?.toString(),
+            scanWarningCount = activeSession.initialScan.warnings.coerceAtMost(Int.MAX_VALUE.toLong())
+                .toInt(),
             galleryThumbnail = { mediaId, isVideo ->
                 DesktopGalleryThumbnail(activeSession.gallery, mediaId, isVideo)
             },
@@ -231,6 +246,58 @@ private fun DesktopApplication() {
                     mediaState = mediaState,
                 )
             },
+            onViewerFullscreenChanged = onFullscreenChanged,
+            onOpenMedia = { media ->
+                scope.launch {
+                    val opened = withContext(Dispatchers.IO) {
+                        launchDesktopMedia(media.location, selectedVaultPath, reveal = false)
+                    }
+                    if (!opened) showDesktopMediaError(reveal = false)
+                }
+            },
+            onRevealMedia = { media ->
+                scope.launch {
+                    val opened = withContext(Dispatchers.IO) {
+                        launchDesktopMedia(media.location, selectedVaultPath, reveal = true)
+                    }
+                    if (!opened) showDesktopMediaError(reveal = true)
+                }
+            },
+            onSetWallpaperMedia = if (isGnomeDesktop()) {
+                { media ->
+                    scope.launch {
+                        val succeeded = withContext(Dispatchers.IO) {
+                            setLinuxWallpaper(media.location, selectedVaultPath)
+                        }
+                        if (!succeeded) {
+                            JOptionPane.showMessageDialog(
+                                null,
+                                "Unable to set the selected image as wallpaper.",
+                                "Kaede Gallery",
+                                JOptionPane.ERROR_MESSAGE,
+                            )
+                        }
+                    }
+                }
+            } else {
+                null
+            },
+            onOpenVaultNote = { notePath ->
+                scope.launch {
+                    val opened = withContext(Dispatchers.IO) {
+                        launchObsidianNote(notePath, selectedVaultPath)
+                    }
+                    if (!opened) {
+                        JOptionPane.showMessageDialog(
+                            null,
+                            "Unable to open the selected note in Obsidian.",
+                            "Kaede Gallery",
+                            JOptionPane.ERROR_MESSAGE,
+                        )
+                    }
+                }
+            },
+            loadLicenseText = ::loadDesktopLicenseText,
             onExternalLink = { target ->
                 val uri = try {
                     URI(target)
@@ -280,8 +347,9 @@ private fun DesktopApplication() {
                 }
             },
             onChangeVault = {
-                val chosen = chooseVaultDirectory()
-                if (chosen != null) scope.launch { openVault(chosen) }
+                scope.launch {
+                    chooseVaultDirectory()?.let { openVault(it) }
+                }
             },
             onForgetVault = {
                 val selectedPath = vaultPath
@@ -321,6 +389,229 @@ private fun DesktopApplication() {
         )
     }
 }
+
+private fun launchDesktopMedia(location: String?, vaultPath: String?, reveal: Boolean): Boolean {
+    val path = resolveVaultMediaPath(location, vaultPath)
+    return when {
+        path == null -> false
+        reveal && isLinuxDesktop() -> showInLinuxFileManager(path)
+        reveal && isWindowsDesktop() -> showInWindowsFileManager(path)
+        else -> Desktop.isDesktopSupported() &&
+            try {
+                val desktop = Desktop.getDesktop()
+                if (!desktop.isSupported(Desktop.Action.OPEN)) {
+                    false
+                } else {
+                    desktop.open(if (reveal) path.parent.toFile() else path.toFile())
+                    true
+                }
+            } catch (_: IOException) {
+                false
+            } catch (_: SecurityException) {
+                false
+            } catch (_: UnsupportedOperationException) {
+                false
+            }
+    }
+}
+
+private fun showDesktopMediaError(reveal: Boolean) {
+    JOptionPane.showMessageDialog(
+        null,
+        if (reveal) "Unable to show the selected media in the file manager."
+        else "Unable to open the selected media.",
+        "Kaede Gallery",
+        JOptionPane.ERROR_MESSAGE,
+    )
+}
+
+private fun loadDesktopLicenseText(assetPath: String): String? = try {
+    Thread.currentThread().contextClassLoader
+        .getResourceAsStream(assetPath)
+        ?.bufferedReader()
+        ?.use { it.readText() }
+} catch (_: IOException) {
+    null
+}
+
+private fun launchObsidianNote(notePath: String, vaultPath: String?): Boolean {
+    val note = resolveVaultNotePath(notePath, vaultPath)
+    val uri = note?.let(::obsidianOpenUri)
+    return uri != null &&
+        Desktop.isDesktopSupported() &&
+        Desktop.getDesktop().isSupported(Desktop.Action.BROWSE) &&
+        try {
+            Desktop.getDesktop().browse(uri)
+            true
+        } catch (_: IOException) {
+            false
+        } catch (_: SecurityException) {
+            false
+        } catch (_: UnsupportedOperationException) {
+            false
+        }
+}
+
+private fun setLinuxWallpaper(location: String?, vaultPath: String?): Boolean {
+    if (!isGnomeDesktop()) return false
+    val image = resolveVaultMediaPath(location, vaultPath) ?: return false
+    if (image.fileName.toString().substringAfterLast('.', "").lowercase() !in
+        setOf("jpg", "jpeg", "png", "webp", "bmp", "gif")
+    ) {
+        return false
+    }
+    val uri = image.toUri().toASCIIString()
+    return runGSettings("picture-uri", uri) && runGSettings("picture-uri-dark", uri)
+}
+
+private fun runGSettings(key: String, value: String): Boolean {
+    val process = try {
+        ProcessBuilder(
+            "gsettings",
+            "set",
+            "org.gnome.desktop.background",
+            key,
+            value,
+        ).redirectInput(ProcessBuilder.Redirect.from(Path.of("/dev/null").toFile()))
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+    } catch (_: IOException) {
+        return false
+    } catch (_: SecurityException) {
+        return false
+    }
+    return try {
+        if (!process.waitFor(5, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            false
+        } else {
+            process.exitValue() == 0
+        }
+    } catch (_: InterruptedException) {
+        process.destroyForcibly()
+        Thread.currentThread().interrupt()
+        false
+    }
+}
+
+internal fun obsidianOpenUri(note: Path): URI? {
+    val encodedPath = URLEncoder.encode(note.toString(), StandardCharsets.UTF_8)
+    return try {
+        URI("obsidian://open?path=$encodedPath")
+    } catch (_: URISyntaxException) {
+        null
+    }
+}
+
+private fun isLinuxDesktop(): Boolean =
+    System.getProperty("os.name").lowercase(java.util.Locale.ROOT).contains("linux")
+
+private fun isWindowsDesktop(): Boolean =
+    System.getProperty("os.name").lowercase(java.util.Locale.ROOT).contains("windows")
+
+private fun isGnomeDesktop(): Boolean =
+    isLinuxDesktop() &&
+        (System.getenv("XDG_CURRENT_DESKTOP") ?: "")
+            .uppercase(java.util.Locale.ROOT).contains("GNOME")
+
+private fun showInWindowsFileManager(media: Path): Boolean {
+    val process = try {
+        ProcessBuilder(windowsFileManagerShowItemCommand(media))
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+    } catch (_: IOException) {
+        return false
+    } catch (_: SecurityException) {
+        return false
+    }
+    return process.isAlive || process.exitValue() == 0
+}
+
+private fun showInLinuxFileManager(media: Path): Boolean {
+    val process = try {
+        ProcessBuilder(linuxFileManagerShowItemsCommand(media))
+            .redirectInput(ProcessBuilder.Redirect.from(Path.of("/dev/null").toFile()))
+            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+            .redirectError(ProcessBuilder.Redirect.DISCARD)
+            .start()
+    } catch (_: IOException) {
+        return false
+    } catch (_: SecurityException) {
+        return false
+    }
+    return try {
+        if (!process.waitFor(FILE_MANAGER_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+            process.destroyForcibly()
+            false
+        } else {
+            process.exitValue() == 0
+        }
+    } catch (_: InterruptedException) {
+        process.destroyForcibly()
+        Thread.currentThread().interrupt()
+        false
+    }
+}
+
+internal fun windowsFileManagerShowItemCommand(media: Path): List<String> =
+    listOf("explorer.exe", "/select,", media.toString())
+
+internal fun linuxFileManagerShowItemsCommand(media: Path): List<String> {
+    val uri = media.toUri().toASCIIString()
+    val quotedUri = uri.replace("\\", "\\\\").replace("'", "\\'")
+    return listOf(
+        "gdbus",
+        "call",
+        "--session",
+        "--dest=org.freedesktop.FileManager1",
+        "--object-path=/org/freedesktop/FileManager1",
+        "--method=org.freedesktop.FileManager1.ShowItems",
+        "['$quotedUri']",
+        "",
+    )
+}
+
+internal fun resolveVaultMediaPath(location: String?, vaultPath: String?): Path? {
+    if (location == null || vaultPath == null) return null
+    return try {
+        val root = Path.of(vaultPath).toRealPath()
+        val media = Path.of(location).toRealPath()
+        media.takeIf {
+            it.startsWith(root) && Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS)
+        }
+    } catch (_: IOException) {
+        null
+    } catch (_: InvalidPathException) {
+        null
+    } catch (_: SecurityException) {
+        null
+    }
+}
+
+internal fun resolveVaultNotePath(notePath: String?, vaultPath: String?): Path? {
+    if (notePath.isNullOrBlank() || vaultPath.isNullOrBlank()) return null
+    return try {
+        val root = Path.of(vaultPath).toRealPath()
+        val relative = Path.of(notePath)
+        if (relative.isAbsolute) return null
+        val candidate = root.resolve(relative).normalize()
+        if (!candidate.startsWith(root)) return null
+        val note = candidate.toRealPath()
+        note.takeIf {
+            it.startsWith(root) && Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS)
+        }
+    } catch (_: IOException) {
+        null
+    } catch (_: InvalidPathException) {
+        null
+    } catch (_: SecurityException) {
+        null
+    }
+}
+
+private const val FILE_MANAGER_TIMEOUT_SECONDS = 10L
 
 @Composable
 private fun DesktopWelcome(
@@ -494,7 +785,20 @@ private data class DesktopImageState(
     val error: String? = null,
 )
 
-private fun chooseVaultDirectory(): String? {
+private suspend fun chooseVaultDirectory(): String? {
+    if (isLinuxDesktop()) {
+        try {
+            return withContext(Dispatchers.IO) {
+                LinuxPortalDirectoryPicker.chooseDirectory("Select an existing Vault")
+            }?.toString()
+        } catch (_: IOException) {
+            // Keep the desktop usable when a session has no FileChooser portal.
+        }
+    }
+    return chooseVaultDirectoryWithSwing()
+}
+
+private fun chooseVaultDirectoryWithSwing(): String? {
     val chooser = JFileChooser(FileSystemView.getFileSystemView().homeDirectory).apply {
         dialogTitle = "Select an existing Vault"
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY

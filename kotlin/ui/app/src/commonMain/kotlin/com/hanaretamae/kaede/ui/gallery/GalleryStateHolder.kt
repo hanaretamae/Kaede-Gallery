@@ -45,6 +45,9 @@ class GalleryStateHolder(
     private var categoriesJob: Job? = null
     private var searchJob: Job? = null
     private var rescanJob: Job? = null
+    private var pendingJumpPageOffset: Long? = null
+    private var pendingJumpItemOffset: Long? = null
+    private var jumpRestoreState: GalleryUiState? = null
 
     fun start() {
         refresh()
@@ -53,6 +56,9 @@ class GalleryStateHolder(
     fun setQuery(query: GalleryQuery, debounceSearch: Boolean = false) {
         val normalized = query.copy(offset = 0)
         if (normalized == mutableState.value.query) return
+        jumpRestoreState = null
+        pendingJumpPageOffset = null
+        pendingJumpItemOffset = null
         revision++
         requestJob?.cancel()
         categoriesJob?.cancel()
@@ -78,6 +84,9 @@ class GalleryStateHolder(
     }
 
     fun refresh() {
+        jumpRestoreState = null
+        pendingJumpPageOffset = null
+        pendingJumpItemOffset = null
         searchJob?.cancel()
         revision++
         requestJob?.cancel()
@@ -123,6 +132,16 @@ class GalleryStateHolder(
         requestPage(reset = false)
     }
 
+    fun loadPrevious() {
+        val current = mutableState.value
+        if (current.loading || current.pageOffset == 0L) return
+        requestPage(
+            reset = false,
+            requestedOffset = (current.pageOffset - current.query.pageSize).coerceAtLeast(0),
+            prepend = true,
+        )
+    }
+
     fun jumpTo(position: Long) {
         if (position !in 1..MAX_GALLERY_POSITION || mutableState.value.loading) return
         val offset = position - 1
@@ -131,6 +150,9 @@ class GalleryStateHolder(
             mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
             return
         }
+        jumpRestoreState = mutableState.value
+        pendingJumpPageOffset = null
+        pendingJumpItemOffset = offset
         revision++
         requestJob?.cancel()
         categoriesJob?.cancel()
@@ -142,7 +164,34 @@ class GalleryStateHolder(
             error = null,
         )
         requestCategories()
-        requestPage(reset = true, requestedOffset = offset)
+        val targetPageOffset = offset / mutableState.value.query.pageSize *
+            mutableState.value.query.pageSize
+        pendingJumpPageOffset = targetPageOffset
+        if (targetPageOffset == 0L) {
+            requestPage(reset = true, requestedOffset = targetPageOffset)
+        } else {
+            requestPage(
+                reset = true,
+                requestedOffset = (targetPageOffset - mutableState.value.query.pageSize)
+                    .coerceAtLeast(0),
+            )
+        }
+    }
+
+    fun cancelJump() {
+        val restoreState = jumpRestoreState ?: return
+        revision++
+        requestJob?.cancel()
+        categoriesJob?.cancel()
+        searchJob?.cancel()
+        pendingJumpPageOffset = null
+        pendingJumpItemOffset = null
+        mutableState.value = restoreState.copy(loading = false)
+        jumpRestoreState = null
+    }
+
+    fun dismissJumpError() {
+        jumpRestoreState = null
     }
 
     fun cycleTagSelection(tag: String) {
@@ -191,7 +240,11 @@ class GalleryStateHolder(
         rescanJob?.cancel()
     }
 
-    private fun requestPage(reset: Boolean, requestedOffset: Long? = null) {
+    private fun requestPage(
+        reset: Boolean,
+        requestedOffset: Long? = null,
+        prepend: Boolean = false,
+    ) {
         if (mutableState.value.loading) return
         val requestRevision = revision
         val current = mutableState.value
@@ -209,7 +262,14 @@ class GalleryStateHolder(
             when (result) {
                 is RepositoryResult.Success -> {
                     val page = result.value
-                    val invalidJump = requestedOffset != null && page.entries.isEmpty()
+                    val targetItemOffset = pendingJumpItemOffset
+                    val targetPageOffset = pendingJumpPageOffset
+                    val invalidJump = requestedOffset != null && (
+                        page.entries.isEmpty() ||
+                            (offset == targetPageOffset &&
+                                targetItemOffset != null &&
+                                targetItemOffset >= offset + page.entries.size)
+                        )
                     if (
                         invalidJump ||
                         page.offset != offset ||
@@ -218,6 +278,8 @@ class GalleryStateHolder(
                         page.totalCount - page.offset < page.entries.size ||
                         (page.entries.isEmpty() && page.totalCount > page.offset)
                     ) {
+                        pendingJumpPageOffset = null
+                        pendingJumpItemOffset = null
                         mutableState.value = latest.copy(
                             loading = false,
                             error = if (invalidJump) {
@@ -227,17 +289,33 @@ class GalleryStateHolder(
                             },
                         )
                     } else {
-                        val entries = if (reset) page.entries else latest.entries + page.entries
+                        val entries = when {
+                            reset -> page.entries
+                            prepend -> page.entries + latest.entries
+                            else -> latest.entries + page.entries
+                        }
                         mutableState.value = latest.copy(
                             entries = entries,
-                            pageOffset = offset,
+                            pageOffset = if (prepend || reset) offset else latest.pageOffset,
                             totalCount = page.totalCount,
                             loading = false,
                             error = null,
                         )
+                        if (targetPageOffset != null && offset != targetPageOffset) {
+                            requestPage(
+                                reset = false,
+                                requestedOffset = targetPageOffset,
+                            )
+                        } else if (offset == targetPageOffset) {
+                            pendingJumpPageOffset = null
+                            pendingJumpItemOffset = null
+                            jumpRestoreState = null
+                        }
                     }
                 }
                 is RepositoryResult.Failure -> {
+                    pendingJumpPageOffset = null
+                    pendingJumpItemOffset = null
                     mutableState.value = latest.copy(loading = false, error = result.error)
                 }
             }
