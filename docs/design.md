@@ -56,31 +56,37 @@ integrations.
    is documented. Reuse existing functionality instead of duplicating it.
 7. **Complete (foundation):** Add Kotlin Multiplatform / Compose Multiplatform
    modules and build/test infrastructure while retaining the Flutter app.
-8. **Current migration — Rust FFI:** Add generated Kotlin bindings behind a
-   coarse-grained, read-only repository API. Validate the selected FFI
-   technology and its supported target ABIs before treating this phase as
-   complete.
-9. **Shared UI:** Migrate Gallery, Search, Filter, and Viewer to shared Compose
-   UI with immutable state, paging, and stable keys.
-10. **Settings and design system:** Migrate settings, localization, theme, and
-    Material 3 Expressive presentation without writing into the Vault.
-11. **Android:** Migrate SAF and lifecycle integration; use an Android-native
-    video backend where appropriate.
-12. **Desktop:** Migrate Linux and Windows filesystem, window, and video
-    integrations to desktop implementations.
-13. **Parity and performance:** Verify functional parity, security properties,
-    build/release paths, and measured performance on fictional fixtures before
-    retiring any Flutter target.
-14. **Flutter removal:** Remove Flutter only after all replacement targets
-    and release paths have passed parity and acceptance checks.
+8. **Complete for shipped KMP targets:** Generated Kotlin bindings sit behind
+   the read-only repository API. Android and desktop JVM builds pass, and the
+   Windows-host JVM ABI and distributable pass CI. The separate `mingwX64`
+   library is not used by the Windows Compose application; keep the Flutter
+   MSVC release path.
+9. **Implemented; parity acceptance tracked in phase 13:** Gallery, Search,
+   Filter, and Viewer use shared Compose UI with immutable state, paging, and
+   stable keys.
+10. **Implemented; parity acceptance tracked in phase 13:** Shared settings,
+    localization, theme, and Material 3 Expressive presentation use private
+    app data and do not write into the Vault.
+11. **Implemented and fixture-accepted:** Android SAF and lifecycle
+    integration use the Android-native video backend. The 2,000-note
+    unchanged-scan target is met on the tested device/provider with the shared
+    bound; see `docs/phase1-performance.md`.
+12. **Implemented; runtime acceptance is target-specific:** Linux uses desktop
+    filesystem/window/video integrations. Windows x64 JVM packaging and tests
+    pass CI, including the embedded-mpv platform-selection path. Physical
+    Windows runtime testing is not included in the current acceptance plan.
+13. **In progress:** Continue verifying cross-platform functional parity,
+    security properties, build/release paths, and measured performance on
+    fictional fixtures before retiring any Flutter target.
+14. **Deferred:** Remove Flutter only after all replacement targets and
+    release paths have passed parity and acceptance checks.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
 
-The later shared-UI and settings steps already have partial implementations;
-their presence does not mean those phases passed parity or acceptance checks.
-Complete and verify phases in order rather than treating those early
-implementations as finished.
+Implementation for shared UI, settings, Android, and desktop is present;
+phase 13 remains the parity and acceptance gate. Do not treat passing builds
+or partial target acceptance as proof of complete migration.
 
 ### Current KMP implementation status
 
@@ -133,7 +139,9 @@ through FFmpeg for gallery tiles. The same extractor supports Windows when an
 `ffmpeg` executable is available on `PATH`; Windows runtime behavior has not
 yet been verified. A fictional H.264 video was selected from a dedicated SAF
 fixture on an API 36 device; the viewer played it and the gallery tile displayed
-its magenta video frame. The 2026-10-07 KMP fixture run completes visual
+its magenta video frame. Desktop video playback uses the embedded mpv child
+window on Linux and Windows; Windows runtime playback still requires
+independent runtime acceptance. The 2026-10-07 KMP fixture run completes visual
 acceptance for gallery/search/note-detail surfaces; media playback and
 thumbnail behavior were separately smoke-tested on API 36.
 Linux and Windows video are rendered in an embedded native child window from a
@@ -143,8 +151,8 @@ and automatic sidecar loading. Desktop video thumbnails limit ffmpeg to local
 file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
 timeout, and two concurrent extraction processes. A basic localized About
 section now links to the project and license. Windows x64 CI passed for the
-current migration branch at commit `e479c08`
-([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37557684852)).
+current migration branch at commit `076436a`
+([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37559570910)).
 This verifies the Windows build and packaging path, not execution on physical
 Windows hardware or runtime availability of native mpv embedding there.
 Android visual/interaction checks are complete for the
