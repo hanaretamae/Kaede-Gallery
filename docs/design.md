@@ -542,7 +542,7 @@ rebuilding visible media placeholders during prepends. Progress appears in a can
 dialog that closes on success and remains open on failure; the target is
 briefly highlighted. The count range follows the visible configured page, not
 the number of items prefetched into memory. Thumbnail loading never disables
-gallery scrolling. Pulling down at the top of the gallery starts a rescan.
+gallery scrolling. Pull-to-refresh is disabled; use the explicit rescan action.
 General usage guidance is grouped under a separate Help screen rather than shown
 as a settings-only explanation.
 Within a category ordinary included tags are OR; between categories conditions
