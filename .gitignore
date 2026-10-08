@@ -1,4 +1,5 @@
 /target/
+/app/
 /kotlin/.gradle/
 /kotlin/**/build/
 /kotlin/local.properties

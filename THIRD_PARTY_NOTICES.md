@@ -1,103 +1,52 @@
 # Third-party notices
 
-Kaede Gallery itself is licensed under the [MIT License](LICENSE). Dart and
-Flutter package licenses are shown in the in-app **Open-source licenses**
-screen. Full license texts for bundled native libraries and Rust dependencies
-are also shown there and shipped in `app/assets/licenses/`; Windows ZIPs and
-Nix packages include the same files. The release includes a
-`kaede-gallery-third-party-licenses.tar.gz` archive for APK recipients.
+Kaede Gallery's application code is licensed under the [MIT License](LICENSE).
+The active Android and Compose Desktop applications are built with Kotlin
+Multiplatform / Compose and Rust. Their offline in-app **Open-source licenses**
+viewer and distribution archives use the license texts in
+`kotlin/shared-assets/licenses/`.
 
-Rust dependency notices are generated from the shipped `gallery-bridge` and
-`gallery-ffi` Cargo dependency graphs for Android, Windows x86_64/ARM64, and Linux
-x86_64/ARM64.
-The report includes selected SPDX license texts, the package names and
-versions using them, and any dependency `NOTICE` or copyright files. The
-accepted license expressions are maintained in `about.toml` and `deny.toml`.
-Regenerate the report after changing Rust dependencies with
-`python3 tools/update-rust-license-notices.py`.
+The Rust dependency report is generated from the shipped `gallery-ffi` Cargo
+dependency graph. It lists the package names and versions, selected SPDX license
+texts, and dependency `NOTICE` or copyright files. The accepted license
+expressions are maintained in `about.toml` and `deny.toml`. Regenerate the report
+after changing Rust dependencies with:
 
-## Video playback and thumbnail libraries
+```sh
+python3 tools/update-rust-license-notices.py
+```
 
-| Target       | Libraries                                                                                                 | License                                                                                                     | License text                             |
-| ------------ | --------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------- |
-| Android APK  | libmpv and FFmpeg (`media-kit/libmpv-android-video-build` v1.1.7 `default` build; mpv uses `-Dgpl=false`) | LGPL-2.1-or-later                                                                                           | `LGPL-2.1.txt`                           |
-| Windows ZIP  | libmpv and FFmpeg (`media-kit/libmpv-win32-video-build`, 2023-09-24)                                      | LGPL-3.0-or-later                                                                                           | `LGPL-3.0.txt`                           |
-| Linux bundle | mpv 0.41.0, FFmpeg 9.0.1, libass, and libplacebo (pinned by `flake.lock`)                                 | FFmpeg uses `--enable-gpl --enable-version3`; the bundled application is distributed under GPL-3.0-or-later | `GPL-3.0.txt`, `LGPL-2.1.txt`, `ISC.txt` |
+The report covers the seven Rust target triples configured in `about.toml`; it
+excludes build-only and development-only dependencies.
 
-The Android shared libraries (`.so`) and Windows `libmpv-2.dll` are dynamically
-linked and replaceable. Source/build projects are available at:
+## Platform and media dependencies
 
-- Android: https://github.com/media-kit/libmpv-android-video-build (v1.1.7)
-- Windows: https://github.com/media-kit/libmpv-win32-video-build
-- Linux dependencies: the nixpkgs revision pinned in `flake.lock`, with
-  package build definitions and source references
-- mpv: https://github.com/mpv-player/mpv
-- FFmpeg: https://ffmpeg.org/legal.html
-- libass: https://github.com/libass/libass
-- libplacebo: https://code.videolan.org/videolan/libplacebo
+| Target            | Runtime components                                                               | License and distribution notes                                                                                                                                                                                                                 |
+| ----------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Android APK       | AndroidX Media3, Kotlin/Compose, Rust UniFFI bindings                            | AndroidX and Kotlin/Compose runtime components use Apache-2.0. Rust notices and license texts are included in the APK's offline license viewer and release archive.                                                                            |
+| Windows x64 ZIP   | Compose Desktop, JNA 5.19.1, Rust UniFFI bindings                                | JNA is dual-licensed under Apache-2.0 or LGPL-2.1-or-later. The ZIP includes both license choices. Windows runtime video playback and thumbnail extraction require `mpv` and `ffmpeg` on `PATH`; those executables are not bundled in the ZIP. |
+| Linux Nix package | Compose Desktop, JNA 5.19.1, nixpkgs `mpv`, `ffmpeg`, `libass`, and `libplacebo` | The package wrapper uses the pinned nixpkgs runtime dependencies. FFmpeg is built with GPL support, so the Linux package is distributed under GPL-3.0-or-later; see `GPL-3.0.txt`, `LGPL-2.1.txt`, and `ISC.txt`.                              |
 
-The Linux bundle's Nix package metadata identifies GPL-3.0-or-later, matching
-the license terms of the bundled application.
+The Compose Desktop Linux and Windows distributions bundle JNA 5.19.1. Its JAR
+also contains the `META-INF/LICENSE` notice and license references. Source:
+<https://github.com/java-native-access/jna>
 
-## Kotlin Multiplatform dependencies
+## Bundled license files
 
-The KMP Android and Compose Desktop applications bundle an offline in-app
-license viewer. Its shared license assets are packaged from `app/assets/licenses/`.
-The viewer includes Apache-2.0 for the Kotlin, Compose, AndroidX, and Media3
-runtime groups and as one JNA license option, LGPL-2.1-or-later as the other
-JNA option, and the generated Rust dependency report with package names,
-versions, notices, and full license
-texts (including the MPL-2.0 UniFFI section).
-
-The Compose Desktop Linux and Windows distributions bundle JNA 5.19.1, dual
-licensed under Apache-2.0 or LGPL-2.1-or-later. Its bundled JNA JAR also contains
-the `META-INF/LICENSE` notice and license references. Source:
-https://github.com/java-native-access/jna
-
-## Windows graphics libraries
-
-The Windows ZIP includes the prebuilt ANGLE v1.0.1 archive used by
-`media_kit_libs_windows_video`. Its CMake build pins `ANGLE.7z` with MD5
-`e866f13e8d552348058afaafe869b1ed`. The archive itself contains no license or
-notice files; the upstream license texts and copyright notices are supplied
-with this application. CMake copies these runtime libraries:
-
-| Runtime file(s)               | Component and license                                                           | License text / source                                                                                  |
-| ----------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `libEGL.dll`, `libGLESv2.dll` | ANGLE, BSD-3-Clause                                                             | `ANGLE-LICENSE.txt`; https://github.com/google/angle                                                   |
-| `vk_swiftshader.dll`          | SwiftShader, Apache-2.0                                                         | `SwiftShader-LICENSE.txt`, `SwiftShader-AUTHORS.txt`; https://github.com/google/swiftshader            |
-| `vulkan-1.dll`                | Vulkan Loader, Apache-2.0                                                       | `Vulkan-Loader-LICENSE.txt`, `Vulkan-Loader-NOTICE.txt`; https://github.com/KhronosGroup/Vulkan-Loader |
-| `zlib.dll`                    | zlib                                                                            | `zlib-LICENSE.txt`; https://github.com/madler/zlib/tree/v1.2.13                                        |
-| `d3dcompiler_47.dll`          | Microsoft Direct3D Compiler redistributable; not an open-source ANGLE component | `MICROSOFT-WINDOWS-SDK-REDIST.txt`; https://learn.microsoft.com/en-us/legal/windows-sdk/redist         |
-
-The DLL's embedded Authenticode signature identifies Microsoft Corporation.
-Microsoft lists `d3dcompiler_47.dll` as redistributable for classic Windows
-applications; redistribution is subject to the applicable Windows SDK terms.
-The vendor archive does not record the exact SDK version, so the notice links
-the official redistributable list and preserves that provenance limitation.
-The Windows build workflow validates the DLL's Authenticode signature and
-Microsoft signer identity before packaging.
-The Microsoft DLL is not relicensed under the open-source licenses above.
-
-The archive also contains `libc++.dll`, but the current CMake bundled-library
-list does not copy it into the Windows application bundle.
-
-## Dart and Flutter packages
-
-The Dart/Flutter dependency license texts are included by Flutter in its
-generated license registry and displayed in the in-app **Open-source licenses**
-screen. `dbus` is used unmodified under MPL-2.0. Its full text is shown with
-the other Dart/Flutter package licenses.
+The KMP applications package the shared license assets from
+`kotlin/shared-assets/licenses/`. They include Apache-2.0 for Kotlin, Compose,
+AndroidX, and Media3 runtime groups; Apache-2.0 and LGPL-2.1-or-later for JNA;
+platform/runtime notices where applicable; and the generated Rust dependency
+report, including the MPL-2.0 UniFFI entry. The Linux Nix package and Windows ZIP
+also include the project license and this notice file.
 
 ## Rust dependencies
 
-The generated `RUST-DEPENDENCY-LICENSES.txt` lists the Rust packages in the
-shipped application dependency graph by license, package name, and version,
-followed by the license texts and any included dependency `NOTICE` or
-copyright files. The report covers the seven shipped Rust target triples
-configured in `about.toml`; build-only and development-only dependencies are
-excluded.
+`RUST-DEPENDENCY-LICENSES.txt` lists Rust packages in the shipped application
+dependency graph by license, package name, and version, followed by the license
+texts and any included dependency `NOTICE` or copyright files. Only runtime
+dependencies reachable from `gallery-ffi` are included.
 
 ## macOS
 
-macOS is unsupported and no macOS artifacts are distributed.
+macOS is not supported and no macOS distribution is provided.

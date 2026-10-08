@@ -13,8 +13,8 @@ fail() {
   exit 1
 }
 
-if [[ $# -ne 1 || ! $1 =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-  fail "usage: tools/release.sh vMAJOR.MINOR.PATCH"
+if [[ $# -ne 1 || ! $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+(b[0-9]+)?$ ]]; then
+  fail "usage: tools/release.sh MAJOR.MINOR.PATCH[bN] (without a v prefix)"
 fi
 
 tag=$1
@@ -23,15 +23,15 @@ cd "$repo_root"
 
 [[ -z $(git status --porcelain) ]] || fail "commit or stash all changes before releasing"
 command -v gh >/dev/null || fail "GitHub CLI (gh) is required; enter nix develop first"
-command -v flutter >/dev/null || fail "Flutter is required; enter nix develop first"
+command -v python3 >/dev/null || fail "Python 3 is required; enter nix develop first"
 command -v cargo >/dev/null || fail "Cargo is required; enter nix develop first"
 command -v rustup >/dev/null || fail "Rustup is required; enter nix develop first"
 command -v keepassxc-cli >/dev/null || fail "KeePassXC CLI (keepassxc-cli) is required"
 [[ -n ${ANDROID_HOME:-} && -n ${ANDROID_NDK_HOME:-} ]] || fail "enter nix develop to configure the Android SDK"
 gh auth status --hostname github.com >/dev/null 2>&1 || fail "authenticate with gh auth login first"
 
-app_version=$(sed -n 's/^version:[[:space:]]*//p' app/pubspec.yaml | head -n 1 | cut -d+ -f1)
-[[ $tag == "v$app_version" ]] || fail "tag must match app/pubspec.yaml version v$app_version"
+app_version=$(tr -d '\r\n' < VERSION)
+[[ $tag == "$app_version" ]] || fail "tag must match VERSION $app_version (without a v prefix)"
 git show-ref --verify --quiet "refs/tags/$tag" || fail "create the local tag first: git tag -a $tag -m $tag"
 tag_commit=$(git rev-parse "$tag^{commit}")
 head_commit=$(git rev-parse HEAD)
@@ -102,7 +102,7 @@ cleanup() {
 trap cleanup EXIT
 notes_file=$(mktemp)
 
-awk -v version="${tag#v}" '
+awk -v version="$tag" '
   $0 ~ "^## \\[" version "\\]( - .*)?$" { found = 1; next }
   found && /^## / { exit }
   found { print }
@@ -114,21 +114,21 @@ if command -v nix >/dev/null; then
   native_system=$(awk '$1 == "system" { print $3 }' <<< "$nix_config")
   extra_systems=$(awk '$1 == "extra-platforms" { $1 = $2 = ""; print }' <<< "$nix_config")
   has_builders=$(awk '$1 == "builders" && NF > 2 { print "yes" }' <<< "$nix_config")
-  for system in x86_64-linux aarch64-linux; do
-    [[ " ${SKIP_LINUX_ARCHES:-} " == *" $system "* ]] && continue
+  for system in x86_64-linux; do
     [[ $system == "$native_system" || " $extra_systems " == *" $system "* || -n $has_builders ]] ||
-      fail "no way to build $system (needs binfmt emulation or a remote builder); set SKIP_LINUX_ARCHES=$system to skip"
+      fail "no way to build $system (needs a native or remote builder)"
   done
 fi
 
-dart tools/generate_saf_limits.dart --check
-rustup target add aarch64-linux-android x86_64-linux-android
+python3 tools/generate_saf_limits.py --check
 cargo test --locked --workspace
 (
-  cd app
-  flutter pub get --enforce-lockfile
-  flutter analyze
-  flutter test
+  cd kotlin
+  ./gradlew --no-daemon \
+    :core:rust:jvmTest \
+    :core:settings:jvmTest \
+    :ui:app:jvmTest \
+    :desktopApp:test
 )
 
 key_dir=$(mktemp -d "$XDG_RUNTIME_DIR/kaede-gallery-release.XXXXXXXX") ||
@@ -147,71 +147,79 @@ if ! signing_password=$(keepassxc-cli show "${keepassxc_auth[@]}" --show-protect
 fi
 [[ -n $signing_password ]] || fail "the KeePassXC signing entry has no password"
 
+rust_toolchain=1.98.1
+rustup run "$rust_toolchain" rustc --version >/dev/null 2>&1 ||
+  fail "Rustup toolchain $rust_toolchain is not installed"
+for target in aarch64-linux-android x86_64-linux-android; do
+  rustup target list --installed --toolchain "$rust_toolchain" | grep -Fxq "$target" ||
+    fail "Rust target $target is not installed for Rustup $rust_toolchain; install it before releasing"
+done
+rustc_path=$(rustup which rustc --toolchain "$rust_toolchain") ||
+  fail "Rustup could not locate rustc for $rust_toolchain"
+rustdoc_path=$(rustup which rustdoc --toolchain "$rust_toolchain") ||
+  fail "Rustup could not locate rustdoc for $rust_toolchain"
+export RUSTUP_TOOLCHAIN=$rust_toolchain
+export RUSTC=$rustc_path
+export RUSTDOC=$rustdoc_path
+export PATH="$(dirname "$rustc_path"):$PATH"
 ndk_bin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
-[[ -x $ndk_bin/aarch64-linux-android35-clang && -x $ndk_bin/x86_64-linux-android35-clang ]] ||
+[[ -x $ndk_bin/aarch64-linux-android23-clang && -x $ndk_bin/x86_64-linux-android23-clang ]] ||
   fail "Android NDK compiler was not found"
-rust_toolchain_bin=$(dirname "$(rustup which rustc)")
-export PATH="$rust_toolchain_bin:$PATH"
 for triple in aarch64 x86_64; do
   upper=${triple^^}
-  export "CC_${triple}_linux_android=$ndk_bin/${triple}-linux-android35-clang"
-  export "CXX_${triple}_linux_android=$ndk_bin/${triple}-linux-android35-clang++"
+  export "CC_${triple}_linux_android=$ndk_bin/${triple}-linux-android23-clang"
+  export "CXX_${triple}_linux_android=$ndk_bin/${triple}-linux-android23-clang++"
   export "AR_${triple}_linux_android=$ndk_bin/llvm-ar"
   export "RANLIB_${triple}_linux_android=$ndk_bin/llvm-ranlib"
-  export "CARGO_TARGET_${upper}_LINUX_ANDROID_LINKER=$ndk_bin/${triple}-linux-android35-clang"
+  export "CARGO_TARGET_${upper}_LINUX_ANDROID_LINKER=$ndk_bin/${triple}-linux-android23-clang"
 done
-
 
 dist_dir=$(mktemp -d "$XDG_RUNTIME_DIR/kaede-gallery-dist.XXXXXXXX") ||
   fail "could not create a release output directory"
 dist_cleanup=$dist_dir
-version=${tag#v}
-apksigner="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+version=$tag
+latest_build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)
+[[ -n $latest_build_tools ]] || fail "Android SDK build-tools were not found"
+apksigner="$ANDROID_HOME/build-tools/$latest_build_tools/apksigner"
 command -v apkanalyzer >/dev/null || fail "Android SDK apkanalyzer was not found"
 [[ -x $apksigner ]] || fail "apksigner was not found"
 
-build_apk() {
-  local name=$1 platforms=$2 apk
-  (
-    cd app
-    ANDROID_KEYSTORE_PATH="$keystore_path" \
-      ANDROID_KEYSTORE_PASSWORD="$signing_password" \
-      ANDROID_KEY_ALIAS=kaede-gallery \
-      ANDROID_KEY_PASSWORD="$signing_password" \
+(
+  cd kotlin
+  ANDROID_KEYSTORE_PATH="$keystore_path" \
+    ANDROID_KEYSTORE_PASSWORD="$signing_password" \
+    ANDROID_KEY_ALIAS=kaede-gallery \
+    ANDROID_KEY_PASSWORD="$signing_password" \
     GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.daemon=false" \
-    flutter build apk --release --target-platform "$platforms"
-  )
-  apk="$repo_root/app/build/app/outputs/flutter-apk/app-release.apk"
-  [[ -f $apk ]] || fail "APK for $name was not produced"
-  "$apksigner" verify "$apk" || fail "APK signature verification failed for $name"
-  permissions=$(apkanalyzer manifest permissions "$apk") ||
-    fail "could not inspect the $name APK permissions"
-  if grep -Eq 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED)' \
-    <<< "$permissions"; then
-    fail "the $name APK requests a network or broad-storage permission"
-  fi
-  cp -- "$apk" "$dist_dir/kaede-gallery-$version-$name.apk"
-}
-
-# Separate per-ABI APKs plus one universal APK that contains both ABIs.
-build_apk android-arm64 android-arm64
-build_apk android-x86_64 android-x64
-build_apk android-universal android-arm64,android-x64
+    ./gradlew --no-daemon :androidApp:assembleRelease
+)
+mapfile -d '' apks < <(find kotlin/androidApp/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print0)
+[[ ${#apks[@]} -eq 1 ]] || fail "expected exactly one KMP release APK, found ${#apks[@]}"
+apk=${apks[0]}
+"$apksigner" verify "$apk" || fail "APK signature verification failed"
+application_id=$(apkanalyzer manifest application-id "$apk") ||
+  fail "could not inspect the APK application ID"
+[[ $application_id == com.hanaretamae.kaede ]] ||
+  fail "unexpected KMP APK application ID: $application_id"
+permissions=$(apkanalyzer manifest permissions "$apk") ||
+  fail "could not inspect the APK permissions"
+if grep -Eq 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED)' \
+  <<< "$permissions"; then
+  fail "the KMP APK requests a network or broad-storage permission"
+fi
+cp -- "$apk" "$dist_dir/kaede-gallery-$version-android-universal.apk"
 unset signing_password
 rm -f -- "$keystore_path"
 rmdir -- "$key_dir"
 key_dir=
 
-# Self-contained Linux executables (no Nix needed on the target machine).
-# The non-native architecture needs binfmt emulation or a remote builder;
-# set SKIP_LINUX_ARCHES="aarch64-linux" to skip an architecture explicitly.
-command -v nix >/dev/null || fail "Nix is required to build the Linux bundles"
-for system in x86_64-linux aarch64-linux; do
-  [[ " ${SKIP_LINUX_ARCHES:-} " == *" $system "* ]] && continue
+# Self-contained x86_64 Linux executable (no Nix needed on the target machine).
+command -v nix >/dev/null || fail "Nix is required to build the Linux bundle"
+for system in x86_64-linux; do
   arch=${system%-linux}
   linux_out="$dist_dir/linux-$arch"
   nix bundle --system "$system" --out-link "$linux_out" ".#packages.$system.default" ||
-    fail "could not build the $system bundle (set SKIP_LINUX_ARCHES=$system to skip)"
+    fail "could not build the $system bundle"
   [[ -f $linux_out ]] || fail "the $system bundle was not produced"
   cp -- "$(readlink -f "$linux_out")" "$dist_dir/kaede-gallery-$version-linux-$arch"
   rm -f -- "$linux_out"
@@ -220,14 +228,19 @@ done
 
 cp -- LICENSE "$dist_dir/kaede-gallery-LICENSE.txt"
 cp -- THIRD_PARTY_NOTICES.md "$dist_dir/kaede-gallery-THIRD_PARTY_NOTICES.md"
-tar -C app/assets -czf "$dist_dir/kaede-gallery-third-party-licenses.tar.gz" licenses
+tar -C kotlin/shared-assets -czf "$dist_dir/kaede-gallery-third-party-licenses.tar.gz" licenses
 (cd "$dist_dir" && sha256sum -- kaede-gallery-* > SHA256SUMS)
 
+release_flags=()
+if [[ $tag =~ b[0-9]+$ ]]; then
+  release_flags+=(--prerelease)
+fi
 gh release create "$tag" "$dist_dir"/kaede-gallery-* "$dist_dir/SHA256SUMS" \
   --verify-tag \
-  --title "$tag" \
+  --title "Kaede Gallery $tag" \
   --notes-file "$notes_file" \
-  --repo "$repo"
+  --repo "$repo" \
+  "${release_flags[@]}"
 
 printf 'Released %s:\n' "$tag"
 ls -1 -- "$dist_dir"

@@ -3,7 +3,6 @@ members = [
     "crates/gallery-parse",
     "crates/gallery-core",
     "crates/gallery-cli",
-    "crates/gallery-bridge",
     "crates/gallery-ffi",
 ]
 resolver = "2"

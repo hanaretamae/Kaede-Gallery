@@ -1,12 +1,10 @@
-name: Windows build
+name: Windows KMP build and release
 
-# Manual only: standard GitHub-hosted runners are free for public repositories.
-# Do not switch to larger (paid) runners.
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: "Release tag to build and attach to (for example v1.5.3). Empty builds the selected ref only."
+        description: "Release tag to build and attach to (for example 2.0.0b1; no v prefix). Empty builds the selected ref only."
         required: false
         type: string
 
@@ -24,68 +22,47 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
           persist-credentials: false
 
-      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+      - uses: actions/setup-java@v5
         with:
-          channel: stable
-          flutter-version: "3.47.4"
-          architecture: x64
-          cache: true
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
 
-      - name: Install Rust
+      - uses: dtolnay/rust-toolchain@1.98.1
+
+      - name: Verify release version
+        if: inputs.tag != ''
+        env:
+          TAG: ${{ inputs.tag }}
         shell: pwsh
         run: |
-          if (-not (Get-Command rustup -ErrorAction SilentlyContinue)) {
-            $initializer = 'x86_64'
-            Invoke-WebRequest "https://win.rustup.rs/$initializer" -OutFile rustup-init.exe
-            ./rustup-init.exe -y --profile minimal --default-toolchain none
-            "$env:USERPROFILE\.cargo\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
-            $env:PATH = "$env:USERPROFILE\.cargo\bin;$env:PATH"
-          }
-          rustup toolchain install 1.98.1 --profile minimal
-          rustup default 1.98.1
-          rustup target add x86_64-pc-windows-msvc
-          $rustc = (rustup which rustc).Trim()
-          if (-not (Test-Path $rustc)) { throw "rustc was not found at $rustc" }
-          "RUSTC=$rustc" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
-          rustc --version
-
-      - name: Build
-        working-directory: app
-        shell: pwsh
-        run: |
-          flutter config --no-analytics
-          flutter pub get --enforce-lockfile
-          flutter build windows --release --verbose
-
-      - name: Verify bundle
-        shell: pwsh
-        run: |
-          $bundle = 'app/build/windows/x64/runner/Release'
-          Get-ChildItem $bundle | Select-Object Name, Length
-          foreach ($name in 'kaede_gallery.exe', 'gallery_bridge.dll', 'libmpv-2.dll',
-              'libEGL.dll', 'libGLESv2.dll', 'vk_swiftshader.dll', 'vulkan-1.dll',
-              'zlib.dll', 'd3dcompiler_47.dll') {
-            if (-not (Test-Path (Join-Path $bundle $name))) { throw "$name is missing from the bundle" }
-          }
-          $d3dSignature = Get-AuthenticodeSignature (Join-Path $bundle 'd3dcompiler_47.dll')
-          if ($d3dSignature.Status -ne 'Valid') {
-            throw "d3dcompiler_47.dll signature is not valid: $($d3dSignature.Status)"
-          }
-          if ($d3dSignature.SignerCertificate.Subject -notmatch 'CN=Microsoft Corporation') {
-            throw "d3dcompiler_47.dll is not signed by Microsoft Corporation"
+          $version = (Get-Content VERSION -Raw).Trim()
+          if ($version -ne $env:TAG) {
+            throw "Release tag must match VERSION $version without a v prefix"
           }
 
-      - name: Package
+      - name: Test and package Compose Desktop
+        working-directory: kotlin
+        shell: pwsh
+        run: >-
+          .\gradlew.bat
+          :core:rust:jvmTest
+          :core:settings:jvmTest
+          :ui:app:jvmTest
+          :desktopApp:test
+          :desktopApp:createDistributable
+
+      - name: Assemble Windows release archive
         shell: pwsh
         run: |
-          $version = ((Select-String -Path app/pubspec.yaml -Pattern '^version:\s*(\S+)').Matches[0].Groups[1].Value -split '\+')[0]
-          $bundle = 'app/build/windows/x64/runner/Release'
+          $version = (Get-Content VERSION -Raw).Trim()
+          $bundle = 'kotlin/desktopApp/build/compose/binaries/main/app/desktopApp'
+          if (-not (Test-Path (Join-Path $bundle 'bin/desktopApp.exe'))) {
+            throw 'Compose Desktop executable is missing from the Windows distribution'
+          }
           Copy-Item LICENSE, THIRD_PARTY_NOTICES.md $bundle
-          Copy-Item -Recurse app/assets/licenses (Join-Path $bundle 'licenses')
-          foreach ($name in 'ANGLE-LICENSE.txt', 'SwiftShader-LICENSE.txt',
-              'SwiftShader-AUTHORS.txt', 'Vulkan-Loader-LICENSE.txt',
-              'Vulkan-Loader-NOTICE.txt', 'zlib-LICENSE.txt',
-              'MICROSOFT-WINDOWS-SDK-REDIST.txt', 'RUST-DEPENDENCY-LICENSES.txt') {
+          Copy-Item -Recurse kotlin/shared-assets/licenses (Join-Path $bundle 'licenses')
+          foreach ($name in 'Apache-2.0.txt', 'LGPL-2.1.txt', 'GPL-3.0.txt', 'RUST-DEPENDENCY-LICENSES.txt') {
             if (-not (Test-Path (Join-Path $bundle "licenses/$name"))) {
               throw "License notice $name is missing from the Windows package"
             }
@@ -94,9 +71,9 @@ jobs:
           Compress-Archive -Path "$bundle/*" -DestinationPath $zip
           "ZIP_NAME=$zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: windows-x64
+          name: kaede-gallery-kmp-windows-x64
           path: ${{ env.ZIP_NAME }}
           if-no-files-found: error
           retention-days: 7
@@ -109,7 +86,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+      - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
@@ -121,7 +98,7 @@ jobs:
           REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          [[ $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "invalid tag" >&2; exit 1; }
+          [[ $TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+(b[0-9]+)?$ ]] || { echo "invalid tag" >&2; exit 1; }
           gh release view "$TAG" --repo "$REPO" >/dev/null ||
             { echo "Create the release first (tools/release.sh)." >&2; exit 1; }
           cd dist

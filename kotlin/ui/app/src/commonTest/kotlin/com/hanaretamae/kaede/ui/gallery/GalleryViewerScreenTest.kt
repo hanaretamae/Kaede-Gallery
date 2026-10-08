@@ -1,7 +1,10 @@
 package com.hanaretamae.kaede.ui.gallery
 
+import com.hanaretamae.kaede.core.model.GalleryDetailLine
+import com.hanaretamae.kaede.core.model.NoteId
 import com.hanaretamae.kaede.core.settings.GalleryNoteBlock
 import com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings
+import com.hanaretamae.kaede.core.settings.GalleryTagDisplayPrefixesCodec
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -29,6 +32,48 @@ class GalleryViewerScreenTest {
                 GalleryNoteBlock.POST_TEXT,
             ),
             noteDetailContentBlocks(structure),
+        )
+    }
+
+    @Test
+    fun viewerUsesHumanReadableDetailLinkLabelsAndRejectsUnsafeTargets() {
+        val webLink = GalleryDetailLine(
+            text = "fictional link",
+            urls = listOf("https://example.invalid/related"),
+            isBullet = true,
+            indentLevel = 0,
+            linkedNoteId = null,
+        )
+        val noteLink = GalleryDetailLine(
+            text = "note-000005",
+            urls = emptyList(),
+            isBullet = true,
+            indentLevel = 0,
+            linkedNoteId = NoteId(5),
+        )
+        val unsafeLink = webLink.copy(urls = listOf("javascript:alert(1)"))
+        val multipleLinks = webLink.copy(
+            urls = listOf("https://example.invalid/one", "https://example.invalid/two"),
+        )
+
+        assertEquals("fictional link", galleryViewerDetailLineActionLabel(webLink, "Open link"))
+        assertEquals("note-000005", galleryViewerDetailLineActionLabel(noteLink, "Open link"))
+        assertEquals("Open link", galleryViewerDetailLineActionLabel(multipleLinks, "Open link"))
+        assertEquals(null, galleryViewerDetailLineActionLabel(unsafeLink, "Open link"))
+    }
+
+    @Test
+    fun viewerHidesConfiguredTagPrefixesLikeFlutterDetails() {
+        assertEquals(
+            listOf("copyright/pin", "source/service/example"),
+            galleryViewerVisibleTags(
+                listOf("source/service/example", "source/art", "copyright/pin"),
+                GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
+            ),
+        )
+        assertEquals(
+            listOf("source/art"),
+            galleryViewerVisibleTags(listOf("source/art"), emptyList()),
         )
     }
 

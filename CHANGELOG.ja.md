@@ -5,6 +5,15 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
+## [2.0.0b1] - 2026-10-08 (Beta)
+
+### 変更
+
+- Flutter アプリと bridge を退役させ、Kotlin Multiplatform / Compose と Rust FFI を唯一のアプリ・リリース経路にしました。
+- `VERSION` に版数を一元化し、Android・Linux・Windows のパッケージ作成を KMP/Rust に移しました。
+- Nix Desktop パッケージは検証済みの x86_64 Linux のみに限定しました。Android arm64 は引き続き対象です。
+- beta の Git tag は `v` を付けない `2.0.0b1` とし、GitHub では prerelease として公開します。
+
 ## [Unreleased]
 
 ## [1.6.2] - 2026-10-06

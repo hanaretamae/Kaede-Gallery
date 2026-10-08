@@ -2,6 +2,7 @@ package com.hanaretamae.kaede.desktop
 
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,17 +25,27 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
+import androidx.compose.ui.awt.ComposeWindow
+import androidx.compose.ui.awt.LocalAwtWindow
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+
+import androidx.compose.ui.unit.DpSize
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import androidx.compose.ui.window.WindowPlacement
 import androidx.compose.ui.window.WindowPosition
+import androidx.compose.ui.window.WindowState
+
 import com.hanaretamae.kaede.core.model.MediaId
 import com.hanaretamae.kaede.core.repository.GallerySessionHandle
 import com.hanaretamae.kaede.core.repository.GalleryRepository
@@ -48,7 +59,11 @@ import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
+
 import java.awt.Desktop
+import java.awt.Dimension
+import java.awt.event.ComponentAdapter
+import java.awt.event.ComponentEvent
 import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.nio.file.Files
@@ -67,7 +82,9 @@ import java.util.UUID
 import javax.imageio.ImageIO
 import javax.swing.JFileChooser
 import javax.swing.JOptionPane
+import javax.swing.Timer
 import javax.swing.filechooser.FileSystemView
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -75,6 +92,8 @@ import java.util.concurrent.atomic.AtomicReference
 
 private const val DESKTOP_VIEWER_THUMBNAIL_SIZE = 1_024
 private const val DESKTOP_GALLERY_THUMBNAIL_SIZE = 512
+internal val DESKTOP_MINIMUM_WINDOW_SIZE = DpSize(540.dp, 720.dp)
+private const val DESKTOP_LAYOUT_DEBUG_PROPERTY = "kaede.debugLayout"
 
 fun main() = application {
     val windowState = rememberWindowState(
@@ -87,19 +106,138 @@ fun main() = application {
         onCloseRequest = ::exitApplication,
         title = "Kaede Gallery",
         state = windowState,
+        resizable = true,
     ) {
-        DesktopApplication { fullscreen ->
-            windowState.placement = if (fullscreen) {
-                WindowPlacement.Fullscreen
-            } else {
-                WindowPlacement.Floating
+        val density = LocalDensity.current
+        val debugLayout = java.lang.Boolean.getBoolean(DESKTOP_LAYOUT_DEBUG_PROPERTY)
+        var composeRootSize by remember { mutableStateOf(IntSize.Zero) }
+        LaunchedEffect(composeRootSize, windowState.size, density) {
+            if (debugLayout && composeRootSize != IntSize.Zero) {
+                System.err.println(
+                    "Kaede Gallery layout: compose=${composeRootSize.width}x${composeRootSize.height}px, " +
+                        "density=${density.density}, windowState=${windowState.size}",
+                )
+            }
+        }
+        Box(
+            modifier = Modifier.fillMaxSize().onSizeChanged { size ->
+                if (composeRootSize != size) composeRootSize = size
+            },
+        ) {
+            DesktopApplication(windowState) { fullscreen ->
+                windowState.placement = if (fullscreen) {
+                    WindowPlacement.Fullscreen
+                } else {
+                    WindowPlacement.Floating
+                }
             }
         }
     }
 }
 
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
-private fun DesktopApplication(onFullscreenChanged: (Boolean) -> Unit) {
+private fun DesktopApplication(
+    windowState: WindowState,
+    onFullscreenChanged: (Boolean) -> Unit,
+) {
+    val awtWindow = LocalAwtWindow.current
+    val density = LocalDensity.current
+    val minimumWidthPx = with(density) { DESKTOP_MINIMUM_WINDOW_SIZE.width.roundToPx() }
+    val minimumHeightPx = with(density) { DESKTOP_MINIMUM_WINDOW_SIZE.height.roundToPx() }
+    if (awtWindow != null) {
+        DisposableEffect(awtWindow, density, minimumWidthPx, minimumHeightPx) {
+            val previousMinimumSize = Dimension(awtWindow.minimumSize)
+            awtWindow.minimumSize = Dimension(minimumWidthPx, minimumHeightPx)
+            val debugLayout = java.lang.Boolean.getBoolean(DESKTOP_LAYOUT_DEBUG_PROPERTY)
+            val nativeGeometry = (awtWindow as? ComposeWindow)?.let { window ->
+                LinuxX11WindowGeometry.open(window.windowHandle)
+            }
+            var initialBoundsApplied = false
+            var lastObservedSize = Dimension(awtWindow.size)
+            fun logWindowSize(force: Boolean = false) {
+                if (!debugLayout) return
+                val currentSize = Dimension(awtWindow.size)
+                if (!force && currentSize == lastObservedSize) return
+                lastObservedSize = currentSize
+                val insets = awtWindow.insets
+                val minimumSize = awtWindow.minimumSize
+                val maximumSize = awtWindow.maximumSize
+                val graphicsConfiguration = awtWindow.graphicsConfiguration
+                val transform = graphicsConfiguration.defaultTransform
+                val resizable = (awtWindow as? java.awt.Frame)?.isResizable
+                val nativeHandle = (awtWindow as? ComposeWindow)?.windowHandle
+                    ?.toString(16)
+                val contentPane = (awtWindow as? javax.swing.JFrame)?.contentPane
+                val children = contentPane?.components?.joinToString { child ->
+                    "${child.javaClass.simpleName}=${child.width}x${child.height}"
+                }
+                System.err.println(
+                    "Kaede Gallery layout: awt=${currentSize.width}x${currentSize.height}px, " +
+                        "insets=${insets.left},${insets.top},${insets.right},${insets.bottom}, " +
+                        "min=${minimumSize.width}x${minimumSize.height}, " +
+                        "max=${maximumSize.width}x${maximumSize.height}, " +
+                        "resizable=$resizable, " +
+                        "scale=${transform.scaleX}x${transform.scaleY}, " +
+                        "nativeHandle=0x$nativeHandle, " +
+                        "contentPane=${contentPane?.width}x${contentPane?.height}, children=$children",
+                )
+            }
+            fun synchronizeNativeSize() {
+                if (!awtWindow.isShowing) return
+                if (!initialBoundsApplied) {
+                    val requestedSize = with(density) {
+                        Dimension(windowState.size.width.roundToPx(), windowState.size.height.roundToPx())
+                    }
+                    if (awtWindow.size != requestedSize) return
+                    initialBoundsApplied = true
+                }
+                val nativeSize = nativeGeometry?.dimensions() ?: return
+                val transform = awtWindow.graphicsConfiguration.defaultTransform
+                val targetSize = awtWindowSizeFromX11(
+                    dimensions = nativeSize,
+                    scaleX = transform.scaleX,
+                    scaleY = transform.scaleY,
+                    insets = awtWindow.insets,
+                )
+                if (targetSize.width <= 0 || targetSize.height <= 0) return
+                if (awtWindow.size != targetSize) {
+                    if (debugLayout) {
+                        System.err.println(
+                            "Kaede Gallery layout: syncing AWT to X11 " +
+                                "${targetSize.width}x${targetSize.height}px",
+                        )
+                    }
+                    awtWindow.size = targetSize
+                }
+                val targetStateSize = with(density) {
+                    DpSize(targetSize.width.toDp(), targetSize.height.toDp())
+                }
+                if (windowState.size != targetStateSize) {
+                    windowState.size = targetStateSize
+                }
+            }
+            val resizeListener = object : ComponentAdapter() {
+                override fun componentResized(event: ComponentEvent) = logWindowSize()
+            }
+            val sizeProbe = Timer(250) {
+                synchronizeNativeSize()
+                logWindowSize()
+            }
+            if (debugLayout) {
+                awtWindow.addComponentListener(resizeListener)
+                logWindowSize(force = true)
+            }
+            if (nativeGeometry != null || debugLayout) sizeProbe.start()
+            onDispose {
+                sizeProbe.stop()
+                if (debugLayout) awtWindow.removeComponentListener(resizeListener)
+                nativeGeometry?.close()
+                awtWindow.minimumSize = previousMinimumSize
+            }
+        }
+    }
+
     val scope = rememberCoroutineScope()
     val sessionRepository = remember { RustGallerySessionRepository() }
     val vaultRepository = remember { RustVaultSelectionRepository() }
@@ -110,11 +248,13 @@ private fun DesktopApplication(onFullscreenChanged: (Boolean) -> Unit) {
     var session by remember { mutableStateOf<GallerySessionHandle?>(null) }
     var vaultPath by remember { mutableStateOf<String?>(null) }
     var loading by remember { mutableStateOf(true) }
+    var loadingMessage by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
 
     suspend fun openVault(path: String, performScan: Boolean = true) {
         if (path == vaultPath && session != null) return
         loading = true
+        loadingMessage = "Loading Vault..."
         error = null
         val previousPath = when (val previous = vaultRepository.loadSelected(privateData)) {
             is RepositoryResult.Failure -> {
@@ -222,10 +362,31 @@ private fun DesktopApplication(onFullscreenChanged: (Boolean) -> Unit) {
     if (activeSession == null || vaultPath == null) {
         DesktopWelcome(
             loading = loading,
+            loadingMessage = loadingMessage,
             error = error,
             onChooseVault = {
                 scope.launch {
-                    chooseVaultDirectory()?.let { openVault(it) }
+                    loading = true
+                    loadingMessage = "Waiting for folder selection..."
+                    error = null
+                    try {
+                        val selectedPath = chooseVaultDirectory()
+                        if (selectedPath == null) {
+                            loading = false
+                            loadingMessage = null
+                            error = "No folder was selected. Use Open or Select to confirm the folder."
+                        } else {
+                            openVault(selectedPath)
+                        }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (failure: Exception) {
+                        loading = false
+                        loadingMessage = null
+                        error = failure.message
+                            ?.takeIf { failure is PortalSelectionException }
+                            ?: "The selected folder could not be opened."
+                    }
                 }
             },
         )
@@ -616,6 +777,7 @@ private const val FILE_MANAGER_TIMEOUT_SECONDS = 10L
 @Composable
 private fun DesktopWelcome(
     loading: Boolean,
+    loadingMessage: String?,
     error: String?,
     onChooseVault: () -> Unit,
 ) {
@@ -636,6 +798,8 @@ private fun DesktopWelcome(
                 if (loading) {
                     Spacer(Modifier.height(16.dp))
                     CircularProgressIndicator()
+                    Spacer(Modifier.height(8.dp))
+                    Text(loadingMessage ?: "Loading...")
                 }
                 if (error != null) {
                     Spacer(Modifier.height(16.dp))
@@ -704,7 +868,7 @@ private fun DesktopMediaContent(
         imageState.bitmap != null -> Image(
             bitmap = requireNotNull(imageState.bitmap),
             contentDescription = null,
-            contentScale = ContentScale.Fit,
+            contentScale = ContentScale.Inside,
             modifier = Modifier.fillMaxSize(),
         )
         imageState.error != null -> Text(
@@ -791,16 +955,20 @@ private suspend fun chooseVaultDirectory(): String? {
             return withContext(Dispatchers.IO) {
                 LinuxPortalDirectoryPicker.chooseDirectory("Select an existing Vault")
             }?.toString()
-        } catch (_: IOException) {
-            // Keep the desktop usable when a session has no FileChooser portal.
+        } catch (failure: IOException) {
+            if (!shouldUseSwingFallback(failure)) throw failure
+            val reason = failure.message ?: "System folder picker failed."
+            return chooseVaultDirectoryWithSwing("$reason Select an existing Vault")
         }
     }
     return chooseVaultDirectoryWithSwing()
 }
 
-private fun chooseVaultDirectoryWithSwing(): String? {
+private fun chooseVaultDirectoryWithSwing(
+    dialogTitle: String = "Select an existing Vault",
+): String? {
     val chooser = JFileChooser(FileSystemView.getFileSystemView().homeDirectory).apply {
-        dialogTitle = "Select an existing Vault"
+        this.dialogTitle = dialogTitle
         fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
         isAcceptAllFileFilterUsed = false
     }

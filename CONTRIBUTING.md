@@ -10,7 +10,7 @@ phase boundaries. Check that changes do not contradict it.
 
 ## Development environment
 
-Use the pinned development environment with `nix develop`.
+Use the pinned development environment with `nix develop`. On Linux, the shell adds GLib's library directory to `LD_LIBRARY_PATH` so the Portal client can load GIO through JNA.
 
 ## Checks before submitting
 
@@ -20,8 +20,7 @@ When a Rust dependency changes, regenerate the bundled Rust license report:
 python3 tools/update-rust-license-notices.py
 ```
 
-Commit the updated `app/assets/licenses/RUST-DEPENDENCY-LICENSES.txt` with the
-dependency change.
+The generator updates `kotlin/shared-assets/licenses/RUST-DEPENDENCY-LICENSES.txt`, which is packaged by both Android and Desktop apps.
 
 ```sh
 # Rust
@@ -30,27 +29,36 @@ cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo deny check advisories bans licenses sources
 
-# Kotlin Multiplatform / Compose
+# Kotlin Multiplatform / Compose (from the repository root)
 cd kotlin
 ./gradlew :core:model:allTests :core:settings:allTests :core:rust:allTests :ui:app:allTests :ui:app:compileKotlinJvm :ui:app:compileAndroidMain :desktopApp:test :desktopApp:compileKotlin
 
-# Launch the Linux Desktop replacement UI (filesystem Vaults and images)
+# Run Linux Compose Desktop and create its distributable
 LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" \
   ./gradlew :desktopApp:run
 ./gradlew :desktopApp:createDistributable
 
-# Linux Android native library (from the Nix development shell)
-rustup target add --toolchain 1.98.1 aarch64-linux-android
-PATH="$(dirname "$(rustup which cargo --toolchain 1.98.1)"):$PATH" \
-  env "CC_aarch64-linux-android=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" \
-    "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android24-clang" \
-  ./gradlew :core:rust:cargoBuildAarch64AndroidDebug
-
-# Flutter
-cd app
-dart format lib test
-flutter analyze
-flutter test
+# Android debug APK on Linux x86_64 (inside nix develop)
+set -euo pipefail
+# Stop if either target is missing; do not launch Gradle and wait for its retry loop.
+export RUSTUP_TOOLCHAIN=1.98.1
+rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | grep -Fx aarch64-linux-android
+rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | grep -Fx x86_64-linux-android
+export RUSTC="$(rustup which rustc --toolchain "$RUSTUP_TOOLCHAIN")"
+export RUSTDOC="$(rustup which rustdoc --toolchain "$RUSTUP_TOOLCHAIN")"
+export PATH="$(dirname "$RUSTC"):$PATH"
+NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+export CC_aarch64_linux_android="$NDK_BIN/aarch64-linux-android23-clang"
+export CXX_aarch64_linux_android="$NDK_BIN/aarch64-linux-android23-clang++"
+export AR_aarch64_linux_android="$NDK_BIN/llvm-ar"
+export RANLIB_aarch64_linux_android="$NDK_BIN/llvm-ranlib"
+export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android23-clang"
+export CC_x86_64_linux_android="$NDK_BIN/x86_64-linux-android23-clang"
+export CXX_x86_64_linux_android="$NDK_BIN/x86_64-linux-android23-clang++"
+export AR_x86_64_linux_android="$NDK_BIN/llvm-ar"
+export RANLIB_x86_64_linux_android="$NDK_BIN/llvm-ranlib"
+export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android23-clang"
+./gradlew :androidApp:assembleDebug
 ```
 
 ## Rules
@@ -59,7 +67,7 @@ flutter test
 > Never edit or write to an Obsidian Vault. Scanners and tests must follow this rule too.
 
 - **Fictional data only:** Add only fictional notes and media to tests and documentation.
-- **Languages:** The migration target is Rust and Kotlin. Keep existing Dart/Flutter code working until platform parity is verified; do not add unrelated implementation languages.
+- **Languages:** Rust and Kotlin/Compose are the active implementation; Flutter is retired. Do not reintroduce a parallel UI or add unrelated implementation languages.
 - **Safety:** Core and parser code must use `forbid(unsafe_code)`, remain offline and bounded, and never put note
   content in logs or errors.
 - **Paths and storage:** Validate paths before opening them. Store indexes and caches outside the Vault in
@@ -72,8 +80,12 @@ flutter test
 - Draft changelog entries from the implementation diff and actual verification results.
 - Do not describe unverified behavior, tests that were not run, or future plans as completed. Do not include
   secrets or personal information.
-- The release owner verifies the changelog and tag version before committing and publishing. The release script
-  uses the matching version section in `CHANGELOG.md` as the release notes.
+- The release owner verifies the changelog and tag version before committing and publishing. `VERSION` is the
+  single application version source. `tools/release.sh` builds a signed KMP Android APK and the x86_64 Linux bundle; it uses
+  the Rustup 1.98.1 Android targets already installed on the host and never retries target installation. The manual
+  Windows workflow packages KMP and attaches its ZIP to an existing GitHub Release when dispatched with a tag.
+  Release tags match `VERSION` exactly and have no `v` prefix; beta tags such as `2.0.0b1` are published as GitHub
+  prereleases. Release publication still requires the release owner's real credentials and successful target-specific checks.
 
 ## Dependency changes
 

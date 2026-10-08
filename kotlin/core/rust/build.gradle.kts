@@ -4,7 +4,12 @@ plugins {
     alias(libs.plugins.uniffi.kotlin.multiplatform)
 }
 
+val nixBindgenSource = providers.gradleProperty("kaede.uniffi.bindgenSource").orNull
+
 uniffi {
+    nixBindgenSource?.let { sourcePath ->
+        bindgenFromPath(rootProject.layout.projectDirectory.dir("$sourcePath/bindgen"))
+    }
     generateFromLibrary {
         packageName = "com.hanaretamae.kaede.core.rust"
     }

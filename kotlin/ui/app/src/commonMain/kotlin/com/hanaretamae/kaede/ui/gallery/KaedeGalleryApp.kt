@@ -229,6 +229,7 @@ fun KaedeGalleryApp(
                             selectedEntries = selectedEntries + noteId.asNoteEntry()
                         },
                         tagColorRules = tagColorRules,
+                        hiddenTagPrefixes = settings.hiddenTagPrefixes,
                         noteStructure = noteStructure,
                     )
                 }

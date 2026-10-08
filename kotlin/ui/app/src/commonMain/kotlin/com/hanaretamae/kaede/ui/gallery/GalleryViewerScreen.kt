@@ -73,6 +73,8 @@ import com.hanaretamae.kaede.core.model.NoteId
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.settings.GalleryTagColorCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagColorRule
+import com.hanaretamae.kaede.core.settings.GalleryTagDisplayPrefixesCodec
+import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import com.hanaretamae.kaede.core.settings.GalleryNoteBlock
 import com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings
 
@@ -183,6 +185,7 @@ fun GalleryViewerScreen(
     onExternalLink: (String) -> Unit,
     onOpenNote: (NoteId) -> Unit = {},
     tagColorRules: List<GalleryTagColorRule> = GalleryTagColorCodec.DEFAULT_RULES,
+    hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
     noteStructure: GalleryNoteStructureSettings = GalleryNoteStructureSettings(),
 ) {
     val state by stateHolder.state.collectAsState()
@@ -439,6 +442,7 @@ fun GalleryViewerScreen(
                                     onExternalLink,
                                     onOpenNote,
                                     tagColorRules,
+                                    hiddenTagPrefixes,
                                     noteStructure,
                                 )
                             }
@@ -568,6 +572,7 @@ fun GalleryViewerScreen(
                                     onExternalLink,
                                     onOpenNote,
                                     tagColorRules,
+                                    hiddenTagPrefixes,
                                     noteStructure,
                                 )
                             }
@@ -695,6 +700,17 @@ private fun String.substringBeforeAny(vararg delimiters: Char): String {
     return substring(0, end)
 }
 
+internal fun galleryViewerVisibleTags(
+    tags: List<String>,
+    hiddenPrefixes: List<String>,
+): List<String> = tags.filter { tag ->
+    isGalleryTagDisplayed(
+        tag,
+        includedPrefixes = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
+        hiddenPrefixes = hiddenPrefixes,
+    )
+}.sortedWith(compareBy<String> { it.lowercase() }.thenBy { it })
+
 internal fun galleryViewerCanForwardMediaVerticalScroll(
     detailsVisible: Boolean,
     fullscreen: Boolean,
@@ -737,19 +753,21 @@ private fun NoteDetails(
     onExternalLink: (String) -> Unit,
     onOpenNote: (NoteId) -> Unit,
     tagColorRules: List<GalleryTagColorRule>,
+    hiddenTagPrefixes: List<String>,
     noteStructure: GalleryNoteStructureSettings,
 ) {
     Text(note.title, style = MaterialTheme.typography.titleLarge)
     note.published?.let { Text("${strings.published}: ${it.replace('T', ' ')}") }
     note.created?.let { Text("${strings.created}: ${it.replace('T', ' ')}") }
     note.updated?.let { Text("${strings.updated}: ${it.replace('T', ' ')}") }
-    if (note.tags.isNotEmpty()) {
+    val visibleTags = galleryViewerVisibleTags(note.tags, hiddenTagPrefixes)
+    if (visibleTags.isNotEmpty()) {
         Text(strings.tags, style = MaterialTheme.typography.titleSmall)
         Row(
             modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            note.tags.forEach { tag ->
+            visibleTags.forEach { tag ->
                 AssistChip(
                     onClick = {},
                     label = { Text(tag) },
@@ -782,6 +800,7 @@ private fun NoteDetails(
                         heading = strings.memo,
                         lines = note.memoLines,
                         onExternalLink = onExternalLink,
+                        openLinkLabel = strings.link,
                     )
                 }
                 GalleryNoteBlock.RELATED -> {
@@ -790,7 +809,7 @@ private fun NoteDetails(
                         lines = note.relatedLines,
                         onExternalLink = onExternalLink,
                         onOpenNote = onOpenNote,
-                        openNoteLabel = strings.openNote,
+                        openLinkLabel = strings.link,
                     )
                 }
                 GalleryNoteBlock.POST_TEXT_END -> {
@@ -799,12 +818,25 @@ private fun NoteDetails(
                         lines = note.postTextEndLines,
                         onExternalLink = onExternalLink,
                         onOpenNote = onOpenNote,
-                        openNoteLabel = strings.openNote,
+                        openLinkLabel = strings.link,
                     )
                 }
                 GalleryNoteBlock.MEDIA -> Unit
             }
         }
+}
+
+internal fun galleryViewerDetailLineActionLabel(
+    line: GalleryDetailLine,
+    openLinkLabel: String,
+): String? {
+    val safeUrls = line.urls.filter(::isGalleryViewerWebUrl)
+    return when {
+        line.linkedNoteId != null -> line.text
+        line.urls.size == 1 && safeUrls.size == 1 -> line.text
+        safeUrls.isNotEmpty() -> openLinkLabel
+        else -> null
+    }
 }
 
 internal fun noteDetailContentBlocks(
@@ -829,20 +861,36 @@ private fun DetailLines(
     lines: List<GalleryDetailLine>,
     onExternalLink: (String) -> Unit,
     onOpenNote: (NoteId) -> Unit = {},
-    openNoteLabel: String = "",
+    openLinkLabel: String = "",
 ) {
     if (lines.isEmpty()) return
     Text(heading, style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(top = 12.dp))
     lines.forEach { line ->
-        Text(
-            line.text,
-            modifier = Modifier.padding(start = (line.indentLevel * 12).dp),
-        )
-        line.urls.forEach { url ->
-            TextButton(onClick = { onExternalLink(url) }) { Text(url) }
-        }
-        line.linkedNoteId?.let { noteId ->
-            TextButton(onClick = { onOpenNote(noteId) }) { Text(openNoteLabel) }
+        val safeUrls = line.urls.filter(::isGalleryViewerWebUrl)
+        val actionLabel = galleryViewerDetailLineActionLabel(line, openLinkLabel)
+        val linkedNoteId = line.linkedNoteId
+        val modifier = Modifier.padding(start = (line.indentLevel * 12).dp)
+        when {
+            linkedNoteId != null -> TextButton(
+                modifier = modifier,
+                onClick = { onOpenNote(linkedNoteId) },
+            ) {
+                Text(actionLabel ?: line.text)
+            }
+            line.urls.size == 1 && safeUrls.size == 1 -> TextButton(
+                modifier = modifier,
+                onClick = { onExternalLink(safeUrls.single()) },
+            ) {
+                Text(actionLabel ?: line.text)
+            }
+            else -> {
+                Text(line.text, modifier = modifier)
+                safeUrls.forEach { url ->
+                    TextButton(onClick = { onExternalLink(url) }) {
+                        Text(actionLabel ?: openLinkLabel)
+                    }
+                }
+            }
         }
     }
 }

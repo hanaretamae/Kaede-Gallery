@@ -5,7 +5,7 @@ plugins {
 }
 
 sourceSets.main {
-    resources.srcDir(rootProject.file("../app/assets"))
+    resources.srcDir(rootProject.file("shared-assets"))
 }
 
 dependencies {

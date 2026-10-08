@@ -3,6 +3,15 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.0b1] - 2026-10-08 (Beta)
+
+### Changed
+
+- Retired Flutter and its bridge; Kotlin Multiplatform / Compose with the Rust FFI is now the sole active app and release path.
+- Unified application versioning in `VERSION` and moved Android, Linux, and Windows packaging to the KMP/Rust toolchain.
+- Limited the Nix Desktop package matrix to verified x86_64 Linux; Android arm64 support remains available.
+- Use the unprefixed `2.0.0b1` Git tag and publish beta versions as GitHub prereleases.
+
 ## [Unreleased]
 
 ## [1.6.2] - 2026-10-06

@@ -901,7 +901,7 @@ private fun AndroidMediaContent(
                 Image(
                     bitmap = bitmap!!.asImageBitmap(),
                     contentDescription = null,
-                    contentScale = ContentScale.Fit,
+                    contentScale = ContentScale.Inside,
                     modifier = Modifier.fillMaxSize(),
                 )
             } else {

@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Kaede Gallery のアイコン" src="app/assets/branding/kaede-gallery-icon.png" width="128" height="128">
+  <img alt="Kaede Gallery のアイコン" src="kotlin/shared-assets/branding/kaede-gallery-icon.png" width="128" height="128">
 </p>
 
 <h1 align="center">Kaede Gallery</h1>
@@ -10,13 +10,13 @@
 
 <p align="center">
   タグ付けされた Obsidian Vault のノートを、<b>オフライン・読み取り専用</b>で眺めるギャラリー。<br>
-  Rust（パーサー・索引・CLI）と Flutter（Linux / Android / Windows UI）で構築しています。
+  Rust（パーサー・索引・CLI）と Kotlin Multiplatform / Compose（Linux / Android / Windows Desktop UI）で構築しています。
 </p>
 
 <p align="center">
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20Android%20%7C%20Windows-informational">
   <img alt="Rust" src="https://img.shields.io/badge/core-Rust-orange">
-  <img alt="Flutter" src="https://img.shields.io/badge/UI-Flutter-02569B">
+  <img alt="Kotlin Multiplatform" src="https://img.shields.io/badge/UI-Kotlin%20Multiplatform-7F52FF">
   <img alt="Offline" src="https://img.shields.io/badge/network-none-success">
 </p>
 
@@ -34,21 +34,22 @@
 
 ## 特徴
 
-| 分野 | 内容 |
-| --- | --- |
-| 閲覧 | ノート単位／全メディアの表示切替。タイルに通し番号・複数画像数・覚書数・関連数を表示可能 |
-| ページング | 1ページの件数を設定可能。「総件数 件中 先頭 - 末尾 件」を表示し、任意の位置へジャンプ。スクロールに合わせて前後を追加読み込み |
-| 検索 | ノート名、`#タグ`、`-#タグ`、`&#タグ`、タグ名のあいまい検索 |
-| 絞り込み | 階層タグを +／−／AND／無選択で絞り込み。同カテゴリ内は OR、カテゴリ間は AND。作成日・公開日の昇順／降順（初期値は作成日降順）も選択可能 |
-| ビューアー | 黒背景でメディアを最大表示。タップで投稿者・投稿文・覚書・関連などの詳細を表示。複数メディアはスワイプ／左右キー／トラックパッドで切替 |
-| 関連リンク | Markdown リンクと Wikilink（`![[…]]`・`![](…)` を含む）の指す先がノートなら、アプリ内の詳細ビューで開く |
-| 動画 | mpv による再生。再生速度・1本ループ・ミュート。サムネイルは FFmpeg ベース |
-| 外観 | Material 3 Expressive を意識した配色・形状・動き、Material You（動的カラー）、システム／ライト／ダーク／ピュアブラック |
-| ノート構造 | ブロック順序（投稿者・メディア・投稿文・投稿文の終端・関連・覚書）、見出し名・レベル・箇条書きの有無、Frontmatter キーを設定可能 |
+| 分野       | 内容                                                                                                                                    |
+| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| 閲覧       | ノート単位／全メディアの表示切替。タイルに通し番号・複数画像数・覚書数・関連数を表示可能                                                |
+| ページング | 1ページの件数を設定可能。「総件数 件中 先頭 - 末尾 件」を表示し、任意の位置へジャンプ。スクロールに合わせて前後を追加読み込み           |
+| 検索       | ノート名、`#タグ`、`-#タグ`、`&#タグ`、タグ名のあいまい検索                                                                             |
+| 絞り込み   | 階層タグを +／−／AND／無選択で絞り込み。同カテゴリ内は OR、カテゴリ間は AND。作成日・公開日の昇順／降順（初期値は作成日降順）も選択可能 |
+| ビューアー | 黒背景でメディアを最大表示。タップで投稿者・投稿文・覚書・関連などの詳細を表示。複数メディアはスワイプ／左右キー／トラックパッドで切替  |
+| 関連リンク | Markdown リンクと Wikilink（`![[…]]`・`![](…)` を含む）の指す先がノートなら、アプリ内の詳細ビューで開く                                 |
+| 動画       | mpv による再生。再生速度・1本ループ・ミュート。サムネイルは FFmpeg ベース                                                               |
+| 外観       | Material 3 Expressive を意識した配色・形状・動き、Material You（動的カラー）、システム／ライト／ダーク／ピュアブラック                  |
+| ノート構造 | ブロック順序（投稿者・メディア・投稿文・投稿文の終端・関連・覚書）、見出し名・レベル・箇条書きの有無、Frontmatter キーを設定可能        |
 
 > [!NOTE]
-> Flutter は Material 3 Expressive の全コンポーネントを提供していないため、標準の Material 3 部品の範囲で実装しています。
-> Android はサイドロード用 APK をビルドでき、SAF で選択した通常フォルダを読み取り専用で走査できます。実機でのDocumentsプロバイダ確認は別途必要です。
+> 現在の UI は Kotlin Multiplatform / Compose です。Android と Linux Desktop のビルド手順があります。
+> Windows x64 のテスト・パッケージ作成と手動 Release workflow も用意していますが、実機での実行は未確認です。
+> 署名済み Android release の公開はローカルのリリーススクリプトを使い、リリース用認証情報での検証が必要です。
 
 ## アプリを使う
 
@@ -65,18 +66,22 @@ tags:
   - source/count/1
 cover: media/sample.png
 ---
+
 # 夏の風景
 
-![](<media/sample.png>)
+![](media/sample.png)
 
 # 文書
+
 投稿文はここに書きます。
 
 ## 関連
+
 - [関連ノート](other-note.md)
 - [[another-note]]
 
 ## 覚書
+
 - ビューアーの詳細に表示される覚書
 ```
 
@@ -109,11 +114,11 @@ cover: media/sample.png
 初期の非表示タグは `moc`、`add`、`pin`、`source/art` です。これらはカテゴリ表示にのみ影響し、
 該当タグのノートも検索・一覧には残ります。
 
-| 入力上限 | 値 |
-| --- | --- |
-| ノート | 2 MiB |
-| Frontmatter | 256 KiB |
-| タグ数 | 256 |
+| 入力上限      | 値      |
+| ------------- | ------- |
+| ノート        | 2 MiB   |
+| Frontmatter   | 256 KiB |
+| タグ数        | 256     |
 | YAML のネスト | 64 階層 |
 
 > [!WARNING]
@@ -145,42 +150,23 @@ cargo test --workspace
 cargo deny check advisories bans licenses sources
 ```
 
-### NixOS / Home Manager へのインストール
+### KMP Linux Desktop パッケージ
 
-flake は x86_64 / aarch64 Linux 用のパッケージを提供します。
-NixOS では `nixosModules.default` を import するか、
-`environment.systemPackages` にパッケージを指定できます。
+flake の既定 package と `.#kmpDesktop` は x86_64 Linux 向けの Kotlin/Compose Desktop アプリです。
+aarch64 Linux の Desktop パッケージは現在サポート対象外です。
+ビルド・起動、または GitHub flake からのインストールには次を使います。
 
-```nix
-{
-  inputs.kaede-gallery.url = "github:hanaretamae/Kaede-Gallery";
-
-  outputs = { self, nixpkgs, kaede-gallery, ... }: {
-    nixosConfigurations.my-host = nixpkgs.lib.nixosSystem {
-      # ...
-      modules = [
-        kaede-gallery.nixosModules.default
-        ./configuration.nix
-      ];
-    };
-  };
-}
+```sh
+nix develop
+nix build .#kmpDesktop
+nix run .#kmpDesktop
+nix profile install github:hanaretamae/Kaede-Gallery#kmpDesktop
 ```
 
-Home Manager では `homeManagerModules.default` を import するか、
-`inputs` を Home Manager の設定モジュールに渡して、次のように指定します。
-
-```nix
-home.packages = [
-  inputs.kaede-gallery.packages.${pkgs.stdenv.hostPlatform.system}.default
-];
-```
-
-パッケージには `share/applications/kaede-gallery.desktop` が含まれ、再ログイン後にランチャーへ表示されます。
-直接試す場合は `nix profile install github:hanaretamae/Kaede-Gallery` を使えます。
-この flake は x86_64 / aarch64 Linux 向けのビルド定義です。Kaede Gallery 自体のバイナリキャッシュは
-提供していないため、初回は利用するマシン上でビルドされます。NixOS/Home Manager が
-必要な依存を Nix binary cache から取得できる場合、その依存はキャッシュからダウンロードされます。
+パッケージには Compose Desktop の配布物、Linux ランチャー、ライセンス通知が含まれます。
+`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` はすべて KMP を選びます。
+Nix Desktop パッケージとして案内するのは検証済みの x86_64 Linux のみです。Kaede Gallery 自体の
+バイナリキャッシュはないため、初回は利用するマシン上でビルドします（依存は Nix binary cache から取得できる場合があります）。
 
 <details>
 <summary>索引データベースの場所</summary>
@@ -195,149 +181,33 @@ CLI のエラーメッセージに、ノートの内容・パス・タグ・URL 
 走査では隠しパスと Syncthing の管理ファイルを無視します。索引は使い捨てで、更新日時やサイズが変わると再パースし、
 削除されたノートは次回の走査で消えます。メディアが見つからないノートは「存在フラグ」付きで残り、後の走査で再確認されます。
 
-### Flutter ギャラリーの起動
+### KMP アプリの起動とパッケージ作成
+
+Linux Desktop の開発・配布物作成には `kotlin` の Gradle プロジェクトを使います。
 
 ```sh
 nix develop
-cd app
-flutter pub get
-GDK_BACKEND=wayland flutter run -d linux
+cd kotlin
+LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradlew :desktopApp:run
+./gradlew :desktopApp:createDistributable
 ```
 
-<details>
-<summary>Linux 環境の補足</summary>
+Nix シェルには JDK 17、Android SDK（API 35–37）、Build Tools 37、NDK 28.2、CMake 3.22.1 が含まれます。
+Android の debug APK は `:androidApp:assembleDebug` でビルドします。Rust の Android target と NDK
+cross-compiler の設定が必要です。Linux での詳しい手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。
 
-- Nix シェルには Flutter、Linux デスクトップのビルド依存、Rust、Rustup、FFmpeg（動画サムネイル用）が含まれます。
-- Rust ツールチェインは `rust-toolchain.toml` で固定され、初回ビルド時に Rustup が取得します。
-- 動画再生には mpv / libass を使います。
-- Linux ランナーは実行ファイル隣の共有ライブラリから Rust ブリッジを読み込むため、`LD_LIBRARY_PATH` の設定は不要です。
-- ディレクトリ選択ダイアログは GTK ネイティブで、Flutter ではなくデスクトップの GTK テーマに従います。
-- タイトルバーはコンポジタに任せ、独自の GTK ヘッダーバーは追加しません。
-- `flake.nix` を変更したら `nix develop` を入り直してください。
-- 画像サムネイルは純 Rust デコーダー（PNG・JPEG・GIF・WebP）、動画は Flutter ネイティブプラグインで生成します。AVIF はプレースホルダー表示です。
+KMP Android の production application ID は `com.hanaretamae.kaede`、以前の Flutter Android ID は
+`com.hanaretamae.vault_gallery` です。Android では別アプリとして扱われ、KMP を入れても Flutter 版は
+更新されず、Flutter の非公開設定・索引キャッシュ・SAF の永続権限も引き継がれません。KMP で Vault を
+選び直し、必要なら旧アプリで設定をエクスポートして、設定画面から互換性のある JSON を手動で
+インポートしてください。索引・キャッシュは Vault 外で再作成され、Vault 自体はコピー・変更しません。
 
-</details>
-
-動画・外部ページ・Obsidian URI は、ユーザーがビューア上のボタンを押したときだけ開きます。
-
-### Android APK のビルドと配布
-
-#### ビルド環境とローカルAPK
-
-Nix 開発シェルには Android SDK（API 35/36）、Build Tools 36、NDK 28.2、
-CMake 3.22.1、JDK 17 が含まれます。Linux x86_64 で arm64 と x86_64 の APK を作る場合、
-Rust の Android ターゲットを一度追加してから、NDK のクロスコンパイラを指定します。
-
-```sh
-nix develop
-rustup target add aarch64-linux-android x86_64-linux-android
-cd app
-NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
-PATH="$(dirname "$(rustup which rustc)"):$PATH" \
-  CC_aarch64_linux_android="$NDK_BIN/aarch64-linux-android35-clang" \
-  CXX_aarch64_linux_android="$NDK_BIN/aarch64-linux-android35-clang++" \
-  AR_aarch64_linux_android="$NDK_BIN/llvm-ar" \
-  RANLIB_aarch64_linux_android="$NDK_BIN/llvm-ranlib" \
-  CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android35-clang" \
-  CC_x86_64_linux_android="$NDK_BIN/x86_64-linux-android35-clang" \
-  CXX_x86_64_linux_android="$NDK_BIN/x86_64-linux-android35-clang++" \
-  AR_x86_64_linux_android="$NDK_BIN/llvm-ar" \
-  RANLIB_x86_64_linux_android="$NDK_BIN/llvm-ranlib" \
-  CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android35-clang" \
-  flutter build apk --release --target-platform android-arm64,android-x64
-```
-
-生成物は `app/build/app/outputs/flutter-apk/app-release.apk` です。署名鍵を設定しない
-ローカルビルドは Android の debug keystore で署名されます。手元でのインストール確認には
-使えますが、一般配布や別の署名鍵で署名済みのアプリの更新には使えません。
-
-#### Android の Vault アクセス
-
-Documents 内の通常フォルダを SAF で選び、読み取り権限を保持します。
-ノート本文は上限付きで Rust に渡して索引化し、画像・動画は選択フォルダ内の
-URI から表示・再生します。Vault 本体はアプリ領域へコピーしません。
-Syncthing 固有の連携は不要です。生成物はサイドロード可能な APK です。
-Android 16 の実機では架空の Documents フォルダを使い、SAF での選択・再起動後の
-権限保持・ノート索引・画像表示・短い MP4 の再生を確認しています。異なる端末や
-Documents プロバイダ、メディア形式での追加確認は必要です。
-
-#### GitHub Release に署名 APK を添付する
-
-Android APK はローカルで署名・ビルドし、GitHub CLI を使って Release に添付できます。
-GitHub Actions、クラウド runner、Actions artifact は使いません。まず一度だけ専用鍵を作り、
-安全な場所へバックアップします。鍵とそのパスワードのどちらかを失うと、既存インストールを
-更新できません。KeePassXC データベースに「Kaede Gallery Android signing」エントリーを作成し、
-ユーザー名を `kaede-gallery`、パスワード欄に署名パスワードを保存し、添付ファイル欄へ
-`release.jks` を追加してください。KeePassXC のデータベースは強いマスターパスワードで保護し、
-暗号化バックアップを取ってください。鍵ファイルやパスワードを Git や Release に含めないでください。
-
-```sh
-nix develop
-mkdir -p "$HOME/.local/share/kaede-gallery"
-chmod 700 "$HOME/.local/share/kaede-gallery"
-keytool -genkeypair -v \
-  -keystore "$HOME/.local/share/kaede-gallery/release.jks" \
-  -keyalg RSA -keysize 3072 -validity 10000 -alias kaede-gallery
-chmod 600 "$HOME/.local/share/kaede-gallery/release.jks"
-gh auth login
-```
-
-リリース時は AI が `CHANGELOG.md` にリリース節を追加し、内容を確認してから
-`app/pubspec.yaml` の version を更新して main に push し、同じバージョンの tag を push します。
-スクリプトは KeePassXC CLI を使って、上記エントリーから鍵とパスワードを読み込みます。
-DB とキーファイルの場所は端末ごとに異なるため、リポジトリには保存せず、実行時に環境変数で
-渡します。署名鍵はユーザー専用の `XDG_RUNTIME_DIR` に一時展開して、ビルド後に削除します。
-署名情報を持つ Gradle プロセスは常駐させません。`keepassxc-cli` が Nix 開発環境に含まれます。
-
-##### タグの作成と push
-
-main へのリリースコミットを push した後、`app/pubspec.yaml` の version と一致する
-タグ（`vMAJOR.MINOR.PATCH`）を作成して push します。`vX.Y.Z` は実際のタグに置き換えてください。
-
-```sh
-git tag -a vX.Y.Z -m vX.Y.Z
-git push origin vX.Y.Z
-```
-
-##### Release 作成と APK 添付
-
-タグを push した後、以下のコマンドで署名 APK をビルドし、検証して GitHub Release に添付します。
-`KEEPASSXC_DATABASE` には KeePassXC データベース（`.kdbx`）の絶対パス、
-`KEEPASSXC_KEY_FILE` にはキーファイルの絶対パスを指定してください。パスは実際の保存場所に置き換え、
-このリポジトリには書かないでください。タグもリリース対象のバージョンに置き換えます。
-
-```sh
-KEEPASSXC_DATABASE="/path/to/keepass.kdbx" \
-KEEPASSXC_KEY_FILE="/path/to/key-file.keyx" \
-nix develop --command ./tools/release.sh vX.Y.Z
-```
-
-実行前に、コマンド内の `vX.Y.Z` を `app/pubspec.yaml` および `CHANGELOG.md` に記載した
-リリースバージョンに置き換えてください。データベースが `.kdbx` でない場合や、DB とキーファイルを
-取り違えた場合は、スクリプトが検査して止まります。
-
-実行の流れは次のとおりです。
-
-1. テスト・解析の後、KeePassXC のマスターパスワードを2回入力する。
-2. 署名済み APK がビルド・検証され、GitHub Release に添付される。
-
-エントリー名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。
-必要に応じて `KEEPASSXC_ENTRY`、`KEEPASSXC_ATTACHMENT` 環境変数で変更できます。
-DB とキーファイルは Vault や Git 管理下に置かず、端末上の安全な場所に保管してください。
-実行環境には mode 700 の `XDG_RUNTIME_DIR` が必要です。
-
-スクリプトは tag/version、clean な作業ツリー、push 済み main/tag、GitHub 認証を検査します。
-タグが HEAD より前でも、タグ以降の変更が `CHANGELOG.md` を除く Markdown 文書と
-リリーススクリプトだけなら許可し、アプリやビルド設定の変更があれば停止します。
-Rust/Flutter のテスト、署名 APK（arm64・x86_64・universal）と Linux 実行ファイル（x86_64・aarch64）のビルドと検証の後、Release を作成して添付します。aarch64 の Linux 実行ファイルをビルドするには binfmt（QEMU）か remote builder が必要で、省略する場合は `SKIP_LINUX_ARCHES=aarch64-linux` を指定します。macOS は未対応です。
-作成した Release から APK をダウンロードできます。Release は GitHub 上で配布します。
-
-Windows 版は Windows 上でしかビルドできないため、手動実行（`workflow_dispatch`）専用の GitHub Actions
-（`.github/workflows/windows.yml`、標準ランナーのみ・公開リポジトリでは無料）でビルドします。
-Release を作成した後に Actions タブから「Windows build」を実行し、`tag` に `v1.6.2` のように入力すると、
-x64 の ZIP を Release に追加して `SHA256SUMS` を更新します。ZIP を展開して `kaede_gallery.exe` を起動します。
-Windows on Arm では x64 版をエミュレーションで実行できます。ネイティブ ARM64 版は、Windows 用の動画依存
-(libmpv と ANGLE) が x64 のみのため、現在ビルドできません。
+`.github/workflows/kotlin-android.yml` は arm64 / x86_64 の Rust ABI で Android debug APK をビルド・テストし、
+`.github/workflows/kotlin-windows.yml` は push / pull request ごとに Windows x64 のテストとパッケージを行います。
+手動起動する `.github/workflows/windows.yml` はバージョン付き Windows ZIP を作り、tag を指定すれば既存 Release に添付します。
+`tools/release.sh` は Linux から署名済み Android APK と Linux bundle を作成するリリース入口です。
+Rustup 1.98.1 の Android targets が事前にインストール済みである必要があり、署名鍵は KeePassXC から取得します。
+Windows 実機での動作と実際の鍵を使った Android release はここでは未検証です。
 
 ## 開発者向け情報
 
@@ -360,12 +230,14 @@ tools/benchmark.sh 7806
 crates/
   gallery-parse/    ノートパーサー
   gallery-core/     索引・検索・クエリ・サムネイル
-  gallery-bridge/   flutter_rust_bridge の公開 API
-  gallery-cli/      CLI とダミー Vault 生成
-app/lib/
-  core_api/         リポジトリ層・プロバイダー・設定モデル
-  features/gallery/ 設定・タグ絞り込み・グリッド・ビューアー（part 分割）
+  gallery-ffi/      Kotlin 向け UniFFI API
+  gallery-cli/      CLI と架空 Vault 生成
+kotlin/
+  core/             共通モデル・repository・設定・Rust adapter
+  ui/app/           共通 Compose UI
+  androidApp/       Android SAF・メディア連携
+  desktopApp/       Linux / Windows JVM アプリ
 docs/design.md      設計の基準
 ```
 
-このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。同梱する mpv・FFmpeg などのライセンスは [THIRD_PARTY_NOTICES.ja.md](THIRD_PARTY_NOTICES.ja.md) を参照してください（Linux バンドルは FFmpeg 由来で GPL-3.0-or-later として配布します。Android APK は LGPL の同梱ライブラリのみです）。
+このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。同梱コンポーネントのライセンスは [THIRD_PARTY_NOTICES.ja.md](THIRD_PARTY_NOTICES.ja.md) と各配布物に含まれる notices を確認してください。KMP の Release artifact はまだ公開・検証されていません。

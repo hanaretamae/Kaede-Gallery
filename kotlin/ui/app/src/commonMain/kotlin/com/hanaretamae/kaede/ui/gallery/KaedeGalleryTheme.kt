@@ -1,6 +1,9 @@
 package com.hanaretamae.kaede.ui.gallery
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
@@ -33,5 +36,12 @@ fun KaedeGalleryTheme(
         baseScheme
     }
 
-    MaterialTheme(colorScheme = colorScheme, content = content)
+    MaterialTheme(colorScheme = colorScheme) {
+        Box(
+            modifier = androidx.compose.ui.Modifier.fillMaxSize()
+                .background(colorScheme.background),
+        ) {
+            content()
+        }
+    }
 }

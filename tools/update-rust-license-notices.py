@@ -4,14 +4,10 @@ import json
 import subprocess
 from pathlib import Path
 
-
 ROOT = Path(__file__).resolve().parents[1]
-MANIFESTS = [
-    ROOT / "crates/gallery-bridge/Cargo.toml",
-    ROOT / "crates/gallery-ffi/Cargo.toml",
-]
+MANIFESTS = [ROOT / "crates/gallery-ffi/Cargo.toml"]
 TEMPLATE = ROOT / "tools/rust-dependency-licenses.hbs"
-OUTPUT = ROOT / "app/assets/licenses/RUST-DEPENDENCY-LICENSES.txt"
+OUTPUT = ROOT / "kotlin/shared-assets/licenses/RUST-DEPENDENCY-LICENSES.txt"
 NOTICE_NAMES = {
     "notice",
     "notice.md",
@@ -28,7 +24,7 @@ def shipped_dependency_ids(metadata: dict) -> set[str]:
     root_package_ids = {
         package["id"]
         for package in metadata["packages"]
-        if package["name"] in {"gallery-bridge", "gallery-ffi"}
+        if package["name"] == "gallery-ffi"
         and any(
             Path(package["manifest_path"]).resolve() == manifest.resolve()
             for manifest in MANIFESTS
@@ -50,9 +46,9 @@ def shipped_dependency_ids(metadata: dict) -> set[str]:
     return {
         package_id
         for package_id in reachable
-        if next(package for package in metadata["packages"] if package["id"] == package_id)[
-            "source"
-        ]
+        if next(
+            package for package in metadata["packages"] if package["id"] == package_id
+        )["source"]
         is not None
     }
 
