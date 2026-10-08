@@ -81,7 +81,7 @@ export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android23
 - Do not describe unverified behavior, tests that were not run, or future plans as completed. Do not include
   secrets or personal information.
 - The release owner verifies the changelog and tag version before committing and publishing. `VERSION` is the
-  single application version source. `tools/release.sh` builds a signed KMP Android APK and the x86_64 Linux bundle; it uses
+  single application version source. `tools/release.sh` builds a signed KMP Android APK and x86_64/aarch64 Linux bundles; aarch64 builds on x86_64 require QEMU/binfmt or a remote builder. It uses
   the Rustup 1.98.1 Android targets already installed on the host and never retries target installation. The manual
   Windows workflow packages KMP and attaches its ZIP to an existing GitHub Release when dispatched with a tag.
   Release tags match `VERSION` exactly and have no `v` prefix; beta tags such as `2.0.0b1` are published as GitHub

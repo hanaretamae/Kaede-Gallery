@@ -185,8 +185,8 @@ with a "missing" flag and are re-checked on later scans.
 
 ### KMP Linux Desktop package
 
-The flake's default package and `.#kmpDesktop` are the Kotlin/Compose Desktop app for x86_64 Linux. aarch64 Linux
-Desktop packaging is not currently supported. Build and run it, or install it from the GitHub flake:
+The flake's default package and `.#kmpDesktop` are the Kotlin/Compose Desktop app for x86_64 and aarch64 Linux.
+Build and run the native package, or install it from the GitHub flake:
 
 ```sh
 nix develop
@@ -195,10 +195,17 @@ nix run .#kmpDesktop
 nix profile install github:hanaretamae/Kaede-Gallery#kmpDesktop
 ```
 
+On x86_64, aarch64 packaging uses local QEMU/binfmt emulation when Nix has `aarch64-linux` in `extra-platforms`:
+
+```sh
+nix config show | grep '^extra-platforms'
+nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop
+```
+
 The package bundles the Compose Desktop distributable, Linux launcher, and license notices. `packages.<system>.default`,
-`nixosModules.default`, and `homeManagerModules.default` all select KMP. The verified x86_64 Linux build is the only
-Nix Desktop package currently advertised. No binary cache for Kaede Gallery is provided, so the first build happens
-locally (dependencies may come from the Nix binary cache).
+`nixosModules.default`, and `homeManagerModules.default` all select KMP. The aarch64 Linux package is declared, but
+must be locally verified with QEMU before its build can be claimed as tested. No binary cache for Kaede Gallery is
+provided, so the first build happens locally (dependencies may come from the Nix binary cache).
 
 ### Run and package the KMP app
 
@@ -222,8 +229,8 @@ Flutter's private settings, cached index, or persisted SAF permission. Select th
 export settings from the old app and import the compatible JSON through the settings screen. The index/cache is
 recreated outside the Vault; the Vault itself is never copied or modified.
 
-`.github/workflows/kotlin-android.yml` builds and tests the Android debug APK for arm64 and x86_64 Rust ABIs;
-`.github/workflows/kotlin-windows.yml` tests and packages Windows x64 on push and pull request. The manual
+Android debug/release builds run locally; Android is not built by GitHub Actions. `.github/workflows/kotlin-windows.yml`
+tests and packages Windows x64 on push and pull request. The manual
 `.github/workflows/windows.yml` workflow builds a versioned Windows ZIP and attaches it to an existing release when
 a tag is supplied. `tools/release.sh` is the Linux-hosted release entry point for the signed Android APK and Linux
 bundles; it requires the Rustup 1.98.1 Android targets to already be installed and retrieves the Android signing key

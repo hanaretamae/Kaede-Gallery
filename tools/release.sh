@@ -114,9 +114,9 @@ if command -v nix >/dev/null; then
   native_system=$(awk '$1 == "system" { print $3 }' <<< "$nix_config")
   extra_systems=$(awk '$1 == "extra-platforms" { $1 = $2 = ""; print }' <<< "$nix_config")
   has_builders=$(awk '$1 == "builders" && NF > 2 { print "yes" }' <<< "$nix_config")
-  for system in x86_64-linux; do
+  for system in x86_64-linux aarch64-linux; do
     [[ $system == "$native_system" || " $extra_systems " == *" $system "* || -n $has_builders ]] ||
-      fail "no way to build $system (needs a native or remote builder)"
+      fail "no way to build $system (needs native support, QEMU/binfmt, or a remote builder)"
   done
 fi
 
@@ -213,9 +213,10 @@ rm -f -- "$keystore_path"
 rmdir -- "$key_dir"
 key_dir=
 
-# Self-contained x86_64 Linux executable (no Nix needed on the target machine).
-command -v nix >/dev/null || fail "Nix is required to build the Linux bundle"
-for system in x86_64-linux; do
+# Self-contained Linux executables (no Nix needed on the target machine).
+# aarch64-linux requires QEMU/binfmt or a remote builder on x86_64 hosts.
+command -v nix >/dev/null || fail "Nix is required to build the Linux bundles"
+for system in x86_64-linux aarch64-linux; do
   arch=${system%-linux}
   linux_out="$dist_dir/linux-$arch"
   nix bundle --system "$system" --out-link "$linux_out" ".#packages.$system.default" ||

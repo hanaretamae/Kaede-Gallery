@@ -77,7 +77,7 @@ export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android23
 
 - 各リリースの `CHANGELOG.md` は AI が実装差分と実際の検証結果を基に草案・更新します。
 - AI は未確認の動作、実施していないテスト、将来予定を完了済みのように書かず、秘密情報や個人情報を含めません。
-- リリース担当者は内容とタグのバージョンを確認してからコミット・公開します。アプリの唯一の version source は `VERSION` です。`tools/release.sh` は署名済み KMP Android APK と Linux bundle をビルドし、Rustup 1.98.1 の Android targets は事前にインストール済みのものだけを使います。タグは `VERSION` と完全一致させ、`v` を付けません。`2.0.0b1` のような beta タグは GitHub の prerelease として公開します。Windows の手動 workflow は KMP を package 化し、tag を指定して起動すると既存 GitHub Release に ZIP を添付します。Release 公開にはリリース担当者の認証情報と対象環境の検証が必要です。
+- リリース担当者は内容とタグのバージョンを確認してからコミット・公開します。アプリの唯一の version source は `VERSION` です。`tools/release.sh` は署名済み KMP Android APK と x86_64 / aarch64 Linux bundle をビルドします。x86_64 で aarch64 を作るには QEMU/binfmt または remote builder が必要です。Rustup 1.98.1 の Android targets は事前にインストール済みのものだけを使います。タグは `VERSION` と完全一致させ、`v` を付けません。`2.0.0b1` のような beta タグは GitHub の prerelease として公開します。Windows の手動 workflow は KMP を package 化し、tag を指定して起動すると既存 GitHub Release に ZIP を添付します。Release 公開にはリリース担当者の認証情報と対象環境の検証が必要です。
 
 ## 依存関係を変更するとき
 

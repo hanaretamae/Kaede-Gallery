@@ -152,8 +152,7 @@ cargo deny check advisories bans licenses sources
 
 ### KMP Linux Desktop パッケージ
 
-flake の既定 package と `.#kmpDesktop` は x86_64 Linux 向けの Kotlin/Compose Desktop アプリです。
-aarch64 Linux の Desktop パッケージは現在サポート対象外です。
+flake の既定 package と `.#kmpDesktop` は x86_64 / aarch64 Linux 向けの Kotlin/Compose Desktop アプリです。
 ビルド・起動、または GitHub flake からのインストールには次を使います。
 
 ```sh
@@ -163,10 +162,19 @@ nix run .#kmpDesktop
 nix profile install github:hanaretamae/Kaede-Gallery#kmpDesktop
 ```
 
+x86_64 上の aarch64 ビルドには QEMU/binfmt と、Nix の `extra-platforms` に `aarch64-linux` が必要です。
+確認してから次を実行します。
+
+```sh
+nix config show | grep '^extra-platforms'
+nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop
+```
+
 パッケージには Compose Desktop の配布物、Linux ランチャー、ライセンス通知が含まれます。
 `packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` はすべて KMP を選びます。
-Nix Desktop パッケージとして案内するのは検証済みの x86_64 Linux のみです。Kaede Gallery 自体の
-バイナリキャッシュはないため、初回は利用するマシン上でビルドします（依存は Nix binary cache から取得できる場合があります）。
+aarch64 Linux の package は定義されていますが、QEMU を使ったローカルビルドは未検証です。
+Kaede Gallery 自体のバイナリキャッシュはないため、初回は利用するマシン上でビルドします
+（依存は Nix binary cache から取得できる場合があります）。
 
 <details>
 <summary>索引データベースの場所</summary>
@@ -202,7 +210,7 @@ KMP Android の production application ID は `com.hanaretamae.kaede`、以前�
 選び直し、必要なら旧アプリで設定をエクスポートして、設定画面から互換性のある JSON を手動で
 インポートしてください。索引・キャッシュは Vault 外で再作成され、Vault 自体はコピー・変更しません。
 
-`.github/workflows/kotlin-android.yml` は arm64 / x86_64 の Rust ABI で Android debug APK をビルド・テストし、
+Android の debug/release ビルドはローカルで実行し、GitHub Actions ではビルドしません。
 `.github/workflows/kotlin-windows.yml` は push / pull request ごとに Windows x64 のテストとパッケージを行います。
 手動起動する `.github/workflows/windows.yml` はバージョン付き Windows ZIP を作り、tag を指定すれば既存 Release に添付します。
 `tools/release.sh` は Linux から署名済み Android APK と Linux bundle を作成するリリース入口です。

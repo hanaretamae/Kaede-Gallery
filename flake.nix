@@ -8,6 +8,7 @@
     let
       systems = [
         "x86_64-linux"
+        "aarch64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
       version = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
@@ -191,6 +192,7 @@
               mainProgram = "kaede-gallery";
               platforms = [
                 "x86_64-linux"
+                "aarch64-linux"
               ];
             };
           });

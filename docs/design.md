@@ -84,24 +84,27 @@ integrations.
     Nix defaults, Gradle dependency locking, Android/Linux release scripts,
     Windows packaging/release workflow, license assets, and active documentation
     now target KMP. Local Linux x86_64 and Android debug/release packaging checks
-    pass. The unverified aarch64 Linux Desktop package has been removed from the
-    Nix package matrix; this does not affect Android arm64. The updated Android
-    and Windows Actions builds passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
+    pass. Nix declares both x86_64 and aarch64 Linux Desktop packages; the
+    aarch64 build still needs local QEMU/binfmt verification. GitHub Actions are
+    limited to Windows builds by owner request; the Android workflow was removed,
+    while local Android checks remain. The prior Android and Windows Actions runs
+    passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-    Do not mark this phase complete until the Windows release archive has been
-    attached successfully to the beta release. The previous aarch64 attempt
-    could not fetch pinned OpenJDK/Nix-cache artifacts because cache.nixos.org
-    connections timed out; no aarch64 Linux Desktop compilation result is
-    claimed.
+    Do not mark this phase complete until the aarch64 build is verified and the
+    Windows release archive is attached successfully to the beta release. The
+    previous aarch64 attempt could not fetch pinned OpenJDK/Nix-cache artifacts
+    because cache.nixos.org connections timed out; no successful aarch64 Linux
+    Desktop compilation result is claimed.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
 
 Implementation for shared UI, settings, Android, and desktop is present.
 Phase 13 acceptance is recorded below as historical evidence. Phase 14's
-migration implementation is in place; Android and Windows Actions have passed,
-but the Windows beta archive is not attached yet. The Nix Desktop package matrix
-is x86_64 Linux only. There is no active Flutter application or release path.
+migration implementation is in place. GitHub Actions build Windows only; their
+previous Android job has been removed at the owner's request. The Windows beta
+archive is not attached yet, and the declared aarch64 Nix package awaits local
+QEMU/binfmt verification. There is no active Flutter application or release path.
 
 ### Phase 13 acceptance status
 
@@ -205,14 +208,15 @@ produced the self-contained Linux release bundle. The Gradle dependency updater
 completed and its JSON output parsed successfully. No real signing key or Vault
 was used.
 
-**Still pending before Phase 14 can be marked complete:** create the `2.0.0b1`
-GitHub prerelease and successfully attach the Windows ZIP. The Android and
-Windows GitHub Actions workflows passed on `7a6cd83` (runs [37761351814](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814)
-and [37761351884](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-The unverified aarch64 Linux Desktop package has been removed from the advertised
-Nix matrix; Android arm64 remains supported. Real-key Android signing and release
-publication have not happened because the local KeePassXC database/key-file
-configuration is not available in the release environment.
+**Still pending before Phase 14 can be marked complete:** verify the declared
+aarch64 Linux Desktop package with the owner's local QEMU/binfmt build, create
+the `2.0.0b1` GitHub prerelease, and successfully attach the Windows ZIP. The
+previous Android and Windows GitHub Actions workflows passed on `7a6cd83` (runs
+[37761351814](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814)
+and [37761351884](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)); Actions are now restricted to Windows builds, and Android verification
+continues locally. Real-key Android signing and release publication have not
+happened because the local KeePassXC database/key-file configuration is not
+available in the release environment.
 
 ### Current KMP implementation status
 
@@ -284,9 +288,10 @@ Windows hardware or runtime availability of native mpv embedding there.
 Android visual/interaction checks are complete for the documented fixture
 scenarios. The Phase 13 parity gate has passed for the documented acceptance
 scope. Phase 14 migrated the build and release paths to KMP/Rust and retired the
-Flutter application. Android and Windows Actions passed on `7a6cd83`; the Windows
-beta archive and signed Android release remain pending. Nix Desktop packaging is
-limited to x86_64 Linux.
+Flutter application. Historical Android and Windows Actions passed on `7a6cd83`;
+Actions now build Windows only. The Windows beta archive, local aarch64 QEMU build,
+and signed Android release remain pending. Nix Desktop packages are declared for
+x86_64 and aarch64 Linux.
 KMP now supports editing Flutter-compatible tag color and filter-category
 rules. The most-specific color prefix is applied to filter options and viewer
 tags; category changes are written to private Rust settings and rescan the

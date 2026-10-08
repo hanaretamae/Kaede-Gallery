@@ -11,7 +11,7 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 
 - Flutter アプリと bridge を退役させ、Kotlin Multiplatform / Compose と Rust FFI を唯一のアプリ・リリース経路にしました。
 - `VERSION` に版数を一元化し、Android・Linux・Windows のパッケージ作成を KMP/Rust に移しました。
-- Nix Desktop パッケージは検証済みの x86_64 Linux のみに限定しました。Android arm64 は引き続き対象です。
+- Nix Desktop パッケージに x86_64 と aarch64 Linux を定義しました。aarch64 のビルドはローカルの QEMU/binfmt で検証が必要です。
 - beta の Git tag は `v` を付けない `2.0.0b1` とし、GitHub では prerelease として公開します。
 
 ## [Unreleased]
