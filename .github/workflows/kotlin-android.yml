@@ -26,7 +26,7 @@ jobs:
         with:
           packages: platform-tools
       - name: Install pinned Android SDK and NDK
-        run: sdkmanager "platforms;android-37" "build-tools;37.0.0" "ndk;28.2.13676358"
+        run: sdkmanager "platforms;android-37.0" "build-tools;37.0.0" "ndk;28.2.13676358"
       - name: Build and test KMP Android app
         working-directory: kotlin
         shell: bash

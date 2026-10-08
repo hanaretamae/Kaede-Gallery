@@ -71,6 +71,8 @@ class LinuxPortalDirectoryPickerTest {
 
     @Test
     fun readsTheRequestHandleFromThePortalReply() {
+        if (!System.getProperty("os.name").contains("linux", ignoreCase = true)) return
+
         val glib = NativeApis.glib
         val type = assertNotNull(glib.g_variant_type_new("(o)"))
         val error = PointerByReference()
