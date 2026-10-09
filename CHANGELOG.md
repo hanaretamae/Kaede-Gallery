@@ -3,6 +3,16 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.0b2] - 2026-10-09 (Beta)
+
+### Fixed
+
+- Fixed the AArch64 Linux Desktop Nix dependency cache; the declared `aarch64-linux` package now builds successfully.
+
+### Changed
+
+- The Gradle dependency updater now supports per-system cache updates and merges new artifacts without dropping existing platform entries.
+
 ## [2.0.0b1] - 2026-10-08 (Beta)
 
 ### Changed
