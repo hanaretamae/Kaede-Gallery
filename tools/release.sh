@@ -114,10 +114,9 @@ if command -v nix >/dev/null; then
   native_system=$(awk '$1 == "system" { print $3 }' <<< "$nix_config")
   extra_systems=$(awk '$1 == "extra-platforms" { $1 = $2 = ""; print }' <<< "$nix_config")
   has_builders=$(awk '$1 == "builders" && NF > 2 { print "yes" }' <<< "$nix_config")
-  for system in x86_64-linux aarch64-linux; do
-    [[ $system == "$native_system" || " $extra_systems " == *" $system "* || -n $has_builders ]] ||
-      fail "no way to build $system (needs native support, QEMU/binfmt, or a remote builder)"
-  done
+  system=x86_64-linux
+  [[ $system == "$native_system" || " $extra_systems " == *" $system "* || -n $has_builders ]] ||
+    fail "no way to build x86_64-linux (needed for native and cross-compiled Linux bundles)"
 fi
 
 python3 tools/generate_saf_limits.py --check
@@ -223,14 +222,15 @@ rmdir -- "$key_dir"
 key_dir=
 
 # Self-contained Linux executables (no Nix needed on the target machine).
-# aarch64-linux requires QEMU/binfmt or a remote builder on x86_64 hosts.
 command -v nix >/dev/null || fail "Nix is required to build the Linux bundles"
-for system in x86_64-linux aarch64-linux; do
-  arch=${system%-linux}
+for arch in x86_64 aarch64; do
+  package=default
+  [[ $arch != aarch64 ]] || package=aarch64Cross
   linux_out="$dist_dir/linux-$arch"
-  nix bundle --system "$system" --out-link "$linux_out" ".#packages.$system.default" ||
-    fail "could not build the $system bundle"
-  [[ -f $linux_out ]] || fail "the $system bundle was not produced"
+  nix bundle --system x86_64-linux --out-link "$linux_out" \
+    ".#packages.x86_64-linux.$package" ||
+    fail "could not build the Linux $arch bundle"
+  [[ -f $linux_out ]] || fail "the Linux $arch bundle was not produced"
   cp -- "$(readlink -f "$linux_out")" "$dist_dir/kaede-gallery-$version-linux-$arch"
   rm -f -- "$linux_out"
   chmod 755 "$dist_dir/kaede-gallery-$version-linux-$arch"

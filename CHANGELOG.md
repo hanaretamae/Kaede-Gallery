@@ -3,11 +3,12 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
-## [2.0.0b3] - 2026-10-09 (Beta)
+## [2.0.0b3] - 2026-10-10 (Beta)
 
 ### Added
 
 - Added universal, arm64-v8a, and x86_64 Android APK variants to release packaging. GitHub Release titles now contain only the version.
+- Added an x86_64-hosted AArch64 Linux cross-build for the Rust FFI and self-contained Desktop bundle, without QEMU/binfmt.
 - Applied the supplied adaptive launcher icon to Android.
 - Adopted the latest published Compose Multiplatform Material 3 Expressive alpha and Android Material 3 beta, including expressive motion and theme shapes.
 

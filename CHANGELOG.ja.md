@@ -5,11 +5,12 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
-## [2.0.0b3] - 2026-10-09 (Beta)
+## [2.0.0b3] - 2026-10-10 (Beta)
 
 ### 追加
 
 - Android のリリース package に universal／arm64-v8a／x86_64 APK を追加しました。GitHub Release のタイトルはバージョンのみにしました。
+- QEMU/binfmt を使わず、x86_64 上で Rust FFI と自己完結型 AArch64 Linux Desktop bundle をクロスビルドできるようにしました。
 - Android に既存の adaptive launcher icon を適用しました。
 - Compose Multiplatform の最新 Material 3 Expressive alpha と Android Material 3 beta を採用し、Expressive motion と theme shape を適用しました。
 

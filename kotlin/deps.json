@@ -1216,6 +1216,9 @@
   "org/jetbrains/compose/desktop#desktop-jvm-linux-arm64/1.12.1": {
    "pom": "sha256-GEaJ2kosTx0H7neQGQ2VkgGBt7rkQpcERUsU/2fY9pI="
   },
+  "org/jetbrains/compose/desktop#desktop-jvm-linux-arm64/1.13.0-alpha02": {
+   "pom": "sha256-5AsMNNRXqcWIqxTl8yDKQ7dmJ60iw3Ghgcu49LJrAik="
+  },
   "org/jetbrains/compose/desktop#desktop-jvm-linux-x64/1.12.1": {
    "pom": "sha256-UJOgkYaho+YlhH7qOrO+GB53dxrJMey7OZ+ndvD9Zjs="
   },

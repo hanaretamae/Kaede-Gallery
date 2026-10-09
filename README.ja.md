@@ -162,14 +162,14 @@ nix run .#kmpDesktop
 nix profile install github:hanaretamae/Kaede-Gallery#kmpDesktop
 ```
 
-x86_64 から aarch64 をクロスビルドするには QEMU/binfmt と Nix の `extra-platforms` が必要です。ネイティブまたは remote の AArch64 builder なら同じコマンドをエミュレーションなしで実行できます。
+x86_64 Linux から QEMU/binfmt を使わずに AArch64 package をクロスビルドできます。
 
 ```sh
-nix config show | grep '^extra-platforms'
-nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop
+nix build --system x86_64-linux --no-link .#packages.x86_64-linux.aarch64Cross
+nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#packages.x86_64-linux.aarch64Cross
 ```
 
-この AArch64 package build は 2026-10-09 にオーナーが成功を確認しました（builder の方式は未記録）。パッケージには Compose Desktop の配布物、Linux ランチャー、ライセンス通知が含まれます。`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` はすべて KMP を選びます。自己完結型の AArch64 Linux bundle は、後述する任意の手動 Actions workflow からも作成できます。
+この cross package は x86_64 上で Rust FFI を AArch64 向けにコンパイルし、AArch64 用 Compose native runtime、JRE、launcher、Linux library を組み立てます。従来の native `aarch64-linux` package も AArch64 host で利用できます。`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` は native KMP package を選びます。後述する任意の手動 Actions workflow も AArch64 bundle を cross-build して upload します。
 
 <details>
 <summary>索引データベースの場所</summary>

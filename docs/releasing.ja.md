@@ -36,7 +36,7 @@ export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
 tools/release.sh 2.0.0b3
 ```
 
-既定のKeePassXCエントリ名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。スクリプトは鍵を一時的に取り出し、universal／arm64-v8a／x86_64 APKの署名と検証、Rust/Kotlinテスト、x86_64/AArch64 Linux bundleの作成、チェックサム計算を行い、バージョンだけをタイトルにしたprereleaseを公開します。Rustup 1.98.1と、事前導入済みの `aarch64-linux-android`／`x86_64-linux-android` targets が必要です。Linux両アーキテクチャをビルドする環境には、AArch64ネイティブ対応、QEMU/binfmt、またはremote builderが必要です。`XDG_RUNTIME_DIR` は現在のユーザー所有でmode `700` のprivate directoryでなければなりません。
+既定のKeePassXCエントリ名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。スクリプトは鍵を一時的に取り出し、universal／arm64-v8a／x86_64 APKの署名と検証、Rust/Kotlinテスト、x86_64/AArch64 Linux bundleの作成、チェックサム計算を行い、バージョンだけをタイトルにしたprereleaseを公開します。Rustup 1.98.1と、事前導入済みの `aarch64-linux-android`／`x86_64-linux-android` targets が必要です。Linux bundle は x86_64 Linux builder で作成します。AArch64 向け Rust FFI をクロスコンパイルし、target runtime を組み立てるため、QEMU/binfmt、AArch64 native builder、remote builder は不要です。`XDG_RUNTIME_DIR` は現在のユーザー所有でmode `700` のprivate directoryでなければなりません。
 
 prereleaseの作成後、Windows ZIPを手動workflowで作成・添付します。
 
@@ -61,7 +61,7 @@ tools/run-optional-builds.sh linux-aarch64
 tools/run-optional-builds.sh both
 ```
 
-1回の起動につき、いずれか1つを選んでください。GitHub Actions画面の **Optional Android and Linux AArch64 builds** からも起動できます。これは手動専用で、ローカルビルドを通常の方法とし、artifactは14日間保存します。`android-debug` はdebug署名APKで、production APKではありません。`linux-aarch64` はAArch64 bundleを作成します。このworkflowはx86_64のrelease bundle、GitHub Release、production署名済みAndroid APKを作成・公開しません。
+1回の起動につき、いずれか1つを選んでください。GitHub Actions画面の **Optional Android and Linux AArch64 builds** からも起動できます。これは手動専用で、ローカルビルドを通常の方法とし、artifactは14日間保存します。`android-debug` はdebug署名APKで、production APKではありません。`linux-aarch64` は x86_64 runner 上で AArch64 bundle をクロスビルドします。このworkflowはx86_64のrelease bundle、GitHub Release、production署名済みAndroid APKを作成・公開しません。
 
 別の `windows.yml` workflowはtagなしならWindows artifactを作れますが、tagを指定した場合も、同じtagのGitHub Releaseがすでに存在するときに限りZIPを添付します。
 

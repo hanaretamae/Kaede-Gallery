@@ -82,9 +82,9 @@ jobs:
           retention-days: 14
 
   linux-aarch64:
-    name: Linux AArch64 bundle
+    name: Cross-build Linux AArch64 bundle
     if: ${{ inputs.target == 'linux-aarch64' || inputs.target == 'both' }}
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-latest
     timeout-minutes: 240
     steps:
       - uses: actions/checkout@v5
@@ -100,10 +100,28 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p dist
-          nix bundle --system aarch64-linux --out-link dist/bundle .#packages.aarch64-linux.default
+          nix build --system x86_64-linux --out-link dist/package .#packages.x86_64-linux.aarch64Cross
+          package="$(readlink -f dist/package)"
+          runtime_java="$package/share/kaede-gallery/lib/runtime/bin/.java-wrapped"
+          test -x "$runtime_java"
+          java_machine="$(od -An -tu2 -j18 -N2 "$runtime_java" | tr -d '[:space:]')"
+          test "$java_machine" = 183
+          elf_count=0
+          while IFS= read -r candidate; do
+            magic="$(od -An -tx1 -N4 "$candidate" | tr -d '[:space:]')"
+            [[ $magic == 7f454c46 ]] || continue
+            machine="$(od -An -tu2 -j18 -N2 "$candidate" | tr -d '[:space:]')"
+            if [[ $machine != 183 ]]; then
+              printf 'unexpected ELF machine %s: %s\n' "$machine" "$candidate" >&2
+              exit 1
+            fi
+            elf_count=$((elf_count + 1))
+          done < <(find -L "$package/share/kaede-gallery" -type f -print)
+          test "$elf_count" -gt 0
+          nix bundle --system x86_64-linux --out-link dist/bundle .#packages.x86_64-linux.aarch64Cross
           version="$(tr -d '\r\n' < VERSION)"
           cp -- "$(readlink -f dist/bundle)" "dist/kaede-gallery-${version}-linux-aarch64"
-          rm -- dist/bundle
+          rm -- dist/bundle dist/package
           (cd dist && sha256sum -- "kaede-gallery-${version}-linux-aarch64" > SHA256SUMS)
 
       - uses: actions/upload-artifact@v4

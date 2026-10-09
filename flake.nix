@@ -205,10 +205,164 @@
               silent = false;
             };
           });
+          aarch64CrossDesktop =
+            if system == "x86_64-linux" then
+              let
+                targetPkgs = mkPkgs "aarch64-linux";
+                crossPkgs = pkgs.pkgsCross.aarch64-multiplatform;
+                crossRustc = crossPkgs.pkgsBuildHost.rustc;
+                skikoRuntimeArm64 = pkgs.fetchurl {
+                  url = "https://repo.maven.apache.org/maven2/org/jetbrains/skiko/skiko-awt-runtime-linux-arm64/0.153.0/skiko-awt-runtime-linux-arm64-0.153.0.jar";
+                  hash = "sha256-+Jh77caV+q/658qimIVcJaBf1ZoVMXOkN5GKkuGXhkY=";
+                };
+                crossDesktopBase = kmpDesktopBase.overrideAttrs (old: {
+                  pname = "kaede-gallery-kmp-aarch64-cross";
+                  nativeBuildInputs = old.nativeBuildInputs ++ [
+                    pkgs.cargo
+                    crossRustc
+                    crossPkgs.stdenv.cc
+                    pkgs.python3
+                    pkgs.zip
+                  ];
+                  gradleFlags = old.gradleFlags ++ [
+                    "-Pkaede.desktop.linuxArchitecture=aarch64"
+                  ];
+                  postBuild = (old.postBuild or "") + ''
+                    target_dir="$NIX_BUILD_TOP/kaede-gallery-aarch64-target"
+                    RUSTC=${crossRustc}/bin/rustc \
+                      CC_aarch64_unknown_linux_gnu=${crossPkgs.stdenv.cc}/bin/aarch64-unknown-linux-gnu-gcc \
+                      AR_aarch64_unknown_linux_gnu=${crossPkgs.stdenv.cc}/bin/aarch64-unknown-linux-gnu-ar \
+                      CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=${crossPkgs.stdenv.cc}/bin/aarch64-unknown-linux-gnu-gcc \
+                      CARGO_TARGET_DIR="$target_dir" \
+                      ${pkgs.cargo}/bin/cargo build \
+                        --manifest-path ../crates/gallery-ffi/Cargo.toml \
+                        --package gallery-ffi \
+                        --release \
+                        --locked \
+                        --target aarch64-unknown-linux-gnu
+
+                    native_library="$target_dir/aarch64-unknown-linux-gnu/release/libgallery_ffi.so"
+                    test -f "$native_library"
+                    machine=$(od -An -tu2 -j18 -N2 "$native_library" | tr -d '[:space:]')
+                    test "$machine" = 183
+
+                    app_lib="$PWD/desktopApp/build/compose/binaries/main/app/desktopApp/lib/app"
+                    mapfile -t rust_jars < <(find "$app_lib" -maxdepth 1 -type f -name 'rust-jvm-*.jar' -print)
+                    test "''${#rust_jars[@]}" -eq 1
+                    rust_jar="''${rust_jars[0]}"
+                    ${pkgs.zip}/bin/zip -q -d "$rust_jar" linux-x86-64/libgallery_ffi.so
+                    mkdir -p "$NIX_BUILD_TOP/kaede-gallery-native/linux-aarch64"
+                    cp "$native_library" "$NIX_BUILD_TOP/kaede-gallery-native/linux-aarch64/libgallery_ffi.so"
+                    ${pkgs.jdk17}/bin/jar --update --file "$rust_jar" \
+                      -C "$NIX_BUILD_TOP/kaede-gallery-native" linux-aarch64/libgallery_ffi.so
+                    ${pkgs.jdk17}/bin/jar --list --file "$rust_jar" |
+                      grep -Fx linux-aarch64/libgallery_ffi.so
+
+                    app_lib="$PWD/desktopApp/build/compose/binaries/main/app/desktopApp/lib/app"
+                    rm -f "$app_lib/libskiko-linux-x64.so" "$app_lib/libskiko-linux-x64.so.sha256"
+                    mkdir -p "$NIX_BUILD_TOP/kaede-gallery-skiko-arm64"
+                    (
+                      cd "$NIX_BUILD_TOP/kaede-gallery-skiko-arm64"
+                      ${pkgs.jdk17}/bin/jar --extract --file ${skikoRuntimeArm64} \
+                        libskiko-linux-arm64.so libskiko-linux-arm64.so.sha256
+                    )
+                    cp "$NIX_BUILD_TOP/kaede-gallery-skiko-arm64/libskiko-linux-arm64.so" "$app_lib/"
+                    cp "$NIX_BUILD_TOP/kaede-gallery-skiko-arm64/libskiko-linux-arm64.so.sha256" "$app_lib/"
+                    skiko_machine=$(od -An -tu2 -j18 -N2 "$app_lib/libskiko-linux-arm64.so" |
+                      tr -d '[:space:]')
+                    test "$skiko_machine" = 183
+                  '';
+                  installPhase = ''
+                    runHook preInstall
+                    app_dir="$out/share/kaede-gallery"
+                    app_image="$PWD/desktopApp/build/compose/binaries/main/app/desktopApp"
+                    mkdir -p "$app_dir"
+                    cp -a "$app_image/." "$app_dir/"
+
+                    rm -rf "$app_dir/lib/runtime"
+                    mkdir -p "$app_dir/lib/runtime"
+                    cp -a ${targetPkgs.temurin-bin-17}/. "$app_dir/lib/runtime/"
+                    rm -f "$app_dir/lib/libapplauncher.so" "$app_dir/lib/app/.jpackage.xml"
+
+                    cat > "$app_dir/bin/desktopApp" <<'EOF'
+                    #!${targetPkgs.bash}/bin/bash
+                    set -euo pipefail
+                    app_dir="$(cd -- "$(dirname -- "$0")/../lib/app" && pwd -P)"
+                    export LD_LIBRARY_PATH="${targetPkgs.lib.makeLibraryPath [
+                      targetPkgs.fontconfig
+                      targetPkgs.glib.out
+                      targetPkgs.libGL
+                      targetPkgs.libX11
+                      targetPkgs.libXext
+                      targetPkgs.libXi
+                      targetPkgs.libXrender
+                      targetPkgs.libXtst
+                      targetPkgs.libxkbcommon
+                      targetPkgs.stdenv.cc.cc.lib
+                    ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                    export PATH="${targetPkgs.lib.makeBinPath [
+                      targetPkgs.ffmpeg
+                      targetPkgs.mpv
+                    ]}''${PATH:+:$PATH}"
+                    exec "$app_dir/../runtime/bin/java" \
+                      -Djpackage.app-version=${version} \
+                      -Dcompose.application.resources.dir="$app_dir/resources" \
+                      -Dcompose.application.configure.swing.globals=true \
+                      -Dskiko.library.path="$app_dir" \
+                      -cp "$app_dir/*" \
+                      com.hanaretamae.kaede.desktop.MainKt "$@"
+                    EOF
+                    chmod 755 "$app_dir/bin/desktopApp"
+                    mkdir -p "$out/bin"
+                    ln -s "$app_dir/bin/desktopApp" "$out/bin/kaede-gallery"
+
+                    install -Dm644 \
+                      ${self}/kotlin/shared-assets/branding/kaede-gallery-icon.png \
+                      "$out/share/icons/hicolor/512x512/apps/kaede-gallery.png"
+                    install -Dm644 \
+                      ${kmpDesktopItem}/share/applications/com.hanaretamae.kaede.desktop \
+                      "$out/share/applications/com.hanaretamae.kaede.desktop"
+                    install -Dm644 ${self}/LICENSE \
+                      "$out/share/licenses/kaede-gallery/LICENSE"
+                    install -Dm644 ${self}/THIRD_PARTY_NOTICES.md \
+                      "$out/share/licenses/kaede-gallery/THIRD_PARTY_NOTICES.md"
+                    mkdir -p "$out/share/licenses/kaede-gallery/dependencies"
+                    cp -R ${self}/kotlin/shared-assets/licenses/. \
+                      "$out/share/licenses/kaede-gallery/dependencies/"
+
+                    so_count=0
+                    while IFS= read -r elf; do
+                      machine=$(od -An -tu2 -j18 -N2 "$elf" | tr -d '[:space:]')
+                      test "$machine" = 183
+                      so_count=$((so_count + 1))
+                    done < <(find -L "$app_dir" -type f -name '*.so' -print)
+                    test "$so_count" -gt 0
+                    runHook postInstall
+                  '';
+                  meta = old.meta // {
+                    description = "AArch64 Linux Kaede Gallery cross-built on x86_64";
+                    platforms = [ "x86_64-linux" ];
+                  };
+                });
+              in
+              crossDesktopBase.overrideAttrs (old: {
+                mitmCache = gradle.fetchDeps {
+                  pkg = crossDesktopBase;
+                  pname = old.pname;
+                  attrPath = null;
+                  data = "kotlin/deps.json";
+                  silent = false;
+                };
+              })
+            else
+              null;
         in
         {
           kmpDesktop = kmpDesktop;
           default = kmpDesktop;
+        }
+        // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
+          aarch64Cross = aarch64CrossDesktop;
         }
       );
 

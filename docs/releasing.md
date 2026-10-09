@@ -36,7 +36,7 @@ export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
 tools/release.sh 2.0.0b3
 ```
 
-The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with attachment `release.jks`. The script exports the key temporarily, builds and verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and Kotlin tests, creates x86_64 and AArch64 Linux bundles, calculates checksums, and publishes a version-titled prerelease. It requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android` targets already installed. A host building both Linux architectures must have native AArch64 support, QEMU/binfmt, or a configured remote builder. `XDG_RUNTIME_DIR` must be a private directory owned by the current user with mode `700`.
+The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with attachment `release.jks`. The script exports the key temporarily, builds and verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and Kotlin tests, creates x86_64 and AArch64 Linux bundles, calculates checksums, and publishes a version-titled prerelease. It requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android` targets already installed. Both Linux bundles are built on an x86_64 Linux builder; the AArch64 Rust FFI is cross-compiled and target-native runtime files are assembled without QEMU/binfmt or an AArch64/remote builder. `XDG_RUNTIME_DIR` must be a private directory owned by the current user with mode `700`.
 
 After the prerelease exists, build and attach the Windows ZIP through the manual Windows workflow:
 
@@ -61,7 +61,7 @@ tools/run-optional-builds.sh linux-aarch64
 tools/run-optional-builds.sh both
 ```
 
-Choose one target per invocation. The workflow also appears in the GitHub Actions UI as **Optional Android and Linux AArch64 builds**. It is manual-only, keeps local builds as the normal path, and uploads artifacts for 14 days. `android-debug` is a debug-signed APK, not the production APK; `linux-aarch64` is an AArch64 bundle. This workflow does not build the x86_64 release bundle, create a GitHub Release, or sign/publish a production Android APK.
+Choose one target per invocation. The workflow also appears in the GitHub Actions UI as **Optional Android and Linux AArch64 builds**. It is manual-only, keeps local builds as the normal path, and uploads artifacts for 14 days. `android-debug` is a debug-signed APK, not the production APK; `linux-aarch64` cross-builds an AArch64 bundle on an x86_64 runner. This workflow does not build the x86_64 release bundle, create a GitHub Release, or sign/publish a production Android APK.
 
 The separate `windows.yml` workflow can produce a Windows artifact without a tag, but it only attaches a ZIP when dispatched with a tag for an already-created GitHub Release.
 
