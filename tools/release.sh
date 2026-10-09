@@ -178,7 +178,7 @@ dist_dir=$(mktemp -d "$XDG_RUNTIME_DIR/kaede-gallery-dist.XXXXXXXX") ||
   fail "could not create a release output directory"
 dist_cleanup=$dist_dir
 version=$tag
-latest_build_tools=$(find "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)
+latest_build_tools=$(find -L "$ANDROID_HOME/build-tools" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort -V | tail -n 1)
 [[ -n $latest_build_tools ]] || fail "Android SDK build-tools were not found"
 apksigner="$ANDROID_HOME/build-tools/$latest_build_tools/apksigner"
 command -v apkanalyzer >/dev/null || fail "Android SDK apkanalyzer was not found"
