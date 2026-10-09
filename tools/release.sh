@@ -193,21 +193,30 @@ command -v apkanalyzer >/dev/null || fail "Android SDK apkanalyzer was not found
     GRADLE_OPTS="${GRADLE_OPTS:+$GRADLE_OPTS }-Dorg.gradle.daemon=false" \
     ./gradlew --no-daemon :androidApp:assembleRelease
 )
-mapfile -d '' apks < <(find kotlin/androidApp/build/outputs/apk/release -maxdepth 1 -type f -name '*.apk' -print0)
-[[ ${#apks[@]} -eq 1 ]] || fail "expected exactly one KMP release APK, found ${#apks[@]}"
-apk=${apks[0]}
-"$apksigner" verify "$apk" || fail "APK signature verification failed"
-application_id=$(apkanalyzer manifest application-id "$apk") ||
-  fail "could not inspect the APK application ID"
-[[ $application_id == com.hanaretamae.kaede ]] ||
-  fail "unexpected KMP APK application ID: $application_id"
-permissions=$(apkanalyzer manifest permissions "$apk") ||
-  fail "could not inspect the APK permissions"
-if grep -Eq 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED)' \
-  <<< "$permissions"; then
-  fail "the KMP APK requests a network or broad-storage permission"
-fi
-cp -- "$apk" "$dist_dir/kaede-gallery-$version-android-universal.apk"
+apk_dir=kotlin/androidApp/build/outputs/apk/release
+declare -A apk_variants=(
+  [universal]='*-universal-release.apk'
+  [arm64-v8a]='*-arm64-v8a-release.apk'
+  [x86_64]='*-x86_64-release.apk'
+)
+for arch in universal arm64-v8a x86_64; do
+  mapfile -d '' apks < <(find "$apk_dir" -maxdepth 1 -type f -name "${apk_variants[$arch]}" -print0)
+  [[ ${#apks[@]} -eq 1 ]] ||
+    fail "expected exactly one $arch KMP release APK, found ${#apks[@]}"
+  apk=${apks[0]}
+  "$apksigner" verify "$apk" || fail "$arch APK signature verification failed"
+  application_id=$(apkanalyzer manifest application-id "$apk") ||
+    fail "could not inspect the $arch APK application ID"
+  [[ $application_id == com.hanaretamae.kaede ]] ||
+    fail "unexpected $arch KMP APK application ID: $application_id"
+  permissions=$(apkanalyzer manifest permissions "$apk") ||
+    fail "could not inspect the $arch APK permissions"
+  if grep -Eq 'android\.permission\.(INTERNET|ACCESS_NETWORK_STATE|ACCESS_WIFI_STATE|CHANGE_NETWORK_STATE|CHANGE_WIFI_STATE|MANAGE_EXTERNAL_STORAGE|READ_EXTERNAL_STORAGE|WRITE_EXTERNAL_STORAGE|READ_MEDIA_IMAGES|READ_MEDIA_VIDEO|READ_MEDIA_AUDIO|READ_MEDIA_VISUAL_USER_SELECTED)' \
+    <<< "$permissions"; then
+    fail "the $arch KMP APK requests a network or broad-storage permission"
+  fi
+  cp -- "$apk" "$dist_dir/kaede-gallery-$version-android-$arch.apk"
+done
 unset signing_password
 rm -f -- "$keystore_path"
 rmdir -- "$key_dir"
@@ -238,7 +247,7 @@ if [[ $tag =~ b[0-9]+$ ]]; then
 fi
 gh release create "$tag" "$dist_dir"/kaede-gallery-* "$dist_dir/SHA256SUMS" \
   --verify-tag \
-  --title "Kaede Gallery $tag" \
+  --title "$tag" \
   --notes-file "$notes_file" \
   --repo "$repo" \
   "${release_flags[@]}"

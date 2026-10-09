@@ -229,6 +229,7 @@
               "35"
               "36"
               "37"
+              "37.1"
             ];
             buildToolsVersions = [ "37.0.0" ];
             includeCmake = true;

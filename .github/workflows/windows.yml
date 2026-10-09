@@ -56,19 +56,25 @@ jobs:
         shell: pwsh
         run: |
           $version = (Get-Content VERSION -Raw).Trim()
-          $bundle = 'kotlin/desktopApp/build/compose/binaries/main/app/desktopApp'
-          if (-not (Test-Path (Join-Path $bundle 'bin/desktopApp.exe'))) {
-            throw 'Compose Desktop executable is missing from the Windows distribution'
+          $distributionRoot = 'kotlin/desktopApp/build/compose/binaries/main/app'
+          $launchers = @(Get-ChildItem -LiteralPath $distributionRoot -Filter '*.exe' -File -Recurse)
+          if ($launchers.Count -ne 1) {
+            Get-ChildItem -LiteralPath $distributionRoot -Recurse | Select-Object -ExpandProperty FullName
+            throw "Expected one Compose Desktop launcher in the Windows distribution; found $($launchers.Count)"
           }
-          Copy-Item LICENSE, THIRD_PARTY_NOTICES.md $bundle
-          Copy-Item -Recurse kotlin/shared-assets/licenses (Join-Path $bundle 'licenses')
+          $bundle = $launchers[0].Directory.Parent.FullName
+          Copy-Item -LiteralPath LICENSE, THIRD_PARTY_NOTICES.md -Destination $bundle
+          $licenseSource = 'kotlin/shared-assets/licenses'
+          $licenseDestination = Join-Path $bundle 'licenses'
+          New-Item -ItemType Directory -Force -Path $licenseDestination | Out-Null
+          Copy-Item -Path (Join-Path $licenseSource '*') -Destination $licenseDestination -Recurse -Force
           foreach ($name in 'Apache-2.0.txt', 'LGPL-2.1.txt', 'GPL-3.0.txt', 'RUST-DEPENDENCY-LICENSES.txt') {
-            if (-not (Test-Path (Join-Path $bundle "licenses/$name"))) {
+            if (-not (Test-Path (Join-Path $licenseDestination $name))) {
               throw "License notice $name is missing from the Windows package"
             }
           }
           $zip = "kaede-gallery-$version-windows-x64.zip"
-          Compress-Archive -Path "$bundle/*" -DestinationPath $zip
+          Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip
           "ZIP_NAME=$zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - uses: actions/upload-artifact@v4

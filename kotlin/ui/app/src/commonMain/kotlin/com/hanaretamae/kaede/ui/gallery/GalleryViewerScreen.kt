@@ -29,12 +29,17 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.horizontalScroll
 
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.runtime.Composable
@@ -84,6 +89,7 @@ data class GalleryViewerStrings(
     val next: String,
     val loading: String,
     val noMedia: String,
+    val showDetails: String,
     val author: String,
     val link: String,
     val memo: String,
@@ -113,6 +119,7 @@ val EnglishGalleryViewerStrings = GalleryViewerStrings(
     next = "Next",
     loading = "Loading note…",
     noMedia = "This note has no media",
+    showDetails = "Show details",
     author = "Author",
     link = "Open link",
     memo = "Memo",
@@ -142,6 +149,7 @@ val JapaneseGalleryViewerStrings = GalleryViewerStrings(
     next = "次へ",
     loading = "ノートを読み込み中…",
     noMedia = "このノートにメディアはありません",
+    showDetails = "詳細を表示",
     author = "作者",
     link = "リンクを開く",
     memo = "メモ",
@@ -192,7 +200,6 @@ fun GalleryViewerScreen(
     val clipboardManager = LocalClipboardManager.current
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
-    val horizontalOffset = remember(stateHolder) { mutableFloatStateOf(0f) }
     val detailsScrollState = rememberScrollState()
 
     val density = LocalDensity.current
@@ -303,7 +310,9 @@ fun GalleryViewerScreen(
                         .padding(horizontal = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    TextButton(onClick = onClose) { Text(strings.close) }
+                        IconButton(onClick = onClose) {
+                            Icon(Icons.Filled.Close, strings.close)
+                        }
                     Spacer(Modifier.width(8.dp))
                     val note = state.note
                     val noteTitle = note?.let { galleryViewerTitle(it.path, it.title) }
@@ -399,12 +408,31 @@ fun GalleryViewerScreen(
                         }
                     }
                 }
+            } else if (!presentation.value.fullscreen && state.selectedMedia != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth()
+                        .windowInsetsPadding(WindowInsets.statusBars)
+                        .padding(horizontal = 8.dp),
+                    horizontalArrangement = Arrangement.End,
+                ) {
+                    IconButton(onClick = ::toggleDetails) {
+                        Icon(Icons.Filled.Info, strings.showDetails)
+                    }
+                }
             }
 
             val media = state.selectedMedia
             if (state.loading) {
-                CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                Text(strings.loading, modifier = Modifier.align(Alignment.CenterHorizontally))
+                Box(
+                    modifier = Modifier.weight(1f).fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CircularProgressIndicator()
+                        Spacer(Modifier.height(12.dp))
+                        Text(strings.loading)
+                    }
+                }
             } else if (media == null && state.error == null) {
                 BoxWithConstraints(modifier = Modifier.weight(1f).fillMaxWidth()) {
                     val detailsExpandDistancePx = with(density) { 220.dp.toPx() }
@@ -466,24 +494,58 @@ fun GalleryViewerScreen(
                                     orientation = Orientation.Vertical,
                                     state = detailsForwardingScrollState,
                                 )
-                                .scrollable(
-                                    orientation = Orientation.Horizontal,
-                                    state = rememberScrollableState { delta ->
-                                        horizontalOffset.floatValue += delta
-                                        val threshold = with(density) { 72.dp.toPx() }
-                                        when {
-                                            horizontalOffset.floatValue <= -threshold -> {
-                                                stateHolder.showNextMedia()
-                                                horizontalOffset.floatValue = 0f
+                                .pointerInput(
+                                    state.selectedMediaIndex,
+                                    presentation.value.fullscreen,
+                                    mediaScale.floatValue,
+                                ) {
+                                    val touchSlop = viewConfiguration.touchSlop
+                                    val swipeThreshold = with(density) { 72.dp.toPx() }
+                                    awaitEachGesture {
+                                        val down = awaitFirstDown(
+                                            requireUnconsumed = false,
+                                            pass = PointerEventPass.Initial,
+                                        )
+                                        var previous = down.position
+                                        var total = Offset.Zero
+                                        var horizontalDrag = false
+                                        var pointerPressed = true
+                                        while (pointerPressed) {
+                                            val event = awaitPointerEvent(PointerEventPass.Initial)
+                                            val change = event.changes.firstOrNull {
+                                                it.id == down.id
+                                            } ?: break
+                                            val delta = change.position - previous
+                                            previous = change.position
+                                            total += delta
+                                            if (
+                                                !horizontalDrag &&
+                                                abs(total.x) > touchSlop &&
+                                                abs(total.x) > abs(total.y) &&
+                                                mediaScale.floatValue == 1f
+                                            ) {
+                                                horizontalDrag = true
                                             }
-                                            horizontalOffset.floatValue >= threshold -> {
-                                                stateHolder.showPreviousMedia()
-                                                horizontalOffset.floatValue = 0f
-                                            }
+                                            if (horizontalDrag) change.consume()
+                                            pointerPressed = change.pressed
                                         }
-                                        delta
-                                    },
-                                ),
+                                        when (
+                                            galleryViewerSwipeDirection(
+                                                horizontalOffsetPx = total.x,
+                                                verticalOffsetPx = total.y,
+                                                touchSlopPx = touchSlop,
+                                                swipeThresholdPx = swipeThreshold,
+                                                imageZoomed = mediaScale.floatValue != 1f,
+                                            )
+                                        ) {
+                                            GalleryViewerSwipeDirection.NEXT ->
+                                                stateHolder.showNextMedia()
+                                            GalleryViewerSwipeDirection.PREVIOUS ->
+                                                stateHolder.showPreviousMedia()
+                                            null -> Unit
+                                        }
+                                    }
+                                },
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.Center,
                         ) {
@@ -604,6 +666,33 @@ internal fun galleryCanSetWallpaper(location: String?, isVideo: Boolean): Boolea
 
 internal fun nextImageScale(current: Float, zoom: Float): Float =
     (current * zoom).coerceIn(1f, 5f)
+
+internal enum class GalleryViewerSwipeDirection {
+    PREVIOUS,
+    NEXT,
+}
+
+internal fun galleryViewerSwipeDirection(
+    horizontalOffsetPx: Float,
+    verticalOffsetPx: Float,
+    touchSlopPx: Float,
+    swipeThresholdPx: Float,
+    imageZoomed: Boolean,
+): GalleryViewerSwipeDirection? {
+    if (
+        imageZoomed ||
+        abs(horizontalOffsetPx) < swipeThresholdPx ||
+        abs(horizontalOffsetPx) <= touchSlopPx ||
+        abs(horizontalOffsetPx) <= abs(verticalOffsetPx)
+    ) {
+        return null
+    }
+    return if (horizontalOffsetPx < 0) {
+        GalleryViewerSwipeDirection.NEXT
+    } else {
+        GalleryViewerSwipeDirection.PREVIOUS
+    }
+}
 
 internal fun isGalleryViewerWebUrl(value: String): Boolean {
     val separator = value.indexOf("://")

@@ -935,7 +935,7 @@ private fun DesktopGalleryThumbnail(
             bitmap = requireNotNull(imageState.bitmap),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(180.dp),
+            modifier = Modifier.fillMaxWidth().height(220.dp),
         )
         imageState.error != null -> Text(
             requireNotNull(imageState.error),

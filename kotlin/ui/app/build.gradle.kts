@@ -8,7 +8,11 @@ plugins {
 kotlin {
     android {
         namespace = "com.hanaretamae.kaede.ui"
-        compileSdk = 37
+        compileSdk {
+            version = release(37) {
+                minorApiLevel = 1
+            }
+        }
         buildToolsVersion = "37.0.0"
         minSdk = 21
         withHostTestBuilder { }.configure { }
@@ -24,6 +28,7 @@ kotlin {
             implementation(libs.compose.runtime)
             implementation(libs.compose.foundation)
             implementation(libs.compose.material3)
+            implementation(libs.compose.material.icons.extended)
             implementation(libs.compose.ui)
         }
         commonTest.dependencies {

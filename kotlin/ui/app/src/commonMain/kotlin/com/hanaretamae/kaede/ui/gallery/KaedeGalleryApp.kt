@@ -10,6 +10,7 @@ import androidx.compose.material3.ColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -66,6 +67,7 @@ fun KaedeGalleryApp(
     onRustTagSettingsChanged: (suspend (GallerySettings) -> RepositoryResult<*>)? = null,
     onImportSettings: (((String) -> Unit) -> Unit)? = null,
     onExportSettings: ((String) -> Unit)? = null,
+    onBackHandlerChanged: (((() -> Unit)?) -> Unit)? = null,
 ) {
     val scope = rememberCoroutineScope()
     val settingsStateHolder = remember(settingsRepository, scope) {
@@ -103,6 +105,16 @@ fun KaedeGalleryApp(
     }
 
     val settings = settingsState.settings
+    val systemBackHandler = remember(showSettings, selectedEntries) {
+        when {
+            showSettings -> ({ showSettings = false })
+            selectedEntries.isNotEmpty() -> ({ selectedEntries = selectedEntries.dropLast(1) })
+            else -> null
+        }
+    }
+    SideEffect {
+        onBackHandlerChanged?.invoke(systemBackHandler)
+    }
     val tagColorRules = remember(settings?.flutterTagSettingsJson) {
         try {
             GalleryTagColorCodec.decodeRules(settings?.flutterTagSettingsJson)
@@ -237,6 +249,7 @@ fun KaedeGalleryApp(
                     stateHolder = galleryStateHolder,
                     onEntrySelected = { selectedEntries = selectedEntries + it },
                     onSettings = { showSettings = true },
+                    vaultName = vaultName,
                     strings = activeGalleryStrings,
                     showTilePosition = settings.showTilePosition,
                     showLoadedRange = settings.showLoadedRange,
@@ -247,8 +260,6 @@ fun KaedeGalleryApp(
                     tagColorRules = tagColorRules,
                     galleryThumbnail = galleryThumbnail,
                     onRescan = rescanWithSummary,
-                    onChangeVault = onChangeVault,
-                    onForgetVault = onForgetVault,
                 )
             }
         }

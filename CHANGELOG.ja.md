@@ -5,6 +5,27 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
+## [2.0.0b3] - 2026-10-09 (Beta)
+
+### 追加
+
+- Android のリリース package に universal／arm64-v8a／x86_64 APK を追加しました。GitHub Release のタイトルはバージョンのみにしました。
+- Android に既存の adaptive launcher icon を適用しました。
+- Compose Multiplatform の最新 Material 3 Expressive alpha と Android Material 3 beta を採用し、Expressive motion と theme shape を適用しました。
+
+### 修正
+
+- 固定の exe パスを前提にせず、Compose Desktop が生成した launcher を探して Windows archive を作るようにしました。
+- 最初の Vault 選択画面に system/dynamic color を適用し、Settings と viewer 内で Back 操作を処理するようにしました。
+- ノート読み込み表示を中央に移し、メディアの横スワイプを復元し、Android／Desktop の動画をループ再生するようにしました。
+- 検証済み SAF document ID と上限付き画像 thumbnail を app の非公開領域に cache し、フォルダ階層の繰り返し検索を避けるようにしました。
+
+### 変更
+
+- Vault 名と件数の app bar、ノート／メディア tabs、icon actions、画像主体の tile と件数 badge を持つ gallery に変更しました。
+- 検索・タグ・日付・並び順の絞り込みを filter 内にまとめ、Vault 切替／登録解除は Settings のみで行うようにしました。Settings navigation は icon 付き list にしました。
+- 最新 Material 3 Expressive 依存に合わせ、Android の最小対応を API 24、compile SDK を API 37.1 に引き上げました。
+
 ## [2.0.0b2] - 2026-10-09 (Beta)
 
 ### 修正

@@ -1,5 +1,10 @@
 # Phase 1 performance baseline
 
+Historical baseline: the Android image/grid benchmark below used the retired
+Flutter UI. It does not measure the maintained KMP/Compose app. Current KMP
+Android `ContentResolver` throughput and Compose frame performance have not been
+measured.
+
 Measured on 2026-10-01 using the release CLI and fresh generated fictional
 notes/indexes only. Timings are wall-clock values printed by Bash `time`;
 fixture generation and Cargo compilation are outside each scan timing.

@@ -2,6 +2,7 @@ package com.hanaretamae.kaede.core.rust
 
 import android.content.ContentResolver
 import android.content.Context
+import android.database.sqlite.SQLiteException
 import android.database.Cursor
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -25,6 +26,8 @@ import java.io.IOException
 import java.io.InputStream
 import java.util.ArrayDeque
 
+const val MAX_GALLERY_THUMBNAIL_DIMENSION = 512
+
 data class AndroidSafScanSnapshot(
     val filePaths: List<String>,
     val batches: Flow<List<com.hanaretamae.kaede.core.repository.SafScanNote>>,
@@ -32,6 +35,7 @@ data class AndroidSafScanSnapshot(
 
 class AndroidSafVaultScanner(context: Context) {
     private val resolver: ContentResolver = context.applicationContext.contentResolver
+    private val mediaUriCache = AndroidSafMediaUriCache(context)
 
     fun hasPersistedReadPermission(treeUri: Uri): Boolean = try {
         resolver.persistedUriPermissions.any {
@@ -51,6 +55,7 @@ class AndroidSafVaultScanner(context: Context) {
         }
         validateDocumentId(treeDocumentId)
         val filePaths = ArrayList<String>()
+        val documentIdsByPath = LinkedHashMap<String, String>()
         val notes = ArrayList<NoteDocument>()
         val pendingDirectories = ArrayDeque<Directory>()
         pendingDirectories.add(Directory(treeDocumentId, "", 0))
@@ -97,6 +102,9 @@ class AndroidSafVaultScanner(context: Context) {
                     filePaths.add(relativePath)
                     val childDocumentId = it.getString(idIndex) ?: throw SafAccessException()
                     validateDocumentId(childDocumentId)
+                    if (documentIdsByPath.put(relativePath, childDocumentId) != null) {
+                        throw SafAccessException()
+                    }
                     aggregateDocumentIdBytes += childDocumentId.toByteArray(
                         Charsets.UTF_8,
                     ).size
@@ -154,6 +162,11 @@ class AndroidSafVaultScanner(context: Context) {
             LOG_TAG,
             "SAF enumeration durationMs=${SystemClock.elapsedRealtime() - startedAt}",
         )
+        try {
+            mediaUriCache.replace(treeUri.toString(), documentIdsByPath)
+        } catch (_: SQLiteException) {
+            throw SafAccessException()
+        }
         AndroidSafScanSnapshot(
             filePaths = filePaths,
             batches = readBatches(notes),
@@ -164,6 +177,15 @@ class AndroidSafVaultScanner(context: Context) {
         withContext(Dispatchers.IO) {
             validateTreeUri(treeUri)
             val segments = validateRelativePath(relativePath)
+            val cachedDocumentId = try {
+                mediaUriCache.get(treeUri.toString(), relativePath)
+            } catch (_: SQLiteException) {
+                throw SafAccessException()
+            }
+            cachedDocumentId?.let { documentId ->
+                validateDocumentId(documentId)
+                return@withContext DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)
+            }
             var parentDocumentId = try {
                 DocumentsContract.getTreeDocumentId(treeUri)
             } catch (_: IllegalArgumentException) {
@@ -195,14 +217,28 @@ class AndroidSafVaultScanner(context: Context) {
                 } ?: throw SafAccessException()
                 parentDocumentId = nextDocumentId
                 if (index == segments.lastIndex) {
-                return@withContext DocumentsContract.buildDocumentUriUsingTree(
-                    treeUri,
-                    nextDocumentId,
-                )
+                    try {
+                        mediaUriCache.put(treeUri.toString(), relativePath, nextDocumentId)
+                    } catch (_: SQLiteException) {
+                        throw SafAccessException()
+                    }
+                    return@withContext DocumentsContract.buildDocumentUriUsingTree(
+                        treeUri,
+                        nextDocumentId,
+                    )
                 }
             }
             throw SafAccessException()
         }
+
+    suspend fun clearMediaUriCache(treeUri: Uri) = withContext(Dispatchers.IO) {
+        validateTreeUri(treeUri)
+        try {
+            mediaUriCache.clear(treeUri.toString())
+        } catch (_: SQLiteException) {
+            throw SafAccessException()
+        }
+    }
 
     suspend fun readNoteContent(treeUri: Uri, relativePath: String): ByteArray =
         withContext(Dispatchers.IO) {
@@ -226,6 +262,29 @@ class AndroidSafVaultScanner(context: Context) {
         maxDimension: Int,
     ): Bitmap? = withContext(Dispatchers.IO) {
         if (maxDimension !in 1..MAX_IMAGE_DIMENSION) throw SafAccessException()
+        validateTreeUri(treeUri)
+        validateRelativePath(relativePath)
+        val cacheThumbnails = maxDimension == MAX_GALLERY_THUMBNAIL_DIMENSION
+        if (cacheThumbnails) {
+            val cachedThumbnail = try {
+                mediaUriCache.getThumbnail(treeUri.toString(), relativePath)
+            } catch (_: SQLiteException) {
+                throw SafAccessException()
+            }
+            if (cachedThumbnail != null) {
+                val cachedBitmap = BitmapFactory.decodeByteArray(
+                    cachedThumbnail,
+                    0,
+                    cachedThumbnail.size,
+                )
+                if (cachedBitmap != null) return@withContext cachedBitmap
+                try {
+                    mediaUriCache.removeThumbnail(treeUri.toString(), relativePath)
+                } catch (_: SQLiteException) {
+                    throw SafAccessException()
+                }
+            }
+        }
         val uri = resolveMedia(treeUri, relativePath)
         val input = resolver.openInputStream(uri) ?: return@withContext null
         val bytes = input.use { it.readBounded(MAX_MEDIA_BYTES) }
@@ -244,7 +303,7 @@ class AndroidSafVaultScanner(context: Context) {
             return@withContext null
         }
         val sampleSize = calculateSampleSize(width, height, maxDimension)
-        BitmapFactory.decodeByteArray(
+        val bitmap = BitmapFactory.decodeByteArray(
             bytes,
             0,
             bytes.size,
@@ -253,6 +312,21 @@ class AndroidSafVaultScanner(context: Context) {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             },
         )
+        if (cacheThumbnails && bitmap != null) {
+            val encoded = ByteArrayOutputStream().use { output ->
+                val format = if (bitmap.hasAlpha()) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+                val quality = if (format == Bitmap.CompressFormat.PNG) 100 else 88
+                if (bitmap.compress(format, quality, output)) output.toByteArray() else null
+            }
+            if (encoded != null) {
+                try {
+                    mediaUriCache.putThumbnail(treeUri.toString(), relativePath, encoded)
+                } catch (_: SQLiteException) {
+                    throw SafAccessException()
+                }
+            }
+        }
+        bitmap
     }
 
     suspend fun decodeVideoFrame(

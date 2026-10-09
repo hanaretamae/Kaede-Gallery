@@ -1,24 +1,24 @@
 # ビルド・リリース手順
 
-アプリの唯一のバージョン源は `VERSION` です。正式リリースのタグは `VERSION` と完全一致させ、先頭に `v` を付けません。`2.0.0b2` のような beta タグは GitHub prerelease になります。
+アプリの唯一のバージョン源は `VERSION` です。正式リリースのタグは `VERSION` と完全一致させ、先頭に `v` を付けません。`2.0.0b3` のような beta タグは、バージョンだけをタイトルにした GitHub prerelease になります。
 
 ## 方法を選ぶ
 
 | 方法 | 成果物 | 実行場所 |
 | --- | --- | --- |
-| 完全なリリース（2.0.0b2向け） | production署名済みAndroid APK、x86_64/AArch64 Linux bundle、チェックサム、GitHub prerelease | ローカルLinuxで `tools/release.sh` を実行し、その後Windows ZIPをActionsで添付 |
+| 完全なリリース（2.0.0b3向け） | production署名済みuniversal／arm64-v8a／x86_64 Android APK、x86_64/AArch64 Linux bundle、チェックサム、GitHub prerelease | ローカルLinuxで `tools/release.sh` を実行し、その後Windows ZIPをActionsで添付 |
 | 任意のリモートビルド | Android debug APK、および／またはLinux AArch64 bundleの一時artifact | 手動起動するActions。production releaseではない |
 | 署名付きリリースを全てActionsで実行 | **現在は未対応** | Android production署名から完全なRelease作成までを行うworkflowはまだない |
 
-## 現在の2.0.0b2の状態
+## 現在の2.0.0b3の状態
 
-`2.0.0b2` タグはすでにpushされており、コミット `6fa0080` を指しています。GitHub Releaseはまだ作成されていません。このタグを作り直したり、別コミットへ移動したりしないでください。リリーススクリプトを実行する前に `git fetch origin --tags` でローカルへ取得します。
+`2.0.0b3` は準備中で、まだ公開していません。変更をレビュー・commitし、同じtagをpushして対象ビルドを検証してからrelease scriptを実行してください。以前の `2.0.0b2` tagはコミット `6fa0080` を指しています。作り直したり移動したりしないでください。
 
 タグ作成後に許されるのは、`CHANGELOG.md` 以外のMarkdownドキュメント変更だけです。リリーススクリプトは現在のコミットと `origin/main` が一致することも検査します。リリースノートとドキュメント以外のリリースコードはタグ時点のままにしてください。
 
 ## ローカルLinuxで完全なリリースを作成
 
-最新の `main` を使い、`VERSION` が `2.0.0b2` であること、作業ツリーに未コミット変更がないことを確認します。
+最新の `main` を使い、`VERSION` が `2.0.0b3` であること、作業ツリーに未コミット変更がないことを確認します。
 
 ```sh
 git switch main
@@ -33,10 +33,10 @@ KeePassXCデータベースとキーファイルのパスをローカル環境�
 ```sh
 export KEEPASSXC_DATABASE="/absolute/path/to/signing-database.kdbx"
 export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
-tools/release.sh 2.0.0b2
+tools/release.sh 2.0.0b3
 ```
 
-既定のKeePassXCエントリ名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。スクリプトは鍵を一時的に取り出し、署名付きproduction APKのビルドと検証、Rust/Kotlinテスト、x86_64/AArch64 Linux bundleの作成、チェックサム計算を行い、prereleaseを公開します。Rustup 1.98.1と、事前導入済みの `aarch64-linux-android`／`x86_64-linux-android` targets が必要です。Linux両アーキテクチャをビルドする環境には、AArch64ネイティブ対応、QEMU/binfmt、またはremote builderが必要です。`XDG_RUNTIME_DIR` は現在のユーザー所有でmode `700` のprivate directoryでなければなりません。
+既定のKeePassXCエントリ名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。スクリプトは鍵を一時的に取り出し、universal／arm64-v8a／x86_64 APKの署名と検証、Rust/Kotlinテスト、x86_64/AArch64 Linux bundleの作成、チェックサム計算を行い、バージョンだけをタイトルにしたprereleaseを公開します。Rustup 1.98.1と、事前導入済みの `aarch64-linux-android`／`x86_64-linux-android` targets が必要です。Linux両アーキテクチャをビルドする環境には、AArch64ネイティブ対応、QEMU/binfmt、またはremote builderが必要です。`XDG_RUNTIME_DIR` は現在のユーザー所有でmode `700` のprivate directoryでなければなりません。
 
 prereleaseの作成後、Windows ZIPを手動workflowで作成・添付します。
 
@@ -44,7 +44,7 @@ prereleaseの作成後、Windows ZIPを手動workflowで作成・添付します
 gh workflow run windows.yml \
   --repo hanaretamae/Kaede-Gallery \
   --ref main \
-  --field tag=2.0.0b2
+  --field tag=2.0.0b3
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
@@ -69,4 +69,4 @@ tools/run-optional-builds.sh both
 
 production署名を含む完全なActions-only releaseは**現在未対応**です。現在の署名手順は、リリース担当者のローカルKeePassXCデータベースからkeystoreとpasswordを読み取ります。任意のビルドworkflowは一時的なdebug/build artifactを作るだけで、Windows workflowは先にReleaseが存在することを要求します。
 
-全てをリモートで行うには、保護されたrelease workflow、Android署名keystore/passwordをGitHub Environment secretまたは外部secret managerから渡すことについての明示的な決定、署名済みAPKと全bundleのCI検証が必要です。KeePassXCデータベースやkey fileをアップロードしたり、署名素材をリポジトリファイルに置いたりしないでください。このリモート署名構成は未承認・未設定です。`2.0.0b2` はローカルリリース手順を使用してください。すでにpush済みのtagは、新しいrelease workflowを追加するために動かさないでください。
+全てをリモートで行うには、保護されたrelease workflow、Android署名keystore/passwordをGitHub Environment secretまたは外部secret managerから渡すことについての明示的な決定、署名済みAPKと全bundleのCI検証が必要です。KeePassXCデータベースやkey fileをアップロードしたり、署名素材をリポジトリファイルに置いたりしないでください。このリモート署名構成は未承認・未設定です。`2.0.0b3` はローカルリリース手順を使用してください。

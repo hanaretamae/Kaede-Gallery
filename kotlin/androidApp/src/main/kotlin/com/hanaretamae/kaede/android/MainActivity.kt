@@ -14,6 +14,7 @@ import android.system.Os
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -52,6 +53,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.PlayerView
 import com.hanaretamae.kaede.core.model.GalleryCategory
@@ -71,12 +73,16 @@ import com.hanaretamae.kaede.core.repository.SafScanNote
 import com.hanaretamae.kaede.core.rust.AndroidSafVaultScanner
 import com.hanaretamae.kaede.core.rust.RustGallerySessionRepository
 import com.hanaretamae.kaede.core.rust.RustVaultSelectionRepository
+import com.hanaretamae.kaede.core.rust.MAX_GALLERY_THUMBNAIL_DIMENSION
 import com.hanaretamae.kaede.core.settings.AndroidSettingsRepository
+import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
+import com.hanaretamae.kaede.core.settings.ThemePreference
 import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
+import com.hanaretamae.kaede.ui.gallery.KaedeGalleryTheme
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import com.hanaretamae.kaede.ui.gallery.androidDynamicColorScheme
 import kotlinx.coroutines.launch
@@ -124,6 +130,11 @@ private fun AndroidGalleryRoot() {
     var pendingSettingsImport by remember { mutableStateOf<((String) -> Unit)?>(null) }
     var pendingSettingsExport by remember { mutableStateOf<String?>(null) }
     var pendingSettingsExportVault by remember { mutableStateOf<Uri?>(null) }
+    var systemBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
+
+    BackHandler(enabled = systemBackHandler != null) {
+        systemBackHandler?.invoke()
+    }
 
     val settingsImporter = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
@@ -314,6 +325,13 @@ private fun AndroidGalleryRoot() {
         if (previous != null && previous != vaultUri) {
             session?.close()
             session = null
+            try {
+                scanner.clearMediaUriCache(Uri.parse(previous))
+            } catch (_: AndroidSafVaultScanner.SafAccessException) {
+                error = "The previous Vault's media index could not be cleared."
+                loading = false
+                return
+            }
             when (
                 val forgotten = vaultRepository.clearSelectedData(
                     privateDataDirectory,
@@ -685,6 +703,7 @@ private fun AndroidGalleryRoot() {
                 pendingSettingsExportVault = vaultUri
                 settingsExportFolderPicker.launch(null)
             },
+            onBackHandlerChanged = { systemBackHandler = it },
             dynamicColorSchemeProvider = { theme ->
                 androidDynamicColorScheme(context, theme)
             },
@@ -745,16 +764,25 @@ private fun AndroidGalleryRoot() {
                         RepositoryResult.Failure(forgotten.error)
                     }
                     is RepositoryResult.Success -> {
-                        selectedVault = null
+                        var cleanupError: String? = null
+                        try {
+                            scanner.clearMediaUriCache(vaultUri)
+                        } catch (_: AndroidSafVaultScanner.SafAccessException) {
+                            cleanupError = "The local media index could not be cleared."
+                        }
                         try {
                             activity.contentResolver.releasePersistableUriPermission(
                                 vaultUri,
                                 Intent.FLAG_GRANT_READ_URI_PERMISSION,
                             )
-                            error = null
-                            RepositoryResult.Success(Unit)
                         } catch (_: SecurityException) {
-                            error = "The folder access grant could not be released."
+                            cleanupError = "The folder access grant could not be released."
+                        }
+                        selectedVault = null
+                        error = cleanupError
+                        if (cleanupError == null) {
+                            RepositoryResult.Success(Unit)
+                        } else {
                             RepositoryResult.Failure(RepositoryError.VAULT_UNAVAILABLE)
                         }
                     }
@@ -838,7 +866,11 @@ private fun WelcomeScreen(
     error: String?,
     onChooseVault: () -> Unit,
 ) {
-    MaterialTheme {
+    val context = LocalContext.current
+    KaedeGalleryTheme(
+        appearance = AppearanceSettings(),
+        dynamicColorScheme = androidDynamicColorScheme(context, ThemePreference.SYSTEM),
+    ) {
         Surface(Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -951,7 +983,7 @@ private fun AndroidGalleryThumbnail(
             bitmap = bitmap!!.asImageBitmap(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(180.dp),
+            modifier = Modifier.fillMaxWidth().height(220.dp),
         )
     }
 }
@@ -962,6 +994,7 @@ private fun AndroidVideoPlayer(uri: Uri) {
     val player = remember(uri) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(uri))
+            repeatMode = Player.REPEAT_MODE_ONE
             prepare()
             playWhenReady = true
         }
@@ -986,7 +1019,8 @@ private fun errorText(error: RepositoryError): String = when (error) {
 }
 
 private const val MAX_VIEWER_IMAGE_SIZE = 2_048
-private const val MAX_GALLERY_THUMBNAIL_SIZE = 512
+private const val MAX_GALLERY_THUMBNAIL_SIZE =
+    MAX_GALLERY_THUMBNAIL_DIMENSION
 
 private class AndroidSessionHandle(
     private val delegate: GallerySessionHandle,

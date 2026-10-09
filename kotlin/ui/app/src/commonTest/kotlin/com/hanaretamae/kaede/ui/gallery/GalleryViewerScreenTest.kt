@@ -85,6 +85,30 @@ class GalleryViewerScreenTest {
     }
 
     @Test
+    fun horizontalSwipesSwitchMediaButDoNotOverrideVerticalOrZoomGestures() {
+        assertEquals(
+            GalleryViewerSwipeDirection.NEXT,
+            galleryViewerSwipeDirection(-120f, 8f, 16f, 72f, imageZoomed = false),
+        )
+        assertEquals(
+            GalleryViewerSwipeDirection.PREVIOUS,
+            galleryViewerSwipeDirection(120f, 8f, 16f, 72f, imageZoomed = false),
+        )
+        assertEquals(
+            null,
+            galleryViewerSwipeDirection(-80f, 90f, 16f, 72f, imageZoomed = false),
+        )
+        assertEquals(
+            null,
+            galleryViewerSwipeDirection(-120f, 8f, 16f, 72f, imageZoomed = true),
+        )
+        assertEquals(
+            null,
+            galleryViewerSwipeDirection(-70f, 8f, 16f, 72f, imageZoomed = false),
+        )
+    }
+
+    @Test
     fun wallpaperActionIsLimitedToSupportedImageFiles() {
         assertTrue(galleryCanSetWallpaper("media/photo.webp", isVideo = false))
         assertFalse(galleryCanSetWallpaper("media/clip.mp4", isVideo = false))

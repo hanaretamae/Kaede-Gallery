@@ -98,7 +98,7 @@ integrations.
     never signs production Android packages or publishes releases. The prior Android and Windows Actions runs
     passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-    Do not mark this phase complete until the `2.0.0b2` GitHub prerelease exists
+    Do not mark this phase complete until the `2.0.0b3` GitHub prerelease exists
     and the Windows release archive is attached successfully. An earlier
     aarch64 attempt could not fetch pinned OpenJDK/Nix-cache artifacts because
     cache.nixos.org connections timed out; that failure was later resolved.
@@ -114,8 +114,9 @@ GitHub Actions run Windows tests/package checks on push and pull request, with
 Android debug and Linux AArch64 build artifacts available only through explicit
 manual dispatch, either in the Actions UI or via `tools/run-optional-builds.sh`.
 Local builds remain primary, and the manual workflow does not sign or publish
-Android releases. The remote `2.0.0b2` tag points to `6fa0080`; its GitHub
-prerelease and Windows beta archive are still pending. Full Actions-only
+Android releases. The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
+must not be moved. The `2.0.0b3` GitHub prerelease and Windows beta archive are
+still pending. Full Actions-only
 production release is not implemented: the current signing flow uses the local
 KeePassXC database. See `docs/releasing.md` for the supported local/remote paths
 and the signing prerequisite. There is no active Flutter application or release path.
@@ -223,7 +224,7 @@ completed and its JSON output parsed successfully. No real signing key or Vault
 was used.
 
 **Still pending before Phase 14 can be marked complete:** create the
-`2.0.0b2` GitHub prerelease and successfully attach the Windows ZIP. The owner
+`2.0.0b3` GitHub prerelease and successfully attach the Windows ZIP. The owner
 verified the declared AArch64 Linux Desktop build on 2026-10-09 with
 `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
 (exit status 0); the exact builder mechanism was not recorded. The previous
@@ -466,21 +467,14 @@ remains open until its outstanding target-specific acceptance checks pass.
 
 ## Application language
 
-The existing Flutter UI supports Japanese and English. System language is the default:
-Japanese is selected only when the system locale is Japanese; all other system
-locales use English. Users can override this with System, Japanese, or English
-in Appearance settings. The selection is persisted in private app data with
-the other appearance preferences and never changes Vault contents. UI text is
-localized at the presentation layer; Rust parser/index contracts and
+The maintained Kotlin Multiplatform UI supports Japanese and English. System
+language is the default: Japanese is selected only when the system locale is
+Japanese; all other system locales use English. Users can override this with
+System, Japanese, or English in Appearance settings. The selection is
+persisted in private app data and never changes Vault contents. Presentation
+strings live with the shared Compose gallery, viewer, and settings screens;
+keep both locales' string sets in sync. Rust parser/index contracts and
 stored user-provided note/category labels are not translated.
-
-The current Flutter localization uses `gen-l10n`. The English and Japanese source messages
-are `app/lib/l10n/app_en.arb` and `app/lib/l10n/app_ja.arb`; keep their message
-keys and named placeholders in sync. Run `flutter gen-l10n` from `app/` after
-editing either file. Generated Dart files in `app/lib/l10n/` must not be edited
-by hand. Widgets use `context.l10n`; `AppL10n.current` is only for code that
-cannot receive a `BuildContext`. Preserve these locale and fallback behaviors
-in the Kotlin UI and keep the Flutter localization until parity is verified.
 
 Phase 4 delivered a privately sideloaded APK; this does not imply
 store-distribution readiness. Android Vault access targets an ordinary
@@ -521,17 +515,14 @@ read-only and do not request broad all-files access.
 The SAF resource contract is: at most 100,000 entries, depth 64, 32 MiB of
 aggregate relative-path bytes, 2 MiB per note, 128 notes and 16 MiB per read
 batch, at most 16 concurrent note reads, and 128 MiB of total note content
-per scan. Kotlin, Dart, and Rust must enforce compatible bounds; contract tests
-must prevent these limits from drifting.
+per scan. Kotlin and Rust must enforce compatible bounds; contract tests must
+prevent these limits from drifting.
 Android performance checks use generated fictional notes/media in a dedicated
-test location, never a user's Vault. The repeatable synthetic SAF benchmark
-drives the Rust scan and private thumbnail cache on an Android device, with a
-mock document-provider channel and a real Flutter image decoder and grid.
-Treat it as a Rust/Flutter/device baseline rather than a `ContentResolver`
-throughput measurement. Record only aggregate duration, peak memory, cache-hit
-rate, and frame timings; do not log paths or note content.
-The Linux CLI baseline is not a substitute for Android SAF or Flutter frame
-measurements.
+test location, never a user's Vault. Record only aggregate duration, peak
+memory, cache-hit rate, and frame timings; do not log paths or note content.
+The retired Flutter benchmark is historical evidence only and is not an active
+KMP measurement. The Linux CLI baseline is not a substitute for Android SAF
+or Compose frame measurements.
 An explicit “forget selected Vault” action is separate from settings reset. It
 requires confirmation and removes the selected Vault URI/path, its private
 index and SQLite sidecars, scan summary, document-URI mapping, and thumbnail
@@ -545,92 +536,50 @@ the containing location and select the media item. Android file-manager
 selection opens the selected media document with a read-only grant instead of
 opening a folder picker.
 
-Material 3 Expressive has official design guidance, including expanded tonal
-color, typographic hierarchy, flexible shape, and more natural motion:
-https://m3.material.io/blog/building-with-m3-expressive
-and https://developer.android.com/design/ui/wear/guides/get-started/apply.
-Material 3 Expressive is an opt-in extension, not an official requirement to
-replace every Material 3 widget. This app nevertheless targets app-wide
-Expressive treatment with `material_3_expressive` 1.1.5 and `material_ui`.
-Use an M3E component wherever the pinned package has a semantically suitable
-implementation; where it does not, retain the correct native/platform
-component and apply the shared Expressive theme and motion rather than lose
-behavior or accessibility. Keep navigation, state management, and business
-logic unchanged during UI migration. Verify package APIs against the pinned
-release's README, changelog, and examples. The package requires Flutter
-3.47.0+ and Dart 3.13.0+.
-Official component, color, and motion guidance:
-https://m3.material.io/components/buttons/overview,
-https://m3.material.io/components/button-groups/overview,
-https://m3.material.io/components/segmented-buttons/overview, and
-https://m3.material.io/styles/motion/overview/how-it-works.
-Use Material You theme roles for button surfaces and foregrounds; selected and
-unselected controls must remain distinguishable and legible in light, dark,
-system-color, and pure-black themes. Choice groups use primary/on-primary for
-the selected state and surface-container-highest/on-surface for the unselected
-state, with no elevation or shadow:
-https://m3.material.io/styles/color/roles.
-Custom animations use the package's verified expressive motion tokens and
-respect the operating system's reduced-motion preference. Passive Flutter
-Card shells remain where their surface grouping and media hit-target behavior
-are needed; ExpansionTile and ReorderableListView retain their nested editing
-and drag-reorder semantics. System routes, platform pickers, and media overlays
-remain framework-, platform-, or media-specific and are not replaced by
-unrelated controls.
-The supplied leaf artwork is the app icon on supported Android and Linux
-targets; keep the Android adaptive foreground inside its 66dp mask-safe
-region:
-https://developer.android.com/develop/ui/views/launch/launcher-icons#design_adaptive_icons.
-The gallery filter panel uses Expressive search bars for its note and
-tag-option searches; preserve the distinction between submitted note queries
-and live tag-option filtering. Follow the Material 3 Search guidelines:
-https://m3.material.io/components/search/guidelines.
-Button Groups use the simple frameless treatment; state fills still use
-contrast-safe theme colors. The tag-filter panel shows the exact available
-category and option counts from the model without replacing them with aggregate
-totals, omitting zeroes, or capping large values.
-Main settings navigation cards use the higher surface-container role to
-separate tappable actions from the page background. Small app-bar titles use a
-bold headline style while remaining in the app bar's title position.
-Non-search inputs use the outlined Expressive text-field variant; framework
-text fields use the shared transparent outlined input theme. Search bars retain
-their dedicated search treatment.
+The maintained UI uses Compose Multiplatform Material 3 Expressive and Material
+You. The shared UI uses `MaterialExpressiveTheme`, the expressive
+`MotionScheme`, expressive light color roles, and an expanded shape system.
+Android dynamic color is supplied by the platform; fallback colors and pure
+black remain legible in light and dark modes. Current dependency versions are
+listed in `kotlin/gradle/libs.versions.toml`: Compose Multiplatform and its
+Material 3 library are `1.13.0-alpha02`, AndroidX Material 3 is `1.5.0-beta01`,
+and the shared icon artifact is `1.7.3`. The Android Compose artifacts require
+compile SDK 37.1, configured for both the KMP UI module and Android app. The
+Android Material 3 dependency raises the application minimum SDK to 24.
 
-The settings page groups brightness, system accent color, and pure-black
-controls in one appearance card, using a connected Material 3 Expressive button
-group for the mutually exclusive brightness choice and switches for the
-independent preferences. Use connected button groups for mutually exclusive
-choices in the gallery sort controls and note-link resolution settings as well.
-Pure black applies only to dark mode: the app background remains true black
-while item surfaces retain a subtle dark distinction; the selected
-system/dynamic scheme continues to supply accent and foreground roles. Video
-controls remain transparent over media; the seek
-indicator uses the active theme's primary color while text and transport
-controls remain high-contrast white.
-Gallery tile media/memo/related counts and video indicators have no outlines;
-video is identified by an icon with accessible semantics. Note detail
-tags use a tag-seeded Material You tonal surface with no tag icon; frontmatter
-dates share one surface with their labels, while the selectable note path has no
-separate background. Missing/loading media icons are an optional tile setting
-and are hidden by default. The optional tile position indicator is a 24dp
-tonal marker at the upper left, matching the count-icon background size. The
-note title and author occupy the app bar headline and supporting subtitle roles
-respectively. The display-mode popup uses the standard Material You menu
-surface and selected-state color roles.
-Settings are ordered as appearance, list pagination, storage, notes, then
-“このアプリについて”. Vault selection and scan status are grouped under
-“保管庫”. Note structure and tag-filter visibility remain under “ノート”;
-list pagination is a separate top-level setting. Import, export, reset, help,
-app information, licenses, and the GitHub repository link are grouped under
-“このアプリについて”. Reset writes explicit defaults to settings files; it
-does not remove the files or affect Vault notes and the index. Gallery tag
-eligibility has its own section heading in tag settings. Pull-to-refresh is
-disabled; rescanning remains an explicit toolbar/settings action.
-The tag-filter panel also controls gallery ordering by publication or creation
-date, ascending or descending. This order applies consistently to note and
-media grids and across pagination; notes without the selected date stay last,
-and equal dates are ordered by Vault-relative path. The default is newest
-creation date first.
+The launcher uses the supplied leaf artwork through Android adaptive-icon
+resources. Keep the foreground inside the 66dp mask-safe region:
+https://developer.android.com/develop/ui/views/launch/launcher-icons#design_adaptive_icons.
+
+Gallery navigation shows the selected Vault name and item count in the app bar,
+without the app name. Notes and media are switched with tabs. Gallery tiles
+prioritize media and show no note title or Vault path; media, memo, and related
+counts use icon badges with tonal backgrounds, and videos use an accessible
+video icon. Search, tag filters, publication/creation date, and sort order are
+available in the filter surface. Vault change and forget actions are available
+only in Settings. The app bar uses icon buttons for filters, item jump,
+grid/list layout, rescan, and settings.
+
+Settings navigation uses Material list rows with leading and trailing icons.
+Vault selection, rescan, and forget are grouped in the Vault settings page.
+Pure black applies only to dark mode: the app background is true black while
+item surfaces retain subtle separation and dynamic roles supply accent and
+foreground colors. The initial Vault-selection screen uses the system theme
+and Android dynamic color just like the gallery.
+
+The viewer starts in media-only mode, exposes a detail toggle, centers note
+loading feedback, supports horizontal media swipes, and keeps fullscreen and
+detail transitions within the viewer. Android and Desktop video playback loops
+the current media. Android SAF document IDs and bounded image thumbnails are
+cached only in private app data and invalidated on rescan or Vault removal.
+External media actions resolve validated paths through the same cache; Vault
+files remain read-only. Pull-to-refresh is disabled; rescanning remains an
+explicit toolbar/Settings action.
+
+Keep Material You roles, accessible icon descriptions, and clear selected/
+unselected states across light, dark, dynamic-color, and pure-black themes.
+Platform routes, file pickers, and media overlays remain platform-specific
+rather than being replaced by unrelated UI controls.
 
 ## Note parsing and gallery selection
 

@@ -15,8 +15,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -28,7 +26,12 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -38,12 +41,24 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.StickyNote2
+import androidx.compose.material.icons.automirrored.filled.ViewList
+import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.LocationSearching
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -87,6 +102,8 @@ data class GalleryStrings(
     val reload: String,
     val filters: String,
     val settings: String,
+    val grid: String,
+    val list: String,
     val changeVault: String,
     val forgetVault: String,
     val forgetVaultTitle: String,
@@ -138,6 +155,8 @@ val EnglishGalleryStrings = GalleryStrings(
     reload = "Reload",
     filters = "Filters",
     settings = "Settings",
+    grid = "Grid",
+    list = "List",
     changeVault = "Change Vault",
     forgetVault = "Forget Vault",
     forgetVaultTitle = "Forget selected Vault?",
@@ -191,6 +210,8 @@ val JapaneseGalleryStrings = GalleryStrings(
     reload = "再読み込み",
     filters = "フィルター",
     settings = "設定",
+    grid = "グリッド",
+    list = "リスト",
     changeVault = "Vaultを変更",
     forgetVault = "Vaultの登録を解除",
     forgetVaultTitle = "選択中のVaultを登録解除しますか？",
@@ -244,20 +265,17 @@ fun GalleryScreen(
     showLoadedRange: Boolean = true,
     showCounts: Boolean = true,
     showMissingMediaIcon: Boolean = false,
+    vaultName: String? = null,
     includedTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
     hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
     tagColorRules: List<GalleryTagColorRule> = GalleryTagColorCodec.DEFAULT_RULES,
     galleryThumbnail: @Composable (MediaId, Boolean) -> Unit = { _, _ -> },
     onRescan: (suspend () -> RepositoryResult<*>)? = null,
-    onChangeVault: (() -> Unit)? = null,
-    onForgetVault: (suspend () -> RepositoryResult<*>)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
-    val scope = rememberCoroutineScope()
     var showFilters by remember(stateHolder) { mutableStateOf(false) }
-    var confirmForget by remember(stateHolder) { mutableStateOf(false) }
-    var forgetError by remember(stateHolder) { mutableStateOf<RepositoryError?>(null) }
     var tagFilterSearch by remember(stateHolder) { mutableStateOf("") }
+    var listLayout by remember(stateHolder) { mutableStateOf(false) }
     var noteSearchDraft by remember(stateHolder, showFilters) {
         mutableStateOf(state.query.searchText)
     }
@@ -337,25 +355,92 @@ fun GalleryScreen(
         onDispose(stateHolder::dispose)
     }
 
+    val visibleRange = galleryVisibleRange(
+        pageOffset = state.pageOffset,
+        entryCount = state.entries.size,
+        totalCount = state.totalCount ?: 0,
+        visibleItemIndex = visibleItemIndex,
+        pageSize = state.query.pageSize,
+    )
+
     Scaffold(modifier = modifier.fillMaxSize()) { insets ->
         Column(
             modifier = Modifier.fillMaxSize().padding(insets),
         ) {
-            Text(
-                text = strings.title,
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            )
-            OutlinedTextField(
-                value = state.query.searchText,
-                onValueChange = {
-                    stateHolder.setQuery(state.query.copy(searchText = it), debounceSearch = true)
+            TopAppBar(
+                title = {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = vaultName ?: strings.title,
+                            style = MaterialTheme.typography.titleLarge,
+                            maxLines = 1,
+                        )
+                        Text(
+                            text = state.totalCount?.let { total ->
+                                if (showLoadedRange) {
+                                    visibleRange?.let { range ->
+                                        strings.count(range.first, range.last, total)
+                                    } ?: strings.totalCount(total)
+                                } else {
+                                    strings.totalCount(total)
+                                }
+                            } ?: strings.loading,
+                            style = MaterialTheme.typography.labelMedium,
+                        )
+                    }
                 },
-                label = { Text(strings.search) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                actions = {
+                    val activeCount = state.query.includeTags.size +
+                        state.query.andTags.size +
+                        state.query.excludedTags.size +
+                        state.query.virtualFilters.size +
+                        (if (state.query.searchText.isBlank()) 0 else 1)
+                    BadgedBox(
+                        badge = {
+                            if (activeCount > 0) {
+                                Badge { Text(activeCount.toString()) }
+                            }
+                        },
+                    ) {
+                        IconButton(onClick = { showFilters = true }) {
+                            Icon(Icons.Filled.FilterList, strings.filters)
+                        }
+                    }
+                    IconButton(
+                        onClick = {
+                            positionDraft = ""
+                            positionError = false
+                            showJumpDialog = true
+                        },
+                        enabled = !state.loading && (state.totalCount ?: 0L) > 0,
+                    ) {
+                        Icon(Icons.Filled.LocationSearching, strings.jump)
+                    }
+                    IconButton(onClick = { listLayout = !listLayout }) {
+                        Icon(
+                            if (listLayout) Icons.Filled.GridView
+                            else Icons.AutoMirrored.Filled.ViewList,
+                            if (listLayout) strings.grid else strings.list,
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            val rescan = onRescan
+                            if (rescan == null) {
+                                stateHolder.refresh()
+                            } else {
+                                stateHolder.rescan(rescan)
+                            }
+                        },
+                        enabled = !state.loading && !state.rescanning,
+                    ) {
+                        Icon(Icons.Filled.Refresh, strings.reload)
+                    }
+                    IconButton(onClick = onSettings) {
+                        Icon(Icons.Filled.Settings, strings.settings)
+                    }
+                },
             )
-            Spacer(Modifier.height(8.dp))
             PrimaryTabRow(
                 selectedTabIndex = if (state.query.content == GalleryContent.NOTES) 0 else 1,
             ) {
@@ -374,168 +459,47 @@ fun GalleryScreen(
                     text = { Text(strings.media) },
                 )
             }
-            Row(
-                modifier = Modifier.fillMaxWidth()
-                    .horizontalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val activeCount = state.query.includeTags.size +
-                    state.query.andTags.size +
-                    state.query.excludedTags.size +
-                    state.query.virtualFilters.size +
-                    (if (state.query.searchText.isBlank()) 0 else 1)
-                TextButton(onClick = { showFilters = true }) {
-                    Text(if (activeCount == 0) strings.filters else "${strings.filters} ($activeCount)")
-                }
-                TextButton(
-                    onClick = {
-                        positionDraft = ""
-                        positionError = false
-                        showJumpDialog = true
+            if (jumpProgressVisible) {
+                val targetOffset = pendingJumpOffset
+                AlertDialog(
+                    onDismissRequest = {
+                        if (!state.loading) jumpProgressVisible = false
                     },
-                    enabled = !state.loading && (state.totalCount ?: 0L) > 0,
-                ) {
-                    Text(strings.jump)
-                }
-                TextButton(
-                    onClick = {
-                        val field = if (state.query.sortField == GallerySortField.CREATED) {
-                            GallerySortField.PUBLISHED
-                        } else {
-                            GallerySortField.CREATED
-                        }
-                        stateHolder.setQuery(state.query.copy(sortField = field))
-                    },
-                ) {
-                    Text(
-                        if (state.query.sortField == GallerySortField.CREATED) {
-                            strings.created
-                        } else {
-                            strings.published
-                        },
-                    )
-                }
-                TextButton(
-                    onClick = {
-                        val direction = if (state.query.sortDirection == SortDirection.ASCENDING) {
-                            SortDirection.DESCENDING
-                        } else {
-                            SortDirection.ASCENDING
-                        }
-                        stateHolder.setQuery(state.query.copy(sortDirection = direction))
-                    },
-                ) {
-                    Text(
-                        if (state.query.sortDirection == SortDirection.ASCENDING) {
-                            strings.ascending
-                        } else {
-                            strings.descending
-                        },
-                    )
-                }
-                TextButton(
-                    onClick = {
-                        val rescan = onRescan
-                        if (rescan == null) {
-                            stateHolder.refresh()
-                        } else {
-                            stateHolder.rescan(rescan)
-                        }
-                    },
-                    enabled = !state.loading && !state.rescanning,
-                ) {
-                    Text(strings.reload)
-                }
-                if (onChangeVault != null) {
-                    TextButton(onClick = onChangeVault) { Text(strings.changeVault) }
-                }
-                if (onForgetVault != null) {
-                    TextButton(onClick = { confirmForget = true }) {
-                        Text(strings.forgetVault)
-                    }
-                }
-                TextButton(onClick = onSettings) { Text(strings.settings) }
-            }
-            forgetError?.let { error ->
-                Text(
-                    strings.error(error),
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(horizontal = 16.dp),
-                )
-            }
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                val visibleRange = galleryVisibleRange(
-                    pageOffset = state.pageOffset,
-                    entryCount = state.entries.size,
-                    totalCount = state.totalCount ?: 0,
-                    visibleItemIndex = visibleItemIndex,
-                    pageSize = state.query.pageSize,
-                )
-                Text(
-                    text = state.totalCount?.let {
-                        if (showLoadedRange) {
-                            visibleRange?.let { range ->
-                                strings.count(range.first, range.last, it)
-                            } ?: strings.count(0, 0, it)
-                        } else {
-                            strings.totalCount(it)
-                        }
-                    } ?: strings.loading,
-                    style = MaterialTheme.typography.labelLarge,
-                )
-                Spacer(Modifier.weight(1f))
-                if (state.loading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.width(20.dp).height(20.dp),
-                        strokeWidth = 2.dp,
-                    )
-                }
-                if (jumpProgressVisible) {
-                    val targetOffset = pendingJumpOffset
-                    AlertDialog(
-                        onDismissRequest = {
-                            if (!state.loading) jumpProgressVisible = false
-                        },
-                        title = { Text(strings.jumpTitle) },
-                        text = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                if (state.loading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(24.dp),
-                                        strokeWidth = 2.dp,
-                                    )
-                                    Spacer(Modifier.width(16.dp))
-                                }
-                                Text(
-                                    if (state.error == null && state.loading) {
-                                        strings.jumpLoading((targetOffset ?: 0) + 1)
-                                    } else {
-                                        strings.jumpFailed
-                                    },
+                    title = { Text(strings.jumpTitle) },
+                    text = {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            if (state.loading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
                                 )
+                                Spacer(Modifier.width(16.dp))
                             }
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    if (state.loading) {
-                                        stateHolder.cancelJump()
-                                        pendingJumpOffset = null
-                                    } else {
-                                        stateHolder.dismissJumpError()
-                                    }
-                                    jumpProgressVisible = false
+                            Text(
+                                if (state.error == null && state.loading) {
+                                    strings.jumpLoading((targetOffset ?: 0) + 1)
+                                } else {
+                                    strings.jumpFailed
                                 },
-                            ) {
-                                Text(if (state.loading) strings.cancel else strings.close)
-                            }
-                        },
-                    )
-                }
+                            )
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                if (state.loading) {
+                                    stateHolder.cancelJump()
+                                    pendingJumpOffset = null
+                                } else {
+                                    stateHolder.dismissJumpError()
+                                }
+                                jumpProgressVisible = false
+                            },
+                        ) {
+                            Text(if (state.loading) strings.cancel else strings.close)
+                        }
+                    },
+                )
             }
             val error = state.error
             error?.let {
@@ -568,7 +532,7 @@ fun GalleryScreen(
             } else {
                 LazyVerticalGrid(
                     state = gridState,
-                    columns = GridCells.Adaptive(minSize = 176.dp),
+                    columns = if (listLayout) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 176.dp),
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(12.dp),
                     horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -618,6 +582,48 @@ fun GalleryScreen(
                     TextButton(onClick = stateHolder::clearFilters) {
                         Text(strings.clearFilters)
                     }
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = state.query.sortField == GallerySortField.CREATED,
+                        onClick = {
+                            stateHolder.setQuery(state.query.copy(sortField = GallerySortField.CREATED))
+                        },
+                        label = { Text(strings.created) },
+                    )
+                    FilterChip(
+                        selected = state.query.sortField == GallerySortField.PUBLISHED,
+                        onClick = {
+                            stateHolder.setQuery(state.query.copy(sortField = GallerySortField.PUBLISHED))
+                        },
+                        label = { Text(strings.published) },
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    FilterChip(
+                        selected = state.query.sortDirection == SortDirection.DESCENDING,
+                        onClick = {
+                            stateHolder.setQuery(
+                                state.query.copy(sortDirection = SortDirection.DESCENDING),
+                            )
+                        },
+                        label = { Text(strings.descending) },
+                    )
+                    FilterChip(
+                        selected = state.query.sortDirection == SortDirection.ASCENDING,
+                        onClick = {
+                            stateHolder.setQuery(
+                                state.query.copy(sortDirection = SortDirection.ASCENDING),
+                            )
+                        },
+                        label = { Text(strings.ascending) },
+                    )
                 }
                 OutlinedTextField(
                     value = noteSearchDraft,
@@ -771,31 +777,6 @@ fun GalleryScreen(
             }
         }
     }
-    if (confirmForget) {
-        AlertDialog(
-            onDismissRequest = { confirmForget = false },
-            title = { Text(strings.forgetVaultTitle) },
-            text = { Text(strings.forgetVaultMessage) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        val forget = onForgetVault ?: return@TextButton
-                        confirmForget = false
-                        forgetError = null
-                        scope.launch {
-                            when (val result = forget()) {
-                                is RepositoryResult.Failure -> forgetError = result.error
-                                is RepositoryResult.Success<*> -> Unit
-                            }
-                        }
-                    },
-                ) { Text(strings.forgetVaultConfirm) }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmForget = false }) { Text(strings.cancel) }
-            },
-        )
-    }
     if (showJumpDialog) {
         AlertDialog(
             onDismissRequest = { showJumpDialog = false },
@@ -912,24 +893,44 @@ private fun GalleryTile(
                 MaterialTheme.colorScheme.surface
             },
         ),
+        shape = MaterialTheme.shapes.large,
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-            val (mediaId, isVideo) = when (entry) {
-                is NoteSummary -> entry.representativeMediaId to entry.representativeMediaIsVideo
-                is MediaSummary -> entry.id to entry.isVideo
-            }
-            if (mediaId != null) {
-                Box(
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 96.dp, max = 220.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    galleryThumbnail(mediaId, isVideo)
-                }
-                Spacer(Modifier.height(8.dp))
+        val (mediaId, isVideo, mediaCount, memoCount, relatedCount, exists) = when (entry) {
+            is NoteSummary -> GalleryTileData(
+                mediaId = entry.representativeMediaId,
+                isVideo = entry.representativeMediaIsVideo,
+                mediaCount = entry.mediaCount,
+                memoCount = entry.memoCount,
+                relatedCount = entry.relatedCount,
+                exists = entry.representativeMediaExists,
+            )
+            is MediaSummary -> GalleryTileData(
+                mediaId = entry.id,
+                isVideo = entry.isVideo,
+                mediaCount = entry.mediaCount,
+                memoCount = entry.memoCount,
+                relatedCount = entry.relatedCount,
+                exists = entry.exists,
+            )
+        }
+        Box(
+            modifier = Modifier.fillMaxWidth().height(220.dp)
+                .background(MaterialTheme.colorScheme.surfaceContainerLow),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (mediaId != null && exists) {
+                galleryThumbnail(mediaId, isVideo)
+            } else if (showMissingMediaIcon || mediaId == null) {
+                Icon(
+                    imageVector = if (isVideo) Icons.Filled.VideoLibrary else Icons.Filled.Image,
+                    contentDescription = if (isVideo) strings.video else strings.image,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(48.dp),
+                )
             }
             if (showPosition) {
                 Surface(
-                    modifier = Modifier.padding(bottom = 8.dp),
+                    modifier = Modifier.align(Alignment.TopStart).padding(10.dp),
                     shape = CircleShape,
                     color = MaterialTheme.colorScheme.primaryContainer,
                 ) {
@@ -941,46 +942,70 @@ private fun GalleryTile(
                     )
                 }
             }
-            when (entry) {
-                is NoteSummary -> {
-                    Text(entry.title, style = MaterialTheme.typography.titleMedium)
-                    Text(entry.path, style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
-                    if (entry.representativeMediaId != null && !entry.representativeMediaExists) {
-                        Text(strings.missingMedia, color = MaterialTheme.colorScheme.error)
-                        if (showMissingMediaIcon) {
-                            Text(
-                                if (entry.representativeMediaIsVideo) strings.video else strings.image,
-                                style = MaterialTheme.typography.headlineMedium,
-                            )
-                        }
-                    }
-                    if (showCounts) {
-                        Text(strings.counts(entry.mediaCount, entry.memoCount, entry.relatedCount))
-                    }
-                }
-                is MediaSummary -> {
-                    Text(
-                        text = if (entry.isVideo) strings.video else strings.image,
-                        style = MaterialTheme.typography.titleMedium,
+            if (isVideo) {
+                Surface(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                    shape = CircleShape,
+                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.VideoLibrary,
+                        contentDescription = strings.video,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(7.dp).size(18.dp),
                     )
-                    Text("Media ${entry.id.value}", style = MaterialTheme.typography.bodySmall)
-                    Spacer(Modifier.height(8.dp))
-                    if (showCounts) {
-                        Text(strings.counts(entry.mediaCount, entry.memoCount, entry.relatedCount))
+                }
+            }
+            if (showCounts) {
+                Row(
+                    modifier = Modifier.align(Alignment.BottomStart).padding(10.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    if (mediaCount > 1) {
+                        GalleryCountBadge(Icons.Filled.Collections, mediaCount, strings.image)
                     }
-                    if (!entry.exists) {
-                        Spacer(Modifier.height(8.dp))
-                        Text(strings.missingMedia, color = MaterialTheme.colorScheme.error)
-                        if (showMissingMediaIcon) {
-                            Text(
-                                if (entry.isVideo) strings.video else strings.image,
-                                style = MaterialTheme.typography.headlineMedium,
-                            )
-                        }
+                    if (memoCount > 0) {
+                        GalleryCountBadge(
+                            Icons.AutoMirrored.Filled.StickyNote2,
+                            memoCount,
+                            strings.notes,
+                        )
+                    }
+                    if (relatedCount > 0) {
+                        GalleryCountBadge(Icons.Filled.Link, relatedCount, strings.filters)
                     }
                 }
             }
+        }
+    }
+}
+
+private data class GalleryTileData(
+    val mediaId: MediaId?,
+    val isVideo: Boolean,
+    val mediaCount: Long,
+    val memoCount: Long,
+    val relatedCount: Long,
+    val exists: Boolean,
+)
+
+@Composable
+private fun GalleryCountBadge(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    count: Long,
+    description: String,
+) {
+    BadgedBox(badge = { Badge { Text(count.toString()) } }) {
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = description,
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(7.dp).size(18.dp),
+            )
         }
     }
 }

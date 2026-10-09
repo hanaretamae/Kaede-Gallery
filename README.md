@@ -215,12 +215,12 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-The Nix shell provides JDK 17, the Android SDK (API 35–37), Build Tools 37, NDK 28.2 and CMake 3.22.1. Android
+The Nix shell provides JDK 17, the Android SDK (API 35–37.1), Build Tools 37, NDK 28.2 and CMake 3.22.1. Android
 builds normally run locally: install/check the Rust Android targets, configure the NDK compiler variables, then run
 `:androidApp:assembleDebug` from `kotlin/`. The APK is written under
 `kotlin/androidApp/build/outputs/apk/debug/` and uses the debug application ID `com.hanaretamae.kaede.kmpdebug`.
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the exact setup commands. This is a debug build, not the signed production
-release.
+release. Production Android builds require Android 7.0 (API 24) or later.
 
 The production KMP Android application ID is `com.hanaretamae.kaede`, while the previous Flutter Android ID is
 `com.hanaretamae.vault_gallery`. Android treats these as separate apps: installing KMP does not update or inherit

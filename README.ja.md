@@ -195,7 +195,8 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-Nix シェルには JDK 17、Android SDK（API 35–37）、Build Tools 37、NDK 28.2、CMake 3.22.1 が含まれます。Android は通常ローカルでビルドします。Rust Android targets を用意し、NDK cross-compiler を設定してから `kotlin/` で `:androidApp:assembleDebug` を実行してください。APK は `kotlin/androidApp/build/outputs/apk/debug/` に作成され、debug 用 application ID は `com.hanaretamae.kaede.kmpdebug` です。詳しい設定コマンドは [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。production 用の署名済み release build とは異なります。
+Nix シェルには JDK 17、Android SDK（API 35–37.1）、Build Tools 37、NDK 28.2、CMake 3.22.1 が含まれます。Android は通常ローカルでビルドします。Rust Android targets を用意し、NDK cross-compiler を設定してから `kotlin/` で `:androidApp:assembleDebug` を実行してください。APK は `kotlin/androidApp/build/outputs/apk/debug/` に作成され、debug 用 application ID は `com.hanaretamae.kaede.kmpdebug` です。詳しい設定コマンドは [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。production 用の署名済み release build とは異なります。
+release build の対応 Android バージョンは Android 7.0（API 24）以降です。
 
 KMP Android の production application ID は `com.hanaretamae.kaede`、以前の Flutter Android ID は
 `com.hanaretamae.vault_gallery` です。Android では別アプリとして扱われ、KMP を入れても Flutter 版は

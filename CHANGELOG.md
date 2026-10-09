@@ -3,6 +3,27 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.0b3] - 2026-10-09 (Beta)
+
+### Added
+
+- Added universal, arm64-v8a, and x86_64 Android APK variants to release packaging. GitHub Release titles now contain only the version.
+- Applied the supplied adaptive launcher icon to Android.
+- Adopted the latest published Compose Multiplatform Material 3 Expressive alpha and Android Material 3 beta, including expressive motion and theme shapes.
+
+### Fixed
+
+- Fixed Windows archive packaging to locate the generated Compose Desktop launcher instead of assuming a fixed executable path.
+- Restored Android system/dynamic colors on initial Vault selection and handled Back within Settings and the viewer.
+- Centered note-loading feedback, restored horizontal media swipes, and enabled looping video playback on Android and Desktop.
+- Cached validated SAF document IDs and bounded image thumbnails in private app data to avoid repeated folder traversal.
+
+### Changed
+
+- Reworked the gallery around a Vault-name/count app bar, Notes/Media tabs, icon actions, and image-first tiles with count badges.
+- Moved search, tag, date, and sort filters into the filter surface; kept Vault change/forget actions in Settings with icon-led list navigation.
+- Raised the Android minimum supported version to API 24 and compile SDK to API 37.1 for the current Material 3 Expressive dependencies.
+
 ## [2.0.0b2] - 2026-10-09 (Beta)
 
 ### Fixed

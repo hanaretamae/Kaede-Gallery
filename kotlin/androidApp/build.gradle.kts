@@ -28,14 +28,27 @@ private val releaseVersionCode = releaseVersionCodeLong.toInt()
 android {
     namespace = "com.hanaretamae.kaede.android"
     compileSdk = 37
+    compileSdkMinor = 1
     buildToolsVersion = "37.0.0"
 
     defaultConfig {
         applicationId = "com.hanaretamae.kaede"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
         versionCode = releaseVersionCode
         versionName = releaseVersion
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
+    }
+
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a", "x86_64")
+            isUniversalApk = true
+        }
     }
 
     signingConfigs {

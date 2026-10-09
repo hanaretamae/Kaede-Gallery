@@ -26,6 +26,7 @@ class MpvVideoCommandTest {
                 "--autoload-files=no",
                 "--sub-auto=no",
                 "--audio-file-auto=no",
+                "--loop-file=inf",
                 "--force-window=yes",
                 "--wid=42",
                 "--",

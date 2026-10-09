@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
@@ -13,16 +14,32 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Help
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Storage
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -509,7 +526,7 @@ fun GallerySettingsScreen(
                     style = MaterialTheme.typography.headlineSmall,
                 )
                 Spacer(Modifier.weight(1f))
-                TextButton(
+                IconButton(
                     onClick = {
                         when {
                             selectedLicense != null -> selectedLicense = null
@@ -517,7 +534,9 @@ fun GallerySettingsScreen(
                             else -> page = GallerySettingsPage.HOME
                         }
                     },
-                ) { Text(strings.close) }
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, strings.close)
+                }
             }
             if (state.loading && state.settings == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -586,19 +605,28 @@ fun GallerySettingsScreen(
                     )
                 }
                 listOf(
-                    GallerySettingsPage.PAGINATION,
-                    GallerySettingsPage.VAULT,
-                    GallerySettingsPage.NOTES,
-                    GallerySettingsPage.ABOUT,
-                    GallerySettingsPage.DATA,
-                    GallerySettingsPage.HELP,
-                ).forEach { destination ->
-                    TextButton(
-                        onClick = { page = destination },
-                        modifier = Modifier.fillMaxWidth(),
+                    GallerySettingsPage.PAGINATION to Icons.Filled.SwapVert,
+                    GallerySettingsPage.VAULT to Icons.Filled.Storage,
+                    GallerySettingsPage.NOTES to Icons.AutoMirrored.Filled.Label,
+                    GallerySettingsPage.ABOUT to Icons.Filled.Info,
+                    GallerySettingsPage.DATA to Icons.Filled.Settings,
+                    GallerySettingsPage.HELP to Icons.AutoMirrored.Filled.Help,
+                ).forEach { (destination, icon) ->
+                    ListItem(
+                        leadingContent = { Icon(icon, contentDescription = null) },
+                        trailingContent = {
+                            Icon(Icons.Filled.ChevronRight, contentDescription = null)
+                        },
+                        modifier = Modifier.fillMaxWidth().clickable {
+                            page = destination
+                        },
+                        colors = ListItemDefaults.colors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        ),
                     ) {
                         Text(destination.displayName(strings))
                     }
+                    Spacer(Modifier.height(4.dp))
                 }
                 }
 
