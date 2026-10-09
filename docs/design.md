@@ -84,27 +84,31 @@ integrations.
     Nix defaults, Gradle dependency locking, Android/Linux release scripts,
     Windows packaging/release workflow, license assets, and active documentation
     now target KMP. Local Linux x86_64 and Android debug/release packaging checks
-    pass. Nix declares both x86_64 and aarch64 Linux Desktop packages; the
-    aarch64 build still needs local QEMU/binfmt verification. GitHub Actions are
-    limited to Windows builds by owner request; the Android workflow was removed,
-    while local Android checks remain. The prior Android and Windows Actions runs
+    pass. Nix declares both x86_64 and aarch64 Linux Desktop packages. On
+    2026-10-09, the owner confirmed that
+    `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
+    exited 0 after refreshing the Gradle dependency cache. This verifies the
+    declared AArch64 package build; the exact builder mechanism (native,
+    QEMU/binfmt, or remote) was not recorded. GitHub Actions are limited to
+    Windows builds by owner request; the Android workflow was removed, while
+    local Android checks remain. The prior Android and Windows Actions runs
     passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-    Do not mark this phase complete until the aarch64 build is verified and the
-    Windows release archive is attached successfully to the beta release. The
-    previous aarch64 attempt could not fetch pinned OpenJDK/Nix-cache artifacts
-    because cache.nixos.org connections timed out; no successful aarch64 Linux
-    Desktop compilation result is claimed.
+    Do not mark this phase complete until the `2.0.0b2` GitHub prerelease exists
+    and the Windows release archive is attached successfully. An earlier
+    aarch64 attempt could not fetch pinned OpenJDK/Nix-cache artifacts because
+    cache.nixos.org connections timed out; that failure was later resolved.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
 
 Implementation for shared UI, settings, Android, and desktop is present.
 Phase 13 acceptance is recorded below as historical evidence. Phase 14's
-migration implementation is in place. GitHub Actions build Windows only; their
-previous Android job has been removed at the owner's request. The Windows beta
-archive is not attached yet, and the declared aarch64 Nix package awaits local
-QEMU/binfmt verification. There is no active Flutter application or release path.
+migration implementation is in place. The declared aarch64 Nix package build was
+confirmed successful on 2026-10-09; the builder mechanism was not recorded.
+GitHub Actions build Windows only; their previous Android job has been removed
+at the owner's request. The `2.0.0b2` GitHub prerelease and Windows beta archive
+are still pending. There is no active Flutter application or release path.
 
 ### Phase 13 acceptance status
 
@@ -208,10 +212,12 @@ produced the self-contained Linux release bundle. The Gradle dependency updater
 completed and its JSON output parsed successfully. No real signing key or Vault
 was used.
 
-**Still pending before Phase 14 can be marked complete:** verify the declared
-aarch64 Linux Desktop package with the owner's local QEMU/binfmt build, create
-the `2.0.0b1` GitHub prerelease, and successfully attach the Windows ZIP. The
-previous Android and Windows GitHub Actions workflows passed on `7a6cd83` (runs
+**Still pending before Phase 14 can be marked complete:** create the
+`2.0.0b2` GitHub prerelease and successfully attach the Windows ZIP. The owner
+verified the declared AArch64 Linux Desktop build on 2026-10-09 with
+`nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
+(exit status 0); the exact builder mechanism was not recorded. The previous
+Android and Windows GitHub Actions workflows passed on `7a6cd83` (runs
 [37761351814](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814)
 and [37761351884](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)); Actions are now restricted to Windows builds, and Android verification
 continues locally. Real-key Android signing and release publication have not
