@@ -195,17 +195,14 @@ nix run .#kmpDesktop
 nix profile install github:hanaretamae/Kaede-Gallery#kmpDesktop
 ```
 
-On x86_64, aarch64 packaging uses local QEMU/binfmt emulation when Nix has `aarch64-linux` in `extra-platforms`:
+On x86_64, cross-building for aarch64 requires QEMU/binfmt and Nix `extra-platforms`; a native or remote AArch64 builder can use the same command without emulation:
 
 ```sh
 nix config show | grep '^extra-platforms'
 nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop
 ```
 
-The package bundles the Compose Desktop distributable, Linux launcher, and license notices. `packages.<system>.default`,
-`nixosModules.default`, and `homeManagerModules.default` all select KMP. The aarch64 Linux package is declared, but
-must be locally verified with QEMU before its build can be claimed as tested. No binary cache for Kaede Gallery is
-provided, so the first build happens locally (dependencies may come from the Nix binary cache).
+The owner verified this AArch64 package build on 2026-10-09; the builder mechanism was not recorded. The package bundles the Compose Desktop distributable, Linux launcher, and license notices. `packages.<system>.default`, `nixosModules.default`, and `homeManagerModules.default` all select KMP. A self-contained AArch64 Linux bundle is also available through the optional manual Actions workflow described below.
 
 ### Run and package the KMP app
 
@@ -218,10 +215,12 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-The Nix shell provides JDK 17, the Android SDK (API 35–37), Build Tools 37, NDK 28.2 and CMake 3.22.1. The
-Android debug APK task is `:androidApp:assembleDebug`; Android Rust targets and NDK compiler configuration are
-required. The detailed Linux cross-build setup is in [CONTRIBUTING.md](CONTRIBUTING.md). The APK uses the debug
-application ID `com.hanaretamae.kaede.kmpdebug`.
+The Nix shell provides JDK 17, the Android SDK (API 35–37), Build Tools 37, NDK 28.2 and CMake 3.22.1. Android
+builds normally run locally: install/check the Rust Android targets, configure the NDK compiler variables, then run
+`:androidApp:assembleDebug` from `kotlin/`. The APK is written under
+`kotlin/androidApp/build/outputs/apk/debug/` and uses the debug application ID `com.hanaretamae.kaede.kmpdebug`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the exact setup commands. This is a debug build, not the signed production
+release.
 
 The production KMP Android application ID is `com.hanaretamae.kaede`, while the previous Flutter Android ID is
 `com.hanaretamae.vault_gallery`. Android treats these as separate apps: installing KMP does not update or inherit
@@ -229,12 +228,21 @@ Flutter's private settings, cached index, or persisted SAF permission. Select th
 export settings from the old app and import the compatible JSON through the settings screen. The index/cache is
 recreated outside the Vault; the Vault itself is never copied or modified.
 
-Android debug/release builds run locally; Android is not built by GitHub Actions. `.github/workflows/kotlin-windows.yml`
-tests and packages Windows x64 on push and pull request. The manual
-`.github/workflows/windows.yml` workflow builds a versioned Windows ZIP and attaches it to an existing release when
-a tag is supplied. `tools/release.sh` is the Linux-hosted release entry point for the signed Android APK and Linux
-bundles; it requires the Rustup 1.98.1 Android targets to already be installed and retrieves the Android signing key
-from KeePassXC. Physical Windows runtime behavior and a real-key Android release have not been verified here.
+Local Android builds remain the normal path. For an optional hosted build, manually run
+`.github/workflows/optional-arm-builds.yml` from the Actions tab and choose `android-debug`, `linux-aarch64`, or `both`.
+After that workflow is on GitHub, you can also dispatch it from `nix develop` using the authenticated GitHub CLI:
+
+```sh
+tools/run-optional-builds.sh android-debug
+# Choose linux-aarch64 or both instead; an optional second argument selects the ref.
+```
+
+It is not triggered by pushes or pull requests, uploads build artifacts only, and never signs a production APK or
+publishes a release. `.github/workflows/kotlin-windows.yml` continues Windows x64 tests and packaging on push and pull
+request. The manual `.github/workflows/windows.yml` workflow builds a versioned Windows ZIP and attaches it to an
+existing release when a tag is supplied. `tools/release.sh` remains the Linux-hosted release entry point for the
+signed Android APK and Linux bundles; it requires the Rustup 1.98.1 Android targets and retrieves the signing key from
+KeePassXC. Physical Windows runtime behavior and a real-key Android release have not been verified here.
 
 ## Developer information
 

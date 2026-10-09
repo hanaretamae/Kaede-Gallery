@@ -1,0 +1,116 @@
+name: Optional Android and Linux AArch64 builds
+
+on:
+  workflow_dispatch:
+    inputs:
+      target:
+        description: Select the optional build to run
+        required: true
+        type: choice
+        default: linux-aarch64
+        options:
+          - android-debug
+          - linux-aarch64
+          - both
+
+permissions:
+  contents: read
+
+jobs:
+  android-debug:
+    name: Android debug APK
+    if: ${{ inputs.target == 'android-debug' || inputs.target == 'both' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+          cache: gradle
+          cache-dependency-path: kotlin/**/*.gradle*
+
+      - uses: dtolnay/rust-toolchain@1.98.1
+        with:
+          targets: aarch64-linux-android,x86_64-linux-android
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK and NDK packages
+        run: >-
+          sdkmanager --install
+          "platforms;android-37"
+          "build-tools;37.0.0"
+          "ndk;28.2.13676358"
+          "cmake;3.22.1"
+
+      - name: Build debug APK (no production signing)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export RUSTUP_TOOLCHAIN=1.98.1
+          rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | grep -Fx aarch64-linux-android
+          rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | grep -Fx x86_64-linux-android
+          export RUSTC="$(rustup which rustc --toolchain "$RUSTUP_TOOLCHAIN")"
+          export RUSTDOC="$(rustup which rustdoc --toolchain "$RUSTUP_TOOLCHAIN")"
+          export PATH="$(dirname "$RUSTC"):$PATH"
+
+          export ANDROID_NDK_HOME="${ANDROID_HOME}/ndk/28.2.13676358"
+          test -x "$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin/aarch64-linux-android23-clang"
+          NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$NDK_BIN/aarch64-linux-android23-clang"
+          export CXX_aarch64_linux_android="$NDK_BIN/aarch64-linux-android23-clang++"
+          export AR_aarch64_linux_android="$NDK_BIN/llvm-ar"
+          export RANLIB_aarch64_linux_android="$NDK_BIN/llvm-ranlib"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android23-clang"
+          export CC_x86_64_linux_android="$NDK_BIN/x86_64-linux-android23-clang"
+          export CXX_x86_64_linux_android="$NDK_BIN/x86_64-linux-android23-clang++"
+          export AR_x86_64_linux_android="$NDK_BIN/llvm-ar"
+          export RANLIB_x86_64_linux_android="$NDK_BIN/llvm-ranlib"
+          export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android23-clang"
+
+          cd kotlin
+          ./gradlew --no-daemon :androidApp:assembleDebug
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaede-gallery-android-debug
+          path: kotlin/androidApp/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+  linux-aarch64:
+    name: Linux AArch64 bundle
+    if: ${{ inputs.target == 'linux-aarch64' || inputs.target == 'both' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: cachix/install-nix-action@v31
+        with:
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+            accept-flake-config = true
+
+      - name: Build self-contained Linux bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          nix bundle --system aarch64-linux --out-link dist/bundle .#packages.aarch64-linux.default
+          version="$(tr -d '\r\n' < VERSION)"
+          cp -- "$(readlink -f dist/bundle)" "dist/kaede-gallery-${version}-linux-aarch64"
+          rm -- dist/bundle
+          (cd dist && sha256sum -- "kaede-gallery-${version}-linux-aarch64" > SHA256SUMS)
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kaede-gallery-linux-aarch64
+          path: |
+            dist/kaede-gallery-*-linux-aarch64
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14

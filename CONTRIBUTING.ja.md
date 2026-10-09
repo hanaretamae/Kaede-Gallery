@@ -61,6 +61,16 @@ export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android23
 ./gradlew :androidApp:assembleDebug
 ```
 
+APK は `kotlin/androidApp/build/outputs/apk/debug/` に作成されます。debug 用の署名であり、production の署名鍵は使いません。通常はローカルビルドを使ってください。任意の GitHub Actions workflow は手動起動のみで、Android debug APK、Linux AArch64 bundle、または両方をビルドできます。push／pull request では起動せず、リリース公開もしません。Workflow が GitHub 上で利用可能になった後は、Nix shell から次のコマンドで起動できます。
+
+```sh
+tools/run-optional-builds.sh android-debug
+# linux-aarch64 / both も選べます。第2引数は任意の ref です。
+tools/run-optional-builds.sh both main
+```
+
+GitHub CLI (`gh auth login`) で認証しておく必要があります。
+
 ## ルール
 
 > [!IMPORTANT]
@@ -77,7 +87,7 @@ export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android23
 
 - 各リリースの `CHANGELOG.md` は AI が実装差分と実際の検証結果を基に草案・更新します。
 - AI は未確認の動作、実施していないテスト、将来予定を完了済みのように書かず、秘密情報や個人情報を含めません。
-- リリース担当者は内容とタグのバージョンを確認してからコミット・公開します。アプリの唯一の version source は `VERSION` です。`tools/release.sh` は署名済み KMP Android APK と x86_64 / aarch64 Linux bundle をビルドします。x86_64 で aarch64 を作るには QEMU/binfmt または remote builder が必要です。Rustup 1.98.1 の Android targets は事前にインストール済みのものだけを使います。タグは `VERSION` と完全一致させ、`v` を付けません。`2.0.0b1` のような beta タグは GitHub の prerelease として公開します。Windows の手動 workflow は KMP を package 化し、tag を指定して起動すると既存 GitHub Release に ZIP を添付します。Release 公開にはリリース担当者の認証情報と対象環境の検証が必要です。
+- リリース担当者は内容とタグのバージョンを確認してからコミット・公開します。アプリの唯一の version source は `VERSION` です。`tools/release.sh` は署名済み KMP Android APK と x86_64 / aarch64 Linux bundle をビルドします。x86_64 で aarch64 を作るには QEMU/binfmt または remote builder が必要です。Rustup 1.98.1 の Android targets は事前にインストール済みのものだけを使います。タグは `VERSION` と完全一致させ、`v` を付けません。`2.0.0b1` のような beta タグは GitHub の prerelease として公開します。Windows の手動 workflow は KMP を package 化し、tag を指定して起動すると既存 GitHub Release に ZIP を添付します。別の Android/Linux AArch64 workflow は `workflow_dispatch` のみで、リリース署名・公開には使いません。Release 公開にはリリース担当者の認証情報と対象環境の検証が必要です。
 
 ## 依存関係を変更するとき
 

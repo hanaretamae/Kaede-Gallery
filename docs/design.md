@@ -89,9 +89,13 @@ integrations.
     `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
     exited 0 after refreshing the Gradle dependency cache. This verifies the
     declared AArch64 package build; the exact builder mechanism (native,
-    QEMU/binfmt, or remote) was not recorded. GitHub Actions are limited to
-    Windows builds by owner request; the Android workflow was removed, while
-    local Android checks remain. The prior Android and Windows Actions runs
+    QEMU/binfmt, or remote) was not recorded. Windows tests/package checks remain
+    automatic on push and pull request. Per the owner's updated preference on
+    2026-10-09, Android debug and Linux AArch64 builds are also available through
+    a separate manual-only Actions workflow; local builds remain the default.
+    It can be dispatched in the Actions UI or with the authenticated GitHub CLI
+    through `tools/run-optional-builds.sh`. It uploads build artifacts only and
+    never signs production Android packages or publishes releases. The prior Android and Windows Actions runs
     passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
     Do not mark this phase complete until the `2.0.0b2` GitHub prerelease exists
@@ -106,9 +110,12 @@ Implementation for shared UI, settings, Android, and desktop is present.
 Phase 13 acceptance is recorded below as historical evidence. Phase 14's
 migration implementation is in place. The declared aarch64 Nix package build was
 confirmed successful on 2026-10-09; the builder mechanism was not recorded.
-GitHub Actions build Windows only; their previous Android job has been removed
-at the owner's request. The `2.0.0b2` GitHub prerelease and Windows beta archive
-are still pending. There is no active Flutter application or release path.
+GitHub Actions run Windows tests/package checks on push and pull request, with
+Android debug and Linux AArch64 build artifacts available only through explicit
+manual dispatch, either in the Actions UI or via `tools/run-optional-builds.sh`.
+Local builds remain primary, and the manual workflow does not sign or publish
+Android releases. The `2.0.0b2` GitHub prerelease and Windows
+beta archive are still pending. There is no active Flutter application or release path.
 
 ### Phase 13 acceptance status
 
@@ -219,10 +226,7 @@ verified the declared AArch64 Linux Desktop build on 2026-10-09 with
 (exit status 0); the exact builder mechanism was not recorded. The previous
 Android and Windows GitHub Actions workflows passed on `7a6cd83` (runs
 [37761351814](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814)
-and [37761351884](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)); Actions are now restricted to Windows builds, and Android verification
-continues locally. Real-key Android signing and release publication have not
-happened because the local KeePassXC database/key-file configuration is not
-available in the release environment.
+and [37761351884](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)); those runs are historical. Windows builds remain automatic, while Android debug and Linux AArch64 builds can be dispatched manually as artifact-only jobs; local verification remains the default. Real-key Android signing and release publication have not happened because the local KeePassXC database/key-file configuration is not available in the release environment.
 
 ### Current KMP implementation status
 

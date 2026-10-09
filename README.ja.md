@@ -162,19 +162,14 @@ nix run .#kmpDesktop
 nix profile install github:hanaretamae/Kaede-Gallery#kmpDesktop
 ```
 
-x86_64 上の aarch64 ビルドには QEMU/binfmt と、Nix の `extra-platforms` に `aarch64-linux` が必要です。
-確認してから次を実行します。
+x86_64 から aarch64 をクロスビルドするには QEMU/binfmt と Nix の `extra-platforms` が必要です。ネイティブまたは remote の AArch64 builder なら同じコマンドをエミュレーションなしで実行できます。
 
 ```sh
 nix config show | grep '^extra-platforms'
 nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop
 ```
 
-パッケージには Compose Desktop の配布物、Linux ランチャー、ライセンス通知が含まれます。
-`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` はすべて KMP を選びます。
-aarch64 Linux の package は定義されていますが、QEMU を使ったローカルビルドは未検証です。
-Kaede Gallery 自体のバイナリキャッシュはないため、初回は利用するマシン上でビルドします
-（依存は Nix binary cache から取得できる場合があります）。
+この AArch64 package build は 2026-10-09 にオーナーが成功を確認しました（builder の方式は未記録）。パッケージには Compose Desktop の配布物、Linux ランチャー、ライセンス通知が含まれます。`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` はすべて KMP を選びます。自己完結型の AArch64 Linux bundle は、後述する任意の手動 Actions workflow からも作成できます。
 
 <details>
 <summary>索引データベースの場所</summary>
@@ -200,9 +195,7 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-Nix シェルには JDK 17、Android SDK（API 35–37）、Build Tools 37、NDK 28.2、CMake 3.22.1 が含まれます。
-Android の debug APK は `:androidApp:assembleDebug` でビルドします。Rust の Android target と NDK
-cross-compiler の設定が必要です。Linux での詳しい手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。
+Nix シェルには JDK 17、Android SDK（API 35–37）、Build Tools 37、NDK 28.2、CMake 3.22.1 が含まれます。Android は通常ローカルでビルドします。Rust Android targets を用意し、NDK cross-compiler を設定してから `kotlin/` で `:androidApp:assembleDebug` を実行してください。APK は `kotlin/androidApp/build/outputs/apk/debug/` に作成され、debug 用 application ID は `com.hanaretamae.kaede.kmpdebug` です。詳しい設定コマンドは [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。production 用の署名済み release build とは異なります。
 
 KMP Android の production application ID は `com.hanaretamae.kaede`、以前の Flutter Android ID は
 `com.hanaretamae.vault_gallery` です。Android では別アプリとして扱われ、KMP を入れても Flutter 版は
@@ -210,7 +203,16 @@ KMP Android の production application ID は `com.hanaretamae.kaede`、以前�
 選び直し、必要なら旧アプリで設定をエクスポートして、設定画面から互換性のある JSON を手動で
 インポートしてください。索引・キャッシュは Vault 外で再作成され、Vault 自体はコピー・変更しません。
 
-Android の debug/release ビルドはローカルで実行し、GitHub Actions ではビルドしません。
+Android は引き続きローカルビルドを基本とします。必要時は Actions タブから
+`.github/workflows/optional-arm-builds.yml` を手動起動し、`android-debug`、`linux-aarch64`、`both` を選べます。
+Workflow が GitHub 上で利用可能になった後は、認証済み GitHub CLI を使って `nix develop` からも起動できます。
+
+```sh
+tools/run-optional-builds.sh android-debug
+# linux-aarch64 / both も選べます。第2引数は任意の ref です。
+```
+
+push / pull request では起動せず、ビルド artifact のみを保存します。production APK の署名や Release 公開はしません。
 `.github/workflows/kotlin-windows.yml` は push / pull request ごとに Windows x64 のテストとパッケージを行います。
 手動起動する `.github/workflows/windows.yml` はバージョン付き Windows ZIP を作り、tag を指定すれば既存 Release に添付します。
 `tools/release.sh` は Linux から署名済み Android APK と Linux bundle を作成するリリース入口です。
