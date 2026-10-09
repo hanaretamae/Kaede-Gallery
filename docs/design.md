@@ -114,8 +114,11 @@ GitHub Actions run Windows tests/package checks on push and pull request, with
 Android debug and Linux AArch64 build artifacts available only through explicit
 manual dispatch, either in the Actions UI or via `tools/run-optional-builds.sh`.
 Local builds remain primary, and the manual workflow does not sign or publish
-Android releases. The `2.0.0b2` GitHub prerelease and Windows
-beta archive are still pending. There is no active Flutter application or release path.
+Android releases. The remote `2.0.0b2` tag points to `6fa0080`; its GitHub
+prerelease and Windows beta archive are still pending. Full Actions-only
+production release is not implemented: the current signing flow uses the local
+KeePassXC database. See `docs/releasing.md` for the supported local/remote paths
+and the signing prerequisite. There is no active Flutter application or release path.
 
 ### Phase 13 acceptance status
 

@@ -242,7 +242,7 @@ publishes a release. `.github/workflows/kotlin-windows.yml` continues Windows x6
 request. The manual `.github/workflows/windows.yml` workflow builds a versioned Windows ZIP and attaches it to an
 existing release when a tag is supplied. `tools/release.sh` remains the Linux-hosted release entry point for the
 signed Android APK and Linux bundles; it requires the Rustup 1.98.1 Android targets and retrieves the signing key from
-KeePassXC. Physical Windows runtime behavior and a real-key Android release have not been verified here.
+KeePassXC. Physical Windows runtime behavior and a real-key Android release have not been verified here. For complete local, optional Actions, and release limitations, see the [release guide](docs/releasing.md).
 
 ## Developer information
 

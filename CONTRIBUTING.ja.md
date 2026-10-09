@@ -69,7 +69,7 @@ tools/run-optional-builds.sh android-debug
 tools/run-optional-builds.sh both main
 ```
 
-GitHub CLI (`gh auth login`) で認証しておく必要があります。
+GitHub CLI (`gh auth login`) で認証しておく必要があります。ローカル・任意Actionsでのビルドとリリース全体は[リリース手順](docs/releasing.ja.md)を参照してください。
 
 ## ルール
 

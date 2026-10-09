@@ -97,7 +97,7 @@ The script requires an authenticated GitHub CLI (`gh auth login`).
   The separate optional Android/Linux AArch64 build workflow is `workflow_dispatch` only and never handles release
   signing or publication. Release tags match `VERSION` exactly and have no `v` prefix; beta tags such as `2.0.0b1`
   are published as GitHub prereleases. Release publication still requires the release owner's real credentials and
-  successful target-specific checks.
+  successful target-specific checks. See the [release guide](docs/releasing.md) for the local, optional Actions, and full-remote release paths.
 
 ## Dependency changes
 

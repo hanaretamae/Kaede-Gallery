@@ -217,7 +217,7 @@ push / pull request では起動せず、ビルド artifact のみを保存し�
 手動起動する `.github/workflows/windows.yml` はバージョン付き Windows ZIP を作り、tag を指定すれば既存 Release に添付します。
 `tools/release.sh` は Linux から署名済み Android APK と Linux bundle を作成するリリース入口です。
 Rustup 1.98.1 の Android targets が事前にインストール済みである必要があり、署名鍵は KeePassXC から取得します。
-Windows 実機での動作と実際の鍵を使った Android release はここでは未検証です。
+Windows 実機での動作と実際の鍵を使った Android release はここでは未検証です。ローカル・任意Actionsでの手順と、Actions-only releaseの制約は[リリース手順](docs/releasing.ja.md)を参照してください。
 
 ## 開発者向け情報
 
