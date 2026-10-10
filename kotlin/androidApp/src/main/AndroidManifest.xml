@@ -15,7 +15,7 @@
         android:label="Kaede Gallery"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@style/Theme.KaedeGallery">
         <activity
             android:name=".MainActivity"
             android:configChanges="orientation|screenSize|uiMode"

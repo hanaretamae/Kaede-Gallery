@@ -39,13 +39,27 @@ data class AndroidSafScanSnapshot(
 class AndroidSafVaultScanner(context: Context) {
     private val resolver: ContentResolver = context.applicationContext.contentResolver
     private val mediaUriCache = AndroidSafMediaUriCache(context)
-    private val thumbnailDecodeLimit = Semaphore(MAX_CONCURRENT_THUMBNAIL_DECODES)
+    private val thumbnailLoadScheduler = ThumbnailLoadScheduler(MAX_CONCURRENT_THUMBNAIL_DECODES)
+    private val imageRequests = SingleFlight<String, Bitmap?>()
+    private val videoFrameRequests = SingleFlight<String, Bitmap?>()
     private val decodedThumbnails = object : LruCache<String, Bitmap>(MAX_THUMBNAIL_MEMORY_BYTES) {
         override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
     }
+    private val decodedViewerImages = object : LruCache<String, Bitmap>(viewerImageMemoryBytes()) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+    }
 
-    suspend fun <T> withThumbnailPermit(block: suspend () -> T): T =
-        thumbnailDecodeLimit.withPermit { block() }
+    /** Returns an already decoded image without touching storage, or null. */
+    fun peekDecodedImage(treeUri: Uri, relativePath: String, maxDimension: Int): Bitmap? =
+        imageMemoryCache(maxDimension).get(thumbnailCacheKey("image", treeUri, relativePath, maxDimension))
+
+    private fun imageMemoryCache(maxDimension: Int): LruCache<String, Bitmap> =
+        if (maxDimension > MAX_GALLERY_THUMBNAIL_DIMENSION) decodedViewerImages else decodedThumbnails
+
+    suspend fun <T> withThumbnailPermit(
+        priority: ThumbnailLoadPriority = ThumbnailLoadPriority.VISIBLE,
+        block: suspend () -> T,
+    ): T = thumbnailLoadScheduler.withPermit(priority, block)
 
     fun hasPersistedReadPermission(treeUri: Uri): Boolean = try {
         resolver.persistedUriPermissions.any {
@@ -175,6 +189,7 @@ class AndroidSafVaultScanner(context: Context) {
         try {
             mediaUriCache.replace(treeUri.toString(), documentIdsByPath)
             decodedThumbnails.evictAll()
+            decodedViewerImages.evictAll()
         } catch (_: SQLiteException) {
             throw SafAccessException()
         }
@@ -272,13 +287,26 @@ class AndroidSafVaultScanner(context: Context) {
         treeUri: Uri,
         relativePath: String,
         maxDimension: Int,
+    ): Bitmap? {
+        if (maxDimension !in 1..MAX_IMAGE_DIMENSION) throw SafAccessException()
+        val key = thumbnailCacheKey("image", treeUri, relativePath, maxDimension)
+        return imageRequests.run(key) {
+            decodeImageUncached(treeUri, relativePath, maxDimension)
+        }
+    }
+
+    private suspend fun decodeImageUncached(
+        treeUri: Uri,
+        relativePath: String,
+        maxDimension: Int,
     ): Bitmap? = withContext(Dispatchers.IO) {
         if (maxDimension !in 1..MAX_IMAGE_DIMENSION) throw SafAccessException()
         validateTreeUri(treeUri)
         validateRelativePath(relativePath)
         val cacheThumbnails = maxDimension == MAX_GALLERY_THUMBNAIL_DIMENSION
         val memoryCacheKey = thumbnailCacheKey("image", treeUri, relativePath, maxDimension)
-        decodedThumbnails.get(memoryCacheKey)?.let { return@withContext it }
+        val memoryCache = imageMemoryCache(maxDimension)
+        memoryCache.get(memoryCacheKey)?.let { return@withContext it }
         if (cacheThumbnails) {
             val cachedThumbnail = try {
                 mediaUriCache.getThumbnail(treeUri.toString(), relativePath)
@@ -292,7 +320,7 @@ class AndroidSafVaultScanner(context: Context) {
                     cachedThumbnail.size,
                 )
                 if (cachedBitmap != null) {
-                    decodedThumbnails.put(memoryCacheKey, cachedBitmap)
+                    memoryCache.put(memoryCacheKey, cachedBitmap)
                     return@withContext cachedBitmap
                 }
                 try {
@@ -321,7 +349,7 @@ class AndroidSafVaultScanner(context: Context) {
                     it.width.toLong() * it.height <= MAX_IMAGE_PIXELS
             }
             if (boundedProviderThumbnail != null) {
-                decodedThumbnails.put(memoryCacheKey, boundedProviderThumbnail)
+                memoryCache.put(memoryCacheKey, boundedProviderThumbnail)
                 if (cacheThumbnails) {
                     cacheThumbnail(treeUri, relativePath, boundedProviderThumbnail)
                 }
@@ -355,7 +383,7 @@ class AndroidSafVaultScanner(context: Context) {
             },
         )
         if (cacheThumbnails && bitmap != null) cacheThumbnail(treeUri, relativePath, bitmap)
-        bitmap?.let { decodedThumbnails.put(memoryCacheKey, it) }
+        bitmap?.let { memoryCache.put(memoryCacheKey, it) }
         bitmap
     }
 
@@ -363,13 +391,24 @@ class AndroidSafVaultScanner(context: Context) {
         treeUri: Uri,
         relativePath: String,
         maxDimension: Int,
-    ): Bitmap? = withContext(Dispatchers.IO) {
+    ): Bitmap? {
         if (
             Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 ||
             maxDimension !in 1..MAX_IMAGE_DIMENSION
         ) {
-            return@withContext null
+            return null
         }
+        val key = thumbnailCacheKey("video", treeUri, relativePath, maxDimension)
+        return videoFrameRequests.run(key) {
+            decodeVideoFrameUncached(treeUri, relativePath, maxDimension)
+        }
+    }
+
+    private suspend fun decodeVideoFrameUncached(
+        treeUri: Uri,
+        relativePath: String,
+        maxDimension: Int,
+    ): Bitmap? = withContext(Dispatchers.IO) {
         validateTreeUri(treeUri)
         validateRelativePath(relativePath)
         val cacheThumbnail = maxDimension == MAX_GALLERY_THUMBNAIL_DIMENSION
@@ -684,6 +723,14 @@ class AndroidSafVaultScanner(context: Context) {
         const val MAX_MEDIA_BYTES = 64 * 1024 * 1024
         const val MAX_CONCURRENT_THUMBNAIL_DECODES = 4
         private const val MAX_THUMBNAIL_MEMORY_BYTES = 32 * 1024 * 1024
+        private const val MAX_VIEWER_IMAGE_MEMORY_BYTES = 96 * 1024 * 1024
+        private const val MIN_VIEWER_IMAGE_MEMORY_BYTES = 24 * 1024 * 1024
+
+        // Room for the current viewer image plus a few prefetched neighbours, bounded by heap size.
+        private fun viewerImageMemoryBytes(): Int =
+            (Runtime.getRuntime().maxMemory() / 6)
+                .coerceIn(MIN_VIEWER_IMAGE_MEMORY_BYTES.toLong(), MAX_VIEWER_IMAGE_MEMORY_BYTES.toLong())
+                .toInt()
         const val MAX_IMAGE_DIMENSION = 16_384
         const val MAX_IMAGE_PIXELS = 32L * 1024 * 1024
         const val NANOS_PER_MILLI = 1_000_000L

@@ -1,5 +1,9 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.hanaretamae.kaede.desktop
 
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
@@ -9,25 +13,40 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.rememberSliderState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.FilledTonalIconToggleButton
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.filled.VolumeOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
@@ -52,6 +71,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 
 import androidx.compose.ui.unit.DpSize
 import androidx.compose.ui.unit.IntSize
@@ -70,20 +91,34 @@ import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.rust.RustGallerySessionRepository
 import com.hanaretamae.kaede.core.rust.RustVaultSelectionRepository
+import com.hanaretamae.kaede.core.rust.ThumbnailLoadPriority
 import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
+import com.hanaretamae.kaede.core.settings.SettingsStateHolder
+import com.hanaretamae.kaede.core.settings.platformSystemLanguagePreference
+import com.hanaretamae.kaede.core.settings.resolve
 import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
+import com.hanaretamae.kaede.ui.gallery.KaedeTooltip
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryTheme
+import com.hanaretamae.kaede.ui.gallery.GallerySettingsScreen
+import com.hanaretamae.kaede.ui.gallery.EnglishGallerySettingsStrings
+import com.hanaretamae.kaede.ui.gallery.JapaneseGallerySettingsStrings
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackActions
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackSpeedChoices
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import com.hanaretamae.kaede.ui.gallery.GalleryLoadingScreen
 
 import java.awt.Desktop
 import java.awt.Dimension
+import java.awt.FileDialog
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
-import java.io.ByteArrayInputStream
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.LinkOption
@@ -107,12 +142,15 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicReference
 
 private const val DESKTOP_VIEWER_THUMBNAIL_SIZE = 1_024
 private const val DESKTOP_GALLERY_THUMBNAIL_SIZE = 512
-internal val DESKTOP_MINIMUM_WINDOW_SIZE = DpSize(540.dp, 720.dp)
+internal val DESKTOP_MINIMUM_WINDOW_SIZE = DpSize(400.dp, 500.dp)
 private const val DESKTOP_LAYOUT_DEBUG_PROPERTY = "kaede.debugLayout"
 private const val PORTAL_REFRESH_INTERVAL_MILLIS = 15_000L
 
@@ -150,7 +188,7 @@ fun main() {
             ) {
                 DesktopApplication(windowState) { fullscreen ->
                     windowState.placement = if (fullscreen) {
-                        WindowPlacement.Fullscreen
+                        WindowPlacement.Maximized
                     } else {
                         WindowPlacement.Floating
                     }
@@ -291,16 +329,29 @@ private fun DesktopApplication(
     val settingsRepository: SettingsRepository = remember(privateData) {
         DesktopSettingsRepository(Path.of(privateData, "settings.properties"))
     }
+    val rootSettingsStateHolder = remember(settingsRepository, scope) {
+        SettingsStateHolder(settingsRepository, scope)
+    }
+    val rootSettingsState by rootSettingsStateHolder.state.collectAsState()
+    LaunchedEffect(rootSettingsStateHolder) { rootSettingsStateHolder.load() }
+    DisposableEffect(rootSettingsStateHolder) {
+        onDispose(rootSettingsStateHolder::dispose)
+    }
     var session by remember { mutableStateOf<GallerySessionHandle?>(null) }
     var vaultPath by remember { mutableStateOf<String?>(null) }
-    var loading by remember { mutableStateOf(true) }
-    var loadingMessage by remember { mutableStateOf<String?>(null) }
+    var loading by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var vaultSelectionResolved by remember { mutableStateOf(false) }
+    var initialScanRequired by remember { mutableStateOf(false) }
+    var openingVaultName by remember { mutableStateOf<String?>(null) }
+    var startupAppearance by remember { mutableStateOf(AppearanceSettings()) }
+    var showWelcomeSettings by remember { mutableStateOf(false) }
+    var showWelcomeExample by remember { mutableStateOf(false) }
 
     suspend fun openVault(path: String, performScan: Boolean = true) {
         if (path == vaultPath && session != null) return
         loading = true
-        loadingMessage = "Loading Vault..."
+        openingVaultName = Path.of(path).fileName?.toString()
         error = null
         val previousPath = when (val previous = vaultRepository.loadSelected(privateData)) {
             is RepositoryResult.Failure -> {
@@ -331,6 +382,7 @@ private fun DesktopApplication(
             }
             is RepositoryResult.Success -> loaded.value
         }
+        startupAppearance = gallerySettings.appearance
         val galleryTagSettingsFile = Path.of(privateData, "gallery-tag-settings.json")
         if (
             gallerySettings.galleryTagPrefixes != GalleryTagPrefixesCodec.DEFAULT_PREFIXES ||
@@ -358,7 +410,7 @@ private fun DesktopApplication(
                 vaultPath = path,
                 indexPath = Path.of(privateData, "gallery.sqlite").toString(),
                 thumbnailCachePath = Path.of(privateData, "thumbnails").toString(),
-                performScan = performScan,
+                performScan = false,
             )
         ) {
             is RepositoryResult.Failure -> {
@@ -376,6 +428,7 @@ private fun DesktopApplication(
                 is RepositoryResult.Success -> {
                     session = DesktopSessionHandle(opened.value)
                     vaultPath = path
+                    initialScanRequired = performScan
                     loading = false
                 }
             }
@@ -387,14 +440,17 @@ private fun DesktopApplication(
             is RepositoryResult.Failure -> {
                 error = errorText(selected.error)
                 loading = false
+                vaultSelectionResolved = true
             }
             is RepositoryResult.Success -> {
                 val selectedPath = selected.value
                 if (selectedPath == null) {
                     loading = false
+                    vaultSelectionResolved = true
                 } else {
                     val indexExists = Path.of(privateData, "gallery.sqlite").toFile().isFile
                     openVault(selectedPath, performScan = !indexExists)
+                    vaultSelectionResolved = true
                 }
             }
         }
@@ -406,42 +462,87 @@ private fun DesktopApplication(
     }
 
     if (activeSession == null || vaultPath == null) {
-        DesktopWelcome(
-            loading = loading,
-            loadingMessage = loadingMessage,
-            error = error,
-            systemAppearance = portalAppearance,
-            onChooseVault = {
-                scope.launch {
-                    loading = true
-                    loadingMessage = "Waiting for folder selection..."
-                    error = null
-                    try {
-                        val selectedPath = chooseVaultDirectory()
-                        if (selectedPath == null) {
+        if (!vaultSelectionResolved || loading ||
+            (rootSettingsState.loading && rootSettingsState.settings == null)
+        ) {
+            DesktopStartupLoading(
+                openingVaultName,
+                rootSettingsState.settings?.appearance ?: startupAppearance,
+                portalAppearance,
+            )
+        } else if (showWelcomeSettings || showWelcomeExample) {
+            val appearance = rootSettingsState.settings?.appearance ?: startupAppearance
+            val darkTheme = when (appearance.theme) {
+                com.hanaretamae.kaede.core.settings.ThemePreference.SYSTEM ->
+                    portalAppearance.darkTheme ?: isSystemInDarkTheme()
+                com.hanaretamae.kaede.core.settings.ThemePreference.LIGHT -> false
+                com.hanaretamae.kaede.core.settings.ThemePreference.DARK -> true
+            }
+            val activeSettingsLanguage = (
+                rootSettingsState.settings?.appearance?.language ?: LanguagePreference.SYSTEM
+                )
+                .resolve(platformSystemLanguagePreference())
+            KaedeGalleryTheme(
+                appearance = appearance,
+                dynamicColorScheme = desktopSystemColorScheme(
+                    portalAppearance.accentColor,
+                    darkTheme,
+                ),
+                systemDarkTheme = portalAppearance.darkTheme,
+            ) {
+                GallerySettingsScreen(
+                    stateHolder = rootSettingsStateHolder,
+                    onClose = { showWelcomeExample = false },
+                    strings = if (activeSettingsLanguage == LanguagePreference.JAPANESE) {
+                        JapaneseGallerySettingsStrings
+                    } else {
+                        EnglishGallerySettingsStrings
+                    },
+                    loadOnEnter = false,
+                    disposeStateHolderOnExit = false,
+                    loadLicenseText = ::loadDesktopLicenseText,
+                    openExampleOnStart = showWelcomeExample,
+                    exampleOnly = showWelcomeExample,
+                )
+            }
+        } else {
+            DesktopWelcome(
+                loading = loading,
+                error = error,
+                systemAppearance = portalAppearance,
+                appearance = rootSettingsState.settings?.appearance ?: startupAppearance,
+                onOpenSettings = { showWelcomeSettings = true },
+                onOpenExample = { showWelcomeExample = true },
+                onChooseVault = {
+                    scope.launch {
+                        loading = true
+                        error = null
+                        try {
+                            val selectedPath = chooseVaultDirectory()
+                            if (selectedPath == null) {
+                                loading = false
+                                error = "No folder was selected. Use Open or Select to confirm the folder."
+                            } else {
+                                openVault(selectedPath)
+                            }
+                        } catch (cancelled: CancellationException) {
+                            throw cancelled
+                        } catch (failure: Exception) {
                             loading = false
-                            loadingMessage = null
-                            error = "No folder was selected. Use Open or Select to confirm the folder."
-                        } else {
-                            openVault(selectedPath)
+                            error = failure.message
+                                ?.takeIf { failure is PortalSelectionException }
+                                ?: "The selected folder could not be opened."
                         }
-                    } catch (cancelled: CancellationException) {
-                        throw cancelled
-                    } catch (failure: Exception) {
-                        loading = false
-                        loadingMessage = null
-                        error = failure.message
-                            ?.takeIf { failure is PortalSelectionException }
-                            ?: "The selected folder could not be opened."
                     }
-                }
-            },
-        )
+                },
+            )
+        }
     } else {
         val selectedVaultPath = vaultPath
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
+            settingsStateHolder = rootSettingsStateHolder,
             dynamicColorSchemeProvider = { themePreference ->
                 val darkTheme = when (themePreference) {
                     com.hanaretamae.kaede.core.settings.ThemePreference.SYSTEM ->
@@ -455,8 +556,9 @@ private fun DesktopApplication(
             vaultName = Path.of(vaultPath).fileName?.toString(),
             scanWarningCount = activeSession.initialScan.warnings.coerceAtMost(Int.MAX_VALUE.toLong())
                 .toInt(),
-            galleryThumbnail = { mediaId, isVideo ->
-                DesktopGalleryThumbnail(activeSession.gallery, mediaId, isVideo)
+            rescanOnStart = initialScanRequired,
+            galleryThumbnail = { mediaId, isVideo, isVisible ->
+                DesktopGalleryThumbnail(activeSession.gallery, mediaId, isVideo, isVisible)
             },
             mediaContent = { mediaState ->
                 DesktopMediaContent(
@@ -546,12 +648,14 @@ private fun DesktopApplication(
                 }
             },
             onImportSettings = { onImported ->
-                importSettingsFile(onImported)
+                scope.launch { importSettingsFile(onImported) }
             },
             onExportSettings = { content ->
-                exportSettingsFile(content, vaultPath)
+                scope.launch { exportSettingsFile(content, vaultPath) }
             },
-            onRescan = activeSession::rescan,
+            onRescan = {
+                activeSession.rescan().also { initialScanRequired = false }
+            },
             onRustTagSettingsChanged = { settings ->
                 when (
                     val written = persistRustTagSettings(
@@ -834,41 +938,80 @@ private const val FILE_MANAGER_TIMEOUT_SECONDS = 10L
 @Composable
 private fun DesktopWelcome(
     loading: Boolean,
-    loadingMessage: String?,
     error: String?,
     systemAppearance: DesktopSystemAppearance,
+    appearance: AppearanceSettings,
+    onOpenSettings: () -> Unit,
     onChooseVault: () -> Unit,
+    onOpenExample: () -> Unit,
 ) {
+    val japanese = appearance.language.resolve(platformSystemLanguagePreference()) ==
+        LanguagePreference.JAPANESE
+    val darkTheme = when (appearance.theme) {
+        com.hanaretamae.kaede.core.settings.ThemePreference.SYSTEM ->
+            systemAppearance.darkTheme ?: isSystemInDarkTheme()
+        com.hanaretamae.kaede.core.settings.ThemePreference.LIGHT -> false
+        com.hanaretamae.kaede.core.settings.ThemePreference.DARK -> true
+    }
     KaedeGalleryTheme(
-        appearance = AppearanceSettings(),
+        appearance = appearance,
         dynamicColorScheme = desktopSystemColorScheme(
             systemAppearance.accentColor,
-            systemAppearance.darkTheme ?: isSystemInDarkTheme(),
+            darkTheme,
         ),
         systemDarkTheme = systemAppearance.darkTheme,
     ) {
-        Surface(modifier = Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(32.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
-                Spacer(Modifier.height(16.dp))
-                Text("Choose an existing, read-only Vault folder to begin.")
-                Spacer(Modifier.height(24.dp))
-                Button(onClick = onChooseVault, enabled = !loading) {
-                    Text("Choose Vault")
-                }
-                if (loading) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Surface(modifier = Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
                     Spacer(Modifier.height(16.dp))
-                    CircularProgressIndicator()
-                    Spacer(Modifier.height(8.dp))
-                    Text(loadingMessage ?: "Loading...")
+                    Text(
+                        if (japanese) {
+                            "既存のVaultフォルダーを選択してください。アクセスは読み取り専用です。"
+                        } else {
+                            "Choose an existing, read-only Vault folder to begin."
+                        },
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    Button(shapes = ButtonDefaults.shapes(), onClick = onChooseVault, enabled = !loading) {
+                        Text(if (japanese) "Vaultを選択" else "Choose Vault")
+                    }
+                    Button(shapes = ButtonDefaults.shapes(), onClick = onOpenExample, enabled = !loading) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.Description, contentDescription = null)
+                            Text(if (japanese) "ノートの例を見る" else "View example note")
+                        }
+                    }
+                    if (error != null) {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            if (japanese) {
+                                "Vaultを読み込めませんでした。フォルダーへのアクセス権限を確認してください。"
+                            } else {
+                                error
+                            },
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
-                if (error != null) {
-                    Spacer(Modifier.height(16.dp))
-                    Text(error, color = MaterialTheme.colorScheme.error)
+            }
+            KaedeTooltip(if (japanese) "設定" else "Settings") {
+                IconButton(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                    onClick = onOpenSettings,
+                ) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = if (japanese) "設定" else "Settings",
+                    )
                 }
             }
         }
@@ -876,12 +1019,33 @@ private fun DesktopWelcome(
 }
 
 @Composable
-private fun DesktopMediaContent(
+private fun DesktopStartupLoading(
+    vaultName: String?,
+    appearance: AppearanceSettings,
+    systemAppearance: DesktopSystemAppearance,
+) {
+    val darkTheme = when (appearance.theme) {
+        com.hanaretamae.kaede.core.settings.ThemePreference.SYSTEM ->
+            systemAppearance.darkTheme ?: isSystemInDarkTheme()
+        com.hanaretamae.kaede.core.settings.ThemePreference.LIGHT -> false
+        com.hanaretamae.kaede.core.settings.ThemePreference.DARK -> true
+    }
+    KaedeGalleryTheme(
+        appearance = appearance,
+        dynamicColorScheme = desktopSystemColorScheme(systemAppearance.accentColor, darkTheme),
+        systemDarkTheme = systemAppearance.darkTheme,
+    ) {
+        GalleryLoadingScreen(vaultName)
+    }
+}
+
+@Composable
+internal fun DesktopMediaContent(
     repository: GalleryRepository,
     mediaState: GalleryViewerMediaState,
 ) {
-    if (mediaState.locationLoading) {
-        CircularProgressIndicator()
+    if (mediaState.media.isVideo && mediaState.locationLoading) {
+        LoadingIndicator()
         return
     }
     val videoPanel = remember { AtomicReference<MpvVideoPanel?>() }
@@ -905,55 +1069,151 @@ private fun DesktopMediaContent(
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             )
             val panel = activeVideoPanel
-            if (panel == null) {
-                Text(
-                    "Starting video player…",
-                    modifier = Modifier.padding(16.dp),
-                )
-            } else {
+            if (panel != null) {
+                DisposableEffect(panel, mediaState.fullscreen) {
+                    val dispatcher = java.awt.KeyEventDispatcher { event ->
+                        if (
+                            mediaState.fullscreen &&
+                            event.id == java.awt.event.KeyEvent.KEY_PRESSED &&
+                            event.keyCode == java.awt.event.KeyEvent.VK_ESCAPE &&
+                            javax.swing.SwingUtilities.getWindowAncestor(panel)?.isActive == true
+                        ) {
+                            mediaState.onToggleFullscreen?.invoke()
+                            true
+                        } else {
+                            false
+                        }
+                    }
+                    val keyboard = java.awt.KeyboardFocusManager.getCurrentKeyboardFocusManager()
+                    keyboard.addKeyEventDispatcher(dispatcher)
+                    onDispose { keyboard.removeKeyEventDispatcher(dispatcher) }
+                }
                 val playbackState by panel.playbackState.collectAsState()
                 if (MpvVideoCommand.supportsInAppControls()) {
-                    DesktopVideoControls(
-                        state = playbackState,
-                        onPlayPause = panel::togglePlayback,
-                        onSeek = panel::seekTo,
-                        onSpeed = panel::setPlaybackSpeed,
-                        onLoop = panel::setLooping,
-                        onMute = panel::setMuted,
-                    )
+                    var controlsVisible by remember(mediaState.fullscreen) { mutableStateOf(true) }
+                    var controlsInteracting by remember { mutableStateOf(false) }
+                    LaunchedEffect(
+                        mediaState.fullscreen, playbackState.playing,
+                        controlsVisible, controlsInteracting,
+                    ) {
+                        if (
+                            mediaState.fullscreen && playbackState.playing &&
+                            controlsVisible && !controlsInteracting
+                        ) {
+                            delay(3_000)
+                            controlsVisible = false
+                        }
+                    }
+                    AnimatedVisibility(
+                        visible = controlsVisible || !mediaState.fullscreen,
+                        enter = slideInVertically { it } + fadeIn(),
+                        exit = slideOutVertically { it } + fadeOut(),
+                    ) {
+                        DesktopVideoControls(
+                            state = playbackState,
+                            fullscreen = mediaState.fullscreen,
+                            onToggleFullscreen = mediaState.onToggleFullscreen,
+                            onPlayPause = panel::togglePlayback,
+                            onSeek = panel::seekTo,
+                            onSpeed = panel::setPlaybackSpeed,
+                            onLoop = panel::setLooping,
+                            onMute = panel::setMuted,
+                            onInteractionChanged = { controlsInteracting = it },
+                        )
+                    }
+                    if (mediaState.fullscreen && !controlsVisible) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.End,
+                        ) {
+                            KaedeTooltip("Show video controls") {
+                                FilledTonalIconButton(onClick = { controlsVisible = true }) {
+                                    Icon(Icons.Filled.PlayArrow, "Show video controls")
+                                }
+                            }
+                            mediaState.onToggleFullscreen?.let { toggle ->
+                                DesktopFullscreenButton(fullscreen = true, onClick = toggle)
+                            }
+                        }
+                    }
+                } else {
+                    mediaState.onToggleFullscreen?.let { toggle ->
+                        DesktopFullscreenButton(
+                            fullscreen = mediaState.fullscreen,
+                            onClick = toggle,
+                            modifier = Modifier.align(Alignment.End).padding(16.dp),
+                        )
+                    }
                 }
             }
         }
         return
     }
-    val imageState by produceState(
-        initialValue = DesktopImageState(),
-        repository,
-        mediaState.media.id,
-    ) {
-        value = withContext(Dispatchers.IO) {
-            when (
-                val result = repository.thumbnail(
-                    mediaState.media.id,
-                    DESKTOP_VIEWER_THUMBNAIL_SIZE,
-                )
-            ) {
-                is RepositoryResult.Failure ->
-                    DesktopImageState(error = errorText(result.error))
-                is RepositoryResult.Success -> {
-                    val bytes = result.value
-                    if (bytes == null) {
-                        DesktopImageState()
-                    } else {
-                        try {
-                            val decoded = ByteArrayInputStream(bytes).use(ImageIO::read)
-                            DesktopImageState(bitmap = decoded?.toComposeImageBitmap())
-                        } catch (_: IOException) {
-                            DesktopImageState(error = "Image thumbnail could not be decoded.")
+    val viewerImage = remember(repository, mediaState.media.id) {
+        mutableStateOf(
+            DesktopImageState(
+                bitmap = DesktopImageMemoryCache.preview(mediaState.media.id),
+            ),
+        )
+    }
+    val imageState by viewerImage
+    LaunchedEffect(repository, mediaState.media.id) {
+        if (DesktopImageMemoryCache.get(mediaState.media.id, DESKTOP_VIEWER_THUMBNAIL_SIZE) != null) {
+            return@LaunchedEffect
+        }
+        viewerImage.value = DesktopImageMemoryCache.load(
+            mediaState.media.id,
+            DESKTOP_VIEWER_THUMBNAIL_SIZE,
+            ThumbnailLoadPriority.INTERACTIVE,
+        ) {
+            withContext(Dispatchers.IO) {
+                when (
+                    val result = repository.thumbnail(
+                        mediaState.media.id,
+                        DESKTOP_VIEWER_THUMBNAIL_SIZE,
+                    )
+                ) {
+                    is RepositoryResult.Failure ->
+                        DesktopImageState(error = errorText(result.error))
+                    is RepositoryResult.Success ->
+                        DesktopImageState(bitmap = result.value?.let(::decodeDesktopImage))
+                }
+            }
+        }
+    }
+    LaunchedEffect(repository, mediaState.media.id, mediaState.prefetchMediaIds) {
+        delay(100)
+        coroutineScope {
+            mediaState.prefetchMediaIds
+                .asSequence()
+                .filter { it != mediaState.media.id }
+                .map { mediaId ->
+                    async {
+                        DesktopImageMemoryCache.load(
+                            mediaId,
+                            DESKTOP_VIEWER_THUMBNAIL_SIZE,
+                            ThumbnailLoadPriority.PREFETCH,
+                        ) {
+                            withContext(Dispatchers.IO) {
+                                when (
+                                    val result = repository.thumbnail(
+                                        mediaId,
+                                        DESKTOP_VIEWER_THUMBNAIL_SIZE,
+                                    )
+                                ) {
+                                    is RepositoryResult.Failure ->
+                                        DesktopImageState(error = errorText(result.error))
+                                    is RepositoryResult.Success ->
+                                        DesktopImageState(
+                                            bitmap = result.value?.let(::decodeDesktopImage),
+                                        )
+                                }
+                            }
                         }
                     }
                 }
-            }
+                .toList()
+                .awaitAll()
         }
     }
 
@@ -964,49 +1224,69 @@ private fun DesktopMediaContent(
             contentScale = ContentScale.Inside,
             modifier = Modifier.fillMaxSize(),
         )
-        imageState.error != null -> Text(
-            "Image unavailable: ${imageState.error}",
-            color = androidx.compose.ui.graphics.Color.White,
-        )
-        else -> Text(
-            "Image unavailable or unsupported.",
-            color = androidx.compose.ui.graphics.Color.White,
-        )
+        else -> Unit
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun DesktopVideoControls(
+internal fun DesktopVideoControls(
     state: DesktopVideoPlaybackState,
     onPlayPause: () -> Unit,
     onSeek: (Float) -> Unit,
     onSpeed: (Float) -> Unit,
     onLoop: (Boolean) -> Unit,
     onMute: (Boolean) -> Unit,
+    fullscreen: Boolean = false,
+    onToggleFullscreen: (() -> Unit)? = null,
+    onInteractionChanged: (Boolean) -> Unit = {},
 ) {
     var seekPreview by remember { mutableStateOf<Float?>(null) }
     var speedMenuExpanded by remember { mutableStateOf(false) }
+    val controlsFocus = remember { FocusRequester() }
     val duration = state.durationSeconds
     val position = seekPreview ?: state.positionSeconds
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shape = MaterialTheme.shapes.large,
+    val sliderState = rememberSliderState(value = 0f)
+    if (seekPreview == null) {
+        sliderState.value = if (duration > 0f) (position / duration).coerceIn(0f, 1f) else 0f
+    }
+    LaunchedEffect(speedMenuExpanded, seekPreview != null) {
+        onInteractionChanged(speedMenuExpanded || seekPreview != null)
+    }
+    LaunchedEffect(speedMenuExpanded) {
+        if (!speedMenuExpanded) controlsFocus.requestFocus()
+    }
+    DisposableEffect(Unit) {
+        onDispose { onInteractionChanged(false) }
+    }
+    Column(
+        modifier = Modifier.fillMaxWidth().focusRequester(controlsFocus).focusable()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            Slider(
-                value = if (duration > 0f) (position / duration).coerceIn(0f, 1f) else 0f,
-                onValueChange = { fraction ->
-                    seekPreview = fraction * duration
-                },
-                onValueChangeFinished = {
-                    seekPreview?.let(onSeek)
-                    seekPreview = null
-                },
-                enabled = state.connected && duration > 0f,
-            )
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        Slider(
+            state = sliderState,
+            onValueChange = { fraction ->
+                sliderState.value = fraction
+                val seconds = fraction * duration
+                seekPreview = seconds
+                onSeek(seconds)
+            },
+            onValueChangeFinished = {
+                seekPreview?.let(onSeek)
+                seekPreview = null
+            },
+            enabled = duration > 0f && state.connected,
+            modifier = Modifier.fillMaxWidth().height(64.dp),
+        )
+        GalleryPlaybackActions(leading = {
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+            KaedeTooltip(if (state.playing) "Pause video" else "Play video") {
                 FilledIconButton(
+                    shapes = IconButtonDefaults.shapes(),
                     onClick = onPlayPause,
                     enabled = state.connected,
                 ) {
@@ -1015,50 +1295,35 @@ private fun DesktopVideoControls(
                         contentDescription = if (state.playing) "Pause video" else "Play video",
                     )
                 }
-                Text(
-                    "${formatDesktopVideoDuration(position)} / ${formatDesktopVideoDuration(duration)}",
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.padding(start = 12.dp),
-                )
-                Spacer(Modifier.weight(1f))
-                Box {
-                    TextButton(
-                        onClick = { speedMenuExpanded = true },
-                        enabled = state.connected,
-                    ) {
-                        Text("${state.playbackSpeed}×")
-                    }
-                    DropdownMenu(
-                        expanded = speedMenuExpanded,
-                        onDismissRequest = { speedMenuExpanded = false },
-                    ) {
-                        listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
-                            DropdownMenuItem(
-                                text = { Text("${speed}×") },
-                                onClick = {
-                                    speedMenuExpanded = false
-                                    onSpeed(speed)
-                                },
-                            )
-                        }
-                    }
-                }
-                IconButton(
-                    onClick = { onLoop(!state.looping) },
+            }
+            DesktopPlaybackPill(
+                "${formatDesktopVideoDuration(position)} / ${formatDesktopVideoDuration(duration)}",
+            )
+            }
+        }, trailing = {
+            DesktopPlaybackPill(
+                "${state.playbackSpeed}x",
+                onClick = { speedMenuExpanded = !speedMenuExpanded }.takeIf { state.connected },
+                contentDescription = "Playback speed",
+            )
+            KaedeTooltip(if (state.looping) "Turn looping off" else "Loop video") {
+                FilledTonalIconToggleButton(
+                    checked = state.looping,
+                    onCheckedChange = onLoop,
+                    shapes = IconButtonDefaults.toggleableShapes(),
                     enabled = state.connected,
                 ) {
                     Icon(
-                        Icons.Filled.RepeatOne,
+                        Icons.Filled.Repeat,
                         contentDescription = if (state.looping) "Turn looping off" else "Loop video",
-                        tint = if (state.looping) {
-                            MaterialTheme.colorScheme.primary
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
                     )
                 }
-                IconButton(
-                    onClick = { onMute(!state.muted) },
+            }
+            KaedeTooltip(if (state.muted) "Unmute video" else "Mute video") {
+                FilledTonalIconToggleButton(
+                    checked = !state.muted,
+                    onCheckedChange = { onMute(!it) },
+                    shapes = IconButtonDefaults.toggleableShapes(),
                     enabled = state.connected,
                 ) {
                     Icon(
@@ -1071,13 +1336,25 @@ private fun DesktopVideoControls(
                     )
                 }
             }
-            state.errorMessage?.let { message ->
-                Text(
-                    text = message,
-                    color = MaterialTheme.colorScheme.error,
-                    style = MaterialTheme.typography.bodySmall,
-                )
+            onToggleFullscreen?.let { toggle ->
+                DesktopFullscreenButton(fullscreen = fullscreen, onClick = toggle)
             }
+        })
+        if (speedMenuExpanded) {
+            GalleryPlaybackSpeedChoices(
+                selected = state.playbackSpeed,
+                onSelect = {
+                    onSpeed(it)
+                    speedMenuExpanded = false
+                },
+            )
+        }
+        state.errorMessage?.let { message ->
+            Text(
+                text = message,
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -1087,46 +1364,49 @@ private fun DesktopGalleryThumbnail(
     repository: GalleryRepository,
     mediaId: MediaId,
     isVideo: Boolean,
+    isVisible: Boolean,
 ) {
-    val imageState by produceState(
-        initialValue = DesktopImageState(),
-        repository,
-        mediaId,
-        isVideo,
-    ) {
-        value = withContext(Dispatchers.IO) {
-            val bytes = if (isVideo) {
-                when (val result = repository.mediaLocation(mediaId)) {
-                    is RepositoryResult.Failure -> null
-                    is RepositoryResult.Success ->
-                        result.value?.let(DesktopVideoThumbnail::extract)
+    val thumbnailState = remember(repository, mediaId, isVideo) {
+        mutableStateOf(
+            DesktopImageState(bitmap = DesktopImageMemoryCache.get(mediaId, DESKTOP_GALLERY_THUMBNAIL_SIZE)),
+        )
+    }
+    val imageState by thumbnailState
+    LaunchedEffect(repository, mediaId, isVideo, isVisible) {
+        if (!isVisible) return@LaunchedEffect
+        if (thumbnailState.value.bitmap != null) return@LaunchedEffect
+        thumbnailState.value = DesktopImageMemoryCache.load(
+            mediaId,
+            DESKTOP_GALLERY_THUMBNAIL_SIZE,
+            ThumbnailLoadPriority.VISIBLE,
+        ) {
+            withContext(Dispatchers.IO) {
+                val bytes = if (isVideo) {
+                    when (val result = repository.mediaLocation(mediaId)) {
+                        is RepositoryResult.Failure -> null
+                        is RepositoryResult.Success ->
+                            result.value?.let(DesktopVideoThumbnail::extract)
+                    }
+                } else {
+                    when (
+                        val result = repository.thumbnail(
+                            mediaId,
+                            DESKTOP_GALLERY_THUMBNAIL_SIZE,
+                        )
+                    ) {
+                        is RepositoryResult.Failure -> null
+                        is RepositoryResult.Success -> result.value
+                    }
                 }
-            } else {
-                when (val result = repository.thumbnail(mediaId, DESKTOP_GALLERY_THUMBNAIL_SIZE)) {
-                    is RepositoryResult.Failure -> null
-                    is RepositoryResult.Success -> result.value
-                }
-            }
-            if (bytes == null) {
+                val bitmap = bytes?.let(::decodeDesktopImage)
                 DesktopImageState(
-                    error = if (isVideo) "Video thumbnail unavailable." else null,
+                    bitmap = bitmap,
+                    error = if (bitmap == null && isVideo) {
+                        "Video thumbnail unavailable."
+                    } else {
+                        null
+                    },
                 )
-            } else {
-                try {
-                    val decoded = ByteArrayInputStream(bytes).use(ImageIO::read)
-                    DesktopImageState(
-                        bitmap = decoded?.toComposeImageBitmap(),
-                        error = if (decoded == null && isVideo) {
-                            "Video thumbnail unavailable."
-                        } else {
-                            null
-                        },
-                    )
-                } catch (_: IOException) {
-                    DesktopImageState(
-                        error = if (isVideo) "Video thumbnail unavailable." else null,
-                    )
-                }
             }
         }
     }
@@ -1143,11 +1423,6 @@ private fun DesktopGalleryThumbnail(
         )
     }
 }
-
-private data class DesktopImageState(
-    val bitmap: ImageBitmap? = null,
-    val error: String? = null,
-)
 
 private suspend fun chooseVaultDirectory(): String? {
     if (isLinuxDesktop()) {
@@ -1179,11 +1454,10 @@ private fun chooseVaultDirectoryWithSwing(
     }
 }
 
-private fun importSettingsFile(onImported: (String) -> Unit) {
-    val chooser = settingsFileChooser()
-    if (chooser.showOpenDialog(null) != JFileChooser.APPROVE_OPTION) return
+private suspend fun importSettingsFile(onImported: (String) -> Unit) {
     try {
-        onImported(DesktopSettingsTransfer.read(chooser.selectedFile.toPath()))
+        val selected = chooseSettingsPath(save = false) ?: return
+        onImported(withContext(Dispatchers.IO) { DesktopSettingsTransfer.read(selected) })
     } catch (_: IOException) {
         showSettingsTransferError()
     } catch (_: SecurityException) {
@@ -1193,15 +1467,17 @@ private fun importSettingsFile(onImported: (String) -> Unit) {
     }
 }
 
-private fun exportSettingsFile(content: String, vaultPath: String?) {
-    val chooser = settingsFileChooser().apply {
-        selectedFile = java.io.File("kaede-gallery-settings.kgsettings")
-    }
-    if (chooser.showSaveDialog(null) != JFileChooser.APPROVE_OPTION) return
+private suspend fun exportSettingsFile(content: String, vaultPath: String?) {
     try {
+        val selected = chooseSettingsPath(
+            save = true,
+            fileName = "kaede-gallery-settings.kgsettings",
+        ) ?: return
         val vault = vaultPath?.let(Path::of)
             ?: throw IOException("No Vault is selected.")
-        DesktopSettingsTransfer.write(chooser.selectedFile.toPath(), content, vault)
+        withContext(Dispatchers.IO) {
+            DesktopSettingsTransfer.write(selected, content, vault)
+        }
     } catch (_: IOException) {
         showSettingsTransferError()
     } catch (_: SecurityException) {
@@ -1211,16 +1487,35 @@ private fun exportSettingsFile(content: String, vaultPath: String?) {
     }
 }
 
-private fun settingsFileChooser(): JFileChooser =
-    JFileChooser(FileSystemView.getFileSystemView().homeDirectory).apply {
-        dialogTitle = "Kaede Gallery settings"
-        fileSelectionMode = JFileChooser.FILES_ONLY
-        isAcceptAllFileFilterUsed = false
-        addChoosableFileFilter(javax.swing.filechooser.FileNameExtensionFilter(
-            "Kaede Gallery settings (*.kgsettings)",
-            "kgsettings",
-        ))
+private suspend fun chooseSettingsPath(save: Boolean, fileName: String? = null): Path? {
+    if (isLinuxDesktop()) {
+        try {
+            return withContext(Dispatchers.IO) {
+                if (save) {
+                    LinuxPortalDirectoryPicker.saveFile(
+                        "Export Kaede Gallery settings",
+                        fileName ?: "kaede-gallery-settings.kgsettings",
+                    )
+                } else {
+                    LinuxPortalDirectoryPicker.chooseFile("Import Kaede Gallery settings")
+                }
+            }
+        } catch (failure: IOException) {
+            if (!shouldUseSwingFallback(failure)) throw failure
+        }
     }
+    val chooser = FileDialog(
+        null as java.awt.Frame?,
+        "Kaede Gallery settings",
+        if (save) FileDialog.SAVE else FileDialog.LOAD,
+    ).apply {
+        if (save) file = fileName ?: "kaede-gallery-settings.kgsettings"
+    }
+    chooser.isVisible = true
+    val selectedFile = chooser.file ?: return null
+    val selectedDirectory = chooser.directory ?: return null
+    return Path.of(selectedDirectory, selectedFile)
+}
 
 private fun showSettingsTransferError() {
     JOptionPane.showMessageDialog(
@@ -1327,4 +1622,62 @@ private fun errorText(error: RepositoryError): String = when (error) {
     RepositoryError.INDEX_UNAVAILABLE -> "The local gallery index is unavailable."
     RepositoryError.INVALID_REQUEST -> "The Vault request was invalid."
     RepositoryError.OPERATION_FAILED -> "The gallery operation failed."
+}
+
+@Composable
+private fun DesktopFullscreenButton(
+    fullscreen: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val label = if (fullscreen) "Restore application window" else "Maximize application window"
+    KaedeTooltip(label) {
+        FilledTonalIconButton(
+            shapes = IconButtonDefaults.shapes(),
+            onClick = onClick,
+            modifier = modifier,
+        ) {
+            Icon(
+                if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                contentDescription = label,
+            )
+        }
+    }
+}
+
+@Composable
+private fun DesktopPlaybackPill(
+    label: String,
+    onClick: (() -> Unit)? = null,
+    contentDescription: String? = null,
+) {
+    val colors = MaterialTheme.colorScheme
+    val semanticsModifier = contentDescription?.let {
+        Modifier.semantics { this.contentDescription = it }
+    } ?: Modifier
+    val content: @Composable () -> Unit = {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        )
+    }
+    if (onClick == null) {
+        Surface(
+            shape = CircleShape,
+            color = colors.secondaryContainer,
+            contentColor = colors.onSecondaryContainer,
+            modifier = semanticsModifier,
+            content = content,
+        )
+    } else {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = colors.secondaryContainer,
+            contentColor = colors.onSecondaryContainer,
+            modifier = semanticsModifier,
+            content = content,
+        )
+    }
 }

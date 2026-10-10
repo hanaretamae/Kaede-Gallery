@@ -24,10 +24,12 @@ import java.io.BufferedReader
 import java.io.BufferedWriter
 import java.io.IOException
 import java.io.InputStreamReader
+import java.io.InputStream
 import java.io.OutputStreamWriter
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.Channels
 import java.nio.channels.SocketChannel
+import java.nio.ByteBuffer
 import java.net.StandardProtocolFamily
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
@@ -35,6 +37,9 @@ import java.nio.file.Path
 import java.nio.file.attribute.PosixFilePermission
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.RejectedExecutionException
+import java.util.concurrent.ThreadPoolExecutor
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.SwingConstants
@@ -63,6 +68,7 @@ internal object MpvVideoCommand {
         add("--sub-auto=no")
         add("--audio-file-auto=no")
         add("--loop-file=no")
+        add("--keep-open=yes")
         add("--force-window=yes")
         if (osName.lowercase().contains("linux")) add("--vo=x11")
         if (ipcSocketPath != null) {
@@ -76,9 +82,40 @@ internal object MpvVideoCommand {
     }
 }
 
+internal fun encodeMpvCommand(values: Iterable<Any>): String =
+    buildJsonObject {
+        put(
+            "command",
+            buildJsonArray {
+                values.forEach { value ->
+                    when (value) {
+                        is String -> add(JsonPrimitive(value))
+                        is Int -> add(JsonPrimitive(value))
+                        is Float -> add(JsonPrimitive(value))
+                        is Boolean -> add(JsonPrimitive(value))
+                        else -> error("Unsupported mpv command value.")
+                    }
+                }
+            },
+        )
+    }.toString()
+
+// Channels.newInputStream holds the channel's blocking lock while waiting for
+// data, which prevents the IPC writer from sending commands on the same socket.
+internal fun mpvSocketInputStream(channel: SocketChannel): InputStream = object : InputStream() {
+    override fun read(): Int {
+        val byte = ByteArray(1)
+        return if (read(byte, 0, 1) == -1) -1 else byte[0].toInt() and 0xff
+    }
+
+    override fun read(bytes: ByteArray, offset: Int, length: Int): Int =
+        if (length == 0) 0 else channel.read(ByteBuffer.wrap(bytes, offset, length))
+}
+
 internal data class DesktopVideoPlaybackState(
     val connected: Boolean = false,
     val playing: Boolean = false,
+    val ended: Boolean = false,
     val looping: Boolean = false,
     val muted: Boolean = false,
     val volume: Float = 100f,
@@ -107,6 +144,7 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     private val status = JLabel("", SwingConstants.CENTER)
     private val state = MutableStateFlow(DesktopVideoPlaybackState())
     val playbackState: StateFlow<DesktopVideoPlaybackState> = state.asStateFlow()
+    @Volatile
     private var player: Process? = null
     private var activePath: String? = null
     private var ipcWriter: BufferedWriter? = null
@@ -114,6 +152,16 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     private var ipcSocketDirectory: Path? = null
     private var lastUnmutedVolume = 100f
     private val ipcLock = Any()
+    private val commandExecutor = ThreadPoolExecutor(
+        1,
+        1,
+        0L,
+        TimeUnit.MILLISECONDS,
+        ArrayBlockingQueue(32),
+        { task ->
+            Thread(task, "kaede-mpv-command").apply { isDaemon = true }
+        },
+    )
 
     init {
         background = Color.BLACK
@@ -232,10 +280,17 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     }
 
     fun togglePlayback() {
-        sendCommand("cycle", "pause")
+        if (state.value.ended) {
+            state.value = state.value.copy(playing = true, ended = false, positionSeconds = 0f)
+            sendCommand("seek", 0f, "absolute+exact")
+            sendCommand("set_property", "pause", false)
+        } else {
+            sendCommand("cycle", "pause")
+        }
     }
 
     fun setLooping(enabled: Boolean) {
+        state.value = state.value.copy(looping = enabled)
         sendCommand("set_property", "loop-file", if (enabled) "inf" else "no")
     }
 
@@ -251,7 +306,8 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     fun seekTo(seconds: Float) {
         val target = seconds.takeIf(Float::isFinite)?.coerceIn(0f, state.value.durationSeconds)
             ?: return
-        sendCommand("set_property", "time-pos", target)
+        state.value = state.value.copy(positionSeconds = target, ended = false)
+        sendCommand("seek", target, "absolute+exact")
     }
 
     fun setPlaybackSpeed(speed: Float) {
@@ -260,13 +316,10 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     }
 
     fun close() {
-        if (!SwingUtilities.isEventDispatchThread()) {
-            SwingUtilities.invokeLater { close() }
-            return
-        }
         activePath = null
         stopPlayer()
         state.value = DesktopVideoPlaybackState()
+        commandExecutor.shutdownNow()
     }
 
     private fun stopPlayer() {
@@ -313,7 +366,7 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
                 OutputStreamWriter(Channels.newOutputStream(channel), StandardCharsets.UTF_8),
             )
             val reader = BufferedReader(
-                InputStreamReader(Channels.newInputStream(channel), StandardCharsets.UTF_8),
+                InputStreamReader(mpvSocketInputStream(channel), StandardCharsets.UTF_8),
             )
             synchronized(ipcLock) {
                 if (player !== process) {
@@ -332,6 +385,7 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
                 "volume",
                 "speed",
                 "loop-file",
+                "eof-reached",
             ).forEachIndexed { index, property ->
                 sendCommand("observe_property", index + 1, property)
             }
@@ -409,6 +463,18 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
             "duration" -> value.jsonPrimitive.floatOrNull?.let { seconds ->
                 state.value = state.value.copy(durationSeconds = seconds.coerceAtLeast(0f))
             }
+            "eof-reached" -> value.jsonPrimitive.booleanOrNull?.let { ended ->
+                val current = state.value
+                state.value = current.copy(
+                    ended = ended,
+                    playing = if (ended) false else state.value.playing,
+                    positionSeconds = if (ended && current.durationSeconds > 0f) {
+                        current.durationSeconds
+                    } else {
+                        current.positionSeconds
+                    },
+                )
+            }
             "volume" -> value.jsonPrimitive.floatOrNull?.let { volume ->
                 state.value = state.value.copy(muted = volume <= 0f, volume = volume)
                 if (volume > 0f) lastUnmutedVolume = volume
@@ -417,46 +483,51 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
                 state.value = state.value.copy(playbackSpeed = speed)
             }
             "loop-file" -> state.value = state.value.copy(
-                looping = value.jsonPrimitive.contentOrNull?.let { it != "no" } ?: false,
+                looping = value.contentOrNull == "inf" ||
+                    (value.floatOrNull ?: 0f) > 0f,
             )
         }
     }
 
     private fun sendCommand(vararg values: Any) {
-        val command = buildJsonArray {
-            values.forEach { value ->
-                when (value) {
-                    is String -> add(JsonPrimitive(value))
-                    is Int -> add(JsonPrimitive(value))
-                    is Float -> add(JsonPrimitive(value))
-                    else -> error("Unsupported mpv command value.")
+        val expectedPlayer = player ?: return
+        val command = encodeMpvCommand(values.asIterable())
+        try {
+            commandExecutor.execute {
+                val writer = synchronized(ipcLock) {
+                    if (player === expectedPlayer) ipcWriter else null
+                } ?: return@execute
+                try {
+                    writer.write(command)
+                    writer.newLine()
+                    writer.flush()
+                } catch (_: IOException) {
+                    if (player === expectedPlayer) {
+                        state.value = state.value.copy(
+                            connected = false,
+                            errorMessage = "In-app video controls lost their player connection.",
+                        )
+                    }
                 }
             }
-        }
-        synchronized(ipcLock) {
-            val writer = ipcWriter ?: return
-            try {
-                writer.write(buildJsonObject { put("command", command) }.toString())
-                writer.newLine()
-                writer.flush()
-            } catch (_: IOException) {
+        } catch (_: RejectedExecutionException) {
+            if (player === expectedPlayer) {
                 state.value = state.value.copy(
-                    connected = false,
-                    errorMessage = "In-app video controls lost their player connection.",
+                    errorMessage = "In-app video controls are busy.",
                 )
             }
         }
     }
 
     private fun cleanupIpc() {
-        synchronized(ipcLock) {
+        val channel = synchronized(ipcLock) {
             ipcWriter = null
-            try {
-                ipcChannel?.close()
-            } catch (_: IOException) {
-                Unit
-            }
-            ipcChannel = null
+            ipcChannel.also { ipcChannel = null }
+        }
+        try {
+            channel?.close()
+        } catch (_: IOException) {
+            Unit
         }
         ipcSocketDirectory?.let { directory ->
             try {
@@ -490,6 +561,6 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     }
 
     private companion object {
-        val SUPPORTED_PLAYBACK_SPEEDS = setOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+        val SUPPORTED_PLAYBACK_SPEEDS = setOf(0.25f, 0.5f, 0.75f, 1f, 1.25f, 1.5f, 1.75f, 2f)
     }
 }

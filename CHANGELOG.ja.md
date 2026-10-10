@@ -5,6 +5,33 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
+## [2.0.0] - 草案（1.6.2以降の変更・未リリース）
+
+1.6.2以降の2.0.0向け変更をまとめた草案です。公開前に最終Release commitと
+実際に検証したtarget結果に合わせて確認・更新してください。
+
+### 追加
+
+- 退役した Flutter アプリと bridge を Kotlin Multiplatform / Compose に置き換え、Rust parser・core・FFI を含む構成を現在の唯一のアプリ／配布経路にしました。
+- Android／Desktop 共通のギャラリー、検索、タグ・日付フィルター、ページング、ノート詳細、Obsidian link 対応、ノート構造設定を追加しました。
+- 再生／一時停止、シーク、0.25〜2倍速、ループ、ミュートを操作できる Compose 動画コントロールを追加しました。Linux は埋め込み動画の描画に mpv を使用します。
+- Android universal／arm64-v8a／x86_64 APK、Linux x86_64／AArch64 Desktop bundle、Windows x64 package 作成workflowを追加しました。
+- Linux XDG Desktop Portal のシステム配色・アクセントカラー、可変／固定ギャラリー列数、英語／日本語UI、設定のimport/exportを追加しました。
+- オフラインで確認できる第三者ライセンス情報を配布物に同梱しました。
+
+### 修正
+
+- Android SAF のメディア処理に provider preview、上限付きthumbnail decode、非公開cache、動画フレームの追加取得経路を導入して改善しました。
+- Windows のメディア起動、ファイルマネージャーでの選択、Obsidian link、動画thumbnail、システムアクセント更新、Desktop archive launcher 検出を修正しました。
+- Android／Desktop の動画ループ・再開、viewer navigation と Back 操作、ギャラリー／詳細の上部バー、cacheとpathの上限・検証を改善しました。
+- ピュアブラック時も Material You の色味を維持し、動画のシークと操作表示を改善しました。
+
+### 変更
+
+- ギャラリー、設定ナビゲーション、フィルター、ノート詳細、theme、各種操作を Material 3 Expressive と幅に応じたレイアウトに再構成しました。
+- Vault は読み取り専用とし、設定・index・cache はアプリの非公開領域に保存します。Vault 内へ書き込みません。
+- 現行 Material 3 Expressive 依存に合わせて Android の最小対応を API 24 にし、`VERSION` を唯一のリリース版数源に統一しました。
+
 ## [2.0.0b4] - 2026-10-10 (Beta)
 
 ### 追加

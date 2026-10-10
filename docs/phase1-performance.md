@@ -119,6 +119,16 @@ video thumbnails try provider previews and multiple sync-frame timestamps to
 handle MP4 files whose first frame is not decodable. These are implementation
 changes, not measured performance results; rerun a generated fictional
 image/video fixture benchmark before claiming that slow-media loading is fixed.
+Within an Android session, resolved media locations are memoized by media ID and
+cleared on rescan to avoid repeating the Rust lookup while scrolling back to
+already visited media. This change has not yet been measured separately.
+Compose gallery and viewer state holders now dispatch repository/FFI reads to
+an injectable background dispatcher, and rapid tag changes are coalesced before
+refreshing the gallery and category counts. This prevents synchronous Rust
+calls from blocking the UI and avoids redundant filter requests; it does not
+reduce the underlying cold SAF read/decode cost. Cold note and display-sized
+image loading still need device measurements before claiming that the
+Dart-versus-Kotlin latency gap is resolved.
 
 ## KMP Android SAF and Compose acceptance
 
@@ -173,3 +183,35 @@ search, opening note details, and a status-bar overlap fix in the viewer.
 The fixture had no media, so KMP thumbnail-cache hits were not applicable;
 Android video playback and thumbnail behavior were separately verified with a
 fictional media fixture.
+
+The current image-loading path now lets independent Rust thumbnail decodes run
+concurrently while serializing only private-cache filesystem operations.
+Android viewer loading requests the selected image before sequentially
+prefetching neighboring images; neighbor prefetches share the bounded decode
+permit used by gallery thumbnails. When no gallery preview is already cached,
+Android and Desktop viewers now request the viewer-sized image directly rather
+than separately generating/decoding a gallery-sized image first. These
+scheduling changes have not been benchmarked against a representative media
+Vault, so they do not establish Dart parity or a measured latency improvement;
+cold provider I/O and image decode timings remain to be measured on the target
+devices. The viewer now resolves adjacent image locations concurrently and
+starts bounded Android decode / Desktop thumbnail prefetch for those neighbors
+in the background, so a subsequent image switch can use the warm decoded-image
+cache. This reduces wait only when prefetch completes before the user switches;
+it can increase background I/O and has not yet been measured on-device.
+
+Gallery thumbnail requests are now gated by the Lazy Grid viewport: Android and
+Desktop defer loading tiles outside the visible range and start requests as
+tiles enter it. This prioritizes the current page without changing image
+resolution or encoding. The viewport scheduling change has not been benchmarked
+on-device.
+
+Image work now uses a bounded priority scheduler on both platforms: the image
+currently open in the viewer takes precedence over visible gallery tiles, and
+neighboring viewer prefetches run last. Desktop image work is capped at four
+concurrent loads rather than competing without a shared limit. Identical
+in-flight requests for the same media and requested size share one provider
+read/decode, while decoded results continue to use the existing bounded memory
+caches. These scheduling and request-coalescing changes have automated
+regression coverage but have not been benchmarked on representative media
+Vaults.

@@ -76,6 +76,15 @@ object SettingsTransferCodec {
                         put("useSystemColor", JsonPrimitive(settings.appearance.useSystemColor))
                         put("pureBlack", JsonPrimitive(settings.appearance.pureBlack))
                         put(
+                            "font",
+                            JsonPrimitive(
+                                when (settings.appearance.font) {
+                                    FontPreference.SYSTEM -> "system"
+                                    FontPreference.GOOGLE_SANS_FLEX -> "google_sans_flex"
+                                },
+                            ),
+                        )
+                        put(
                             "language",
                             JsonPrimitive(
                                 when (settings.appearance.language) {
@@ -139,6 +148,16 @@ object SettingsTransferCodec {
             val useSystemColor = optionalBoolean(appearance, "useSystemColor", false)
                 ?: return null
             val pureBlack = appearance["pureBlack"]?.jsonPrimitive?.booleanOrNull ?: return null
+            val font = when (
+                appearance["font"]?.let { value ->
+                    (value as? JsonPrimitive)?.takeIf(JsonPrimitive::isString)?.content
+                        ?: return null
+                } ?: "system"
+            ) {
+                "system" -> FontPreference.SYSTEM
+                "google_sans_flex" -> FontPreference.GOOGLE_SANS_FLEX
+                else -> return null
+            }
             if (!hasFlutterRequiredTagSettings(tags)) return null
             GalleryTagColorCodec.decodeRules(json.encodeToString(JsonElement.serializer(), tags))
             GalleryTagCategoryCodec.decodeSettings(
@@ -214,6 +233,7 @@ object SettingsTransferCodec {
                     language = language,
                     useSystemColor = useSystemColor,
                     pureBlack = pureBlack,
+                    font = font,
                 ),
                 pageSize = pageSize,
                 fixedColumnCount = fixedColumnCount,
@@ -322,6 +342,11 @@ object SettingsTransferCodec {
             ?: return null
         val language = LanguagePreference.entries.firstOrNull { it.name == values["language"] }
             ?: return null
+        val font = when (values["font"] ?: "SYSTEM") {
+            "SYSTEM" -> FontPreference.SYSTEM
+            "GOOGLE_SANS_FLEX" -> FontPreference.GOOGLE_SANS_FLEX
+            else -> return null
+        }
         val pageSize = values["page_size"]?.toIntOrNull()
             ?.takeIf { it in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE }
             ?: return null
@@ -339,6 +364,7 @@ object SettingsTransferCodec {
                 language = language,
                 useSystemColor = boolean("use_system_color") ?: return null,
                 pureBlack = boolean("pure_black") ?: return null,
+                font = font,
             ),
             pageSize = pageSize,
             galleryTagPrefixes = prefixes,
@@ -358,5 +384,5 @@ object SettingsTransferCodec {
         "show_tile_position",
         "show_counts",
     )
-    private val LEGACY_KEYS = LEGACY_REQUIRED_KEYS + "gallery_tag_prefixes"
+    private val LEGACY_KEYS = LEGACY_REQUIRED_KEYS + setOf("gallery_tag_prefixes", "font")
 }

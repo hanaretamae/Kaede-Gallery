@@ -9,8 +9,24 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import androidx.compose.ui.geometry.Offset
 
 class GalleryViewerScreenTest {
+    @Test
+    fun zoomKeepsThePointUnderTheCursorFixedAndResetsAtNaturalScale() {
+        assertEquals(
+            Offset(-100f, -60f),
+            galleryViewerZoomOffset(Offset.Zero, Offset(100f, 60f), 1f, 2f),
+        )
+        assertEquals(
+            Offset(10f, 20f),
+            galleryViewerZoomOffset(Offset(10f, 20f), Offset(10f, 20f), 2f, 4f),
+        )
+        assertEquals(
+            Offset.Zero,
+            galleryViewerZoomOffset(Offset(10f, 20f), Offset(100f, 60f), 2f, 1f),
+        )
+    }
     @Test
     fun appliesConfiguredNoteDetailOrderAndVisibility() {
         val structure = GalleryNoteStructureSettings(

@@ -6,6 +6,11 @@ plugins {
 
 sourceSets.main {
     resources.srcDir(rootProject.file("shared-assets"))
+    resources.srcDir(rootProject.layout.buildDirectory.dir("generated/distribution-assets"))
+}
+
+tasks.named("processResources") {
+    dependsOn(rootProject.tasks.named("prepareDistributionNotices"))
 }
 
 val targetLinuxArchitecture = providers.gradleProperty("kaede.desktop.linuxArchitecture").orNull
@@ -33,6 +38,7 @@ dependencies {
     implementation(libs.jna)
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(compose.desktop.uiTestJUnit4)
 }
 
 compose.desktop {

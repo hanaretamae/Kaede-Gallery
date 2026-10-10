@@ -18,11 +18,12 @@ internal class DesktopSessionHandle(
         get() = delegate.initialScan
 
     override suspend fun rescan(): RepositoryResult<GalleryScanSummary> =
-        delegate.rescan()
+        delegate.rescan().also { DesktopImageMemoryCache.clear() }
 
     override fun close() {
         if (closed.compareAndSet(false, true)) {
             delegate.close()
+            DesktopImageMemoryCache.clear()
         }
     }
 }

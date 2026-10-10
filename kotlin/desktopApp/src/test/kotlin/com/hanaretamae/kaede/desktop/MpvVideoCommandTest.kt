@@ -34,6 +34,7 @@ class MpvVideoCommandTest {
                 "--sub-auto=no",
                 "--audio-file-auto=no",
                 "--loop-file=no",
+                "--keep-open=yes",
                 "--force-window=yes",
                 "--vo=x11",
                 "--wid=42",
@@ -68,5 +69,13 @@ class MpvVideoCommandTest {
         assertEquals("01:05", formatDesktopVideoDuration(65f))
         assertEquals("01:02:03", formatDesktopVideoDuration(3_723f))
         assertEquals("00:00", formatDesktopVideoDuration(Float.NaN))
+    }
+
+    @Test
+    fun ipcCommandsPreserveBooleanArgumentsForPauseAndResume() {
+        assertEquals(
+            """{"command":["set_property","pause",false]}""",
+            encodeMpvCommand(listOf("set_property", "pause", false)),
+        )
     }
 }

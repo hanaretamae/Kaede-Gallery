@@ -12,9 +12,15 @@
 
 ## 現在の2.0.0b4の状態
 
-`2.0.0b4` のソースcommitと対応するtagのpushは、production releaseの公開とは別です。tagを確認した後、ローカルのrelease scriptで署名済み成果物とGitHub prereleaseを作成してください。過去の `2.0.0b3` と `2.0.0b2` のtagを移動・作り直ししないでください。
+2026-10-11時点で、公開済みの最新 KMP prerelease は `2.0.0b3` です。`2.0.0b4` のソースcommitと対応するtagはありますが、そのGitHub Releaseは未公開です。tagを確認し、以下のRelease gateを満たしてからローカルのrelease scriptを実行してください。過去の `2.0.0b3` と `2.0.0b2` のtagを移動・作り直ししないでください。
 
 タグ作成後に許されるのは、`CHANGELOG.md` 以外のMarkdownドキュメント変更だけです。リリーススクリプトは現在のコミットと `origin/main` が一致することも検査します。リリースノートとドキュメント以外のリリースコードはタグ時点のままにしてください。
+
+## 安定版2.0.0の準備
+
+リポジトリの現在のバージョンは `2.0.0b4` です。このガイドの更新では `VERSION` を変更せず、tag作成や公開も行いません。`docs/design.md` のPhase 14 acceptance gate（必要なprereleaseとWindows archiveの確認を含む）が満たされるまで、安定版Releaseを開始しないでください。その後、`CHANGELOG.md` の草案をrelease commitと検証結果に合わせてレビュー・確定し、`VERSION` を `2.0.0` に更新したうえで、両方をレビュー済みRelease commitに含めます。そのcommitをpushしてから一致する `2.0.0` tagを作成・pushし、下記の完全なローカルRelease手順を `tools/release.sh 2.0.0` で実行します。`2.0.0` はbetaではなく安定版として公開されます。
+
+公開前に、Android APKの署名とpackage permissions、Linux x86_64/AArch64 bundle、生成されたlicense notices、チェックサム、Kotlin/Rust test結果を確認してください。Windows archiveは安定版GitHub Release作成後に添付します。実行が完了したtarget testだけを記録し、Windows実機や未検証のhardware/providerの動作は未確認のままとしてください。公開後はReleaseページ上の実ファイルとチェックサムも確認してください。
 
 ## ローカルLinuxで完全なリリースを作成
 

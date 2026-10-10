@@ -27,6 +27,13 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                 LanguagePreference.ENGLISH.name -> LanguagePreference.ENGLISH
                 else -> return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
             }
+            val font = when (
+                preferences.getString(KEY_FONT, FontPreference.SYSTEM.name)
+            ) {
+                FontPreference.SYSTEM.name -> FontPreference.SYSTEM
+                FontPreference.GOOGLE_SANS_FLEX.name -> FontPreference.GOOGLE_SANS_FLEX
+                else -> return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            }
             val pageSize = preferences.getInt(KEY_PAGE_SIZE, GallerySettings.DEFAULT_PAGE_SIZE)
             if (pageSize !in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE) {
                 return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
@@ -76,6 +83,7 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                             AppearanceSettings().useSystemColor,
                         ),
                         pureBlack = preferences.getBoolean(KEY_PURE_BLACK, false),
+                        font = font,
                     ),
                     pageSize = pageSize,
                     fixedColumnCount = fixedColumnCount,
@@ -104,6 +112,7 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                     .putString(KEY_LANGUAGE, settings.appearance.language.name)
                     .putBoolean(KEY_SYSTEM_COLOR, settings.appearance.useSystemColor)
                     .putBoolean(KEY_PURE_BLACK, settings.appearance.pureBlack)
+                    .putString(KEY_FONT, settings.appearance.font.name)
                     .putInt(KEY_PAGE_SIZE, settings.pageSize)
                     .putInt(KEY_FIXED_COLUMN_COUNT, settings.fixedColumnCount)
                     .putString(
@@ -149,6 +158,7 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
         const val KEY_LANGUAGE = "language"
         const val KEY_SYSTEM_COLOR = "use_system_color"
         const val KEY_PURE_BLACK = "pure_black"
+        const val KEY_FONT = "font"
         const val KEY_PAGE_SIZE = "page_size"
         const val KEY_FIXED_COLUMN_COUNT = "fixed_column_count"
         const val KEY_GALLERY_TAG_PREFIXES = "gallery_tag_prefixes"

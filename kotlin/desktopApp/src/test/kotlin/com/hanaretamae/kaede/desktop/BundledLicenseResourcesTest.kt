@@ -17,13 +17,39 @@ class BundledLicenseResourcesTest {
         val rust = classLoader.getResourceAsStream("licenses/RUST-DEPENDENCY-LICENSES.txt")
             ?.bufferedReader()
             ?.use { it.readText() }
+        val googleSansFlex =
+            classLoader.getResourceAsStream("licenses/GoogleSansFlex-OFL.txt")
+                ?.bufferedReader()
+                ?.use { it.readText() }
+        val application =
+            classLoader.getResourceAsStream("licenses/Kaede-Gallery-MIT.txt")
+                ?.bufferedReader()
+                ?.use { it.readText() }
+        val notices =
+            classLoader.getResourceAsStream("licenses/THIRD_PARTY_NOTICES.md")
+                ?.bufferedReader()
+                ?.use { it.readText() }
+        val runtime =
+            classLoader.getResourceAsStream("licenses/Runtime-LICENSES.txt")
+                ?.bufferedReader()
+                ?.use { it.readText() }
 
         assertNotNull(apache)
         assertNotNull(lgpl)
         assertNotNull(rust)
+        assertNotNull(googleSansFlex)
+        assertNotNull(application)
+        assertNotNull(notices)
+        assertNotNull(runtime)
         assertTrue(apache.contains("Apache License"))
         assertTrue(lgpl.contains("GNU LESSER GENERAL PUBLIC LICENSE"))
         assertTrue(rust.contains("Mozilla Public License Version 2.0"))
         assertTrue(rust.contains("uniffi_pipeline 0.32.0"))
+        assertTrue(googleSansFlex.contains("SIL OPEN FONT LICENSE Version 1.1"))
+        assertTrue(application.contains("MIT License"))
+        assertTrue(notices.contains("Platform and media dependencies"))
+        assertTrue(runtime.contains("GPL-3.0.txt"))
+        assertTrue(runtime.contains("LGPL-3.0.txt"))
+        assertTrue(runtime.contains("MICROSOFT-WINDOWS-SDK-REDIST.txt"))
     }
 }

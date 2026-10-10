@@ -767,10 +767,16 @@ impl GallerySession {
     }
 
     pub fn thumbnail(&self, media_id: i64, size: u32) -> Result<Option<Vec<u8>>, GalleryError> {
-        self.gallery
+        let request = self
+            .gallery
             .lock()
             .map_err(|_| GalleryError::OperationFailed)?
-            .get_thumbnail(media_id, size, Path::new(&self.cache_path))
+            .prepare_thumbnail(media_id, size, Path::new(&self.cache_path))
+            .map_err(GalleryError::from)?;
+        request
+            .map(|request| request.load())
+            .transpose()
+            .map(Option::flatten)
             .map_err(GalleryError::from)
     }
 }
