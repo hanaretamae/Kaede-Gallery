@@ -3,4 +3,5 @@ package com.hanaretamae.kaede.core.rust
 
 internal object AndroidSafLimits {
     const val MAX_CONCURRENT_NOTE_READS = 16
+    const val MAX_SCAN_NOTE_BYTES = 536870912L
 }

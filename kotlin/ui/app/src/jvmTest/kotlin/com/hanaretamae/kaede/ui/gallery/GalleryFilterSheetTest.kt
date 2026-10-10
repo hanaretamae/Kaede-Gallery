@@ -18,12 +18,14 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
 import com.hanaretamae.kaede.core.model.GalleryCategory
+import com.hanaretamae.kaede.core.model.GalleryCategoryOption
 import com.hanaretamae.kaede.core.model.GalleryNoteDetail
 import com.hanaretamae.kaede.core.model.GalleryPage
 import com.hanaretamae.kaede.core.model.GalleryQuery
 import com.hanaretamae.kaede.core.model.MediaId
 import com.hanaretamae.kaede.core.model.NoteSummary
 import com.hanaretamae.kaede.core.model.NoteId
+import com.hanaretamae.kaede.core.model.VirtualFilter
 import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
@@ -89,7 +91,24 @@ class GalleryFilterSheetTest {
             override suspend fun queryPage(query: GalleryQuery) =
                 RepositoryResult.Success(GalleryPage(emptyList(), 0, 0))
             override suspend fun categories(query: GalleryQuery) =
-                RepositoryResult.Success(emptyList<GalleryCategory>())
+                RepositoryResult.Success(
+                    listOf(
+                        GalleryCategory(
+                            path = "source",
+                            displayName = "Source",
+                            options = listOf(
+                                GalleryCategoryOption(
+                                    name = "art",
+                                    fullTag = "source/art",
+                                    count = 1,
+                                    disabled = false,
+                                    virtualFilter = VirtualFilter.MULTIPLE_MEDIA,
+                                ),
+                            ),
+                            count = 1,
+                        ),
+                    ),
+                )
             override suspend fun noteDetail(noteId: NoteId, safContent: ByteArray?) =
                 RepositoryResult.Success<GalleryNoteDetail?>(null)
             override suspend fun notePath(noteId: NoteId) = RepositoryResult.Success<String?>(null)
@@ -106,16 +125,33 @@ class GalleryFilterSheetTest {
         val strings = EnglishGalleryStrings
         compose.onNodeWithContentDescription(strings.filters).performClick()
         compose.onNodeWithContentDescription(strings.close).assertDoesNotExist()
+        val windowWidth = compose.onAllNodes(isRoot()).fetchSemanticsNodes().maxOf {
+            it.boundsInRoot.width
+        }
+        val collapsedBounds = compose.onNodeWithTag("GalleryFilterSheet")
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(windowWidth, collapsedBounds.width, 1f)
+        assertEquals(0f, collapsedBounds.left, 1f)
         compose.onNodeWithText(strings.filters).performTouchInput {
             swipe(center, center - Offset(0f, 450f), durationMillis = 500)
         }
         compose.onNodeWithContentDescription(strings.close).assertIsDisplayed()
         val expandedBounds = compose.onNodeWithTag("GalleryFilterSheet").fetchSemanticsNode().boundsInRoot
-        val windowWidth = compose.onAllNodes(isRoot()).fetchSemanticsNodes().maxOf { it.boundsInRoot.width }
         assertEquals(windowWidth, expandedBounds.width, 1f)
+        assertEquals(0f, expandedBounds.left, 1f)
+        val sortSurface = compose.onNodeWithTag("GalleryFilterSortSurface").fetchSemanticsNode().boundsInRoot
+        assertEquals(0f, sortSurface.left, 1f)
+        assertEquals(windowWidth, sortSurface.right, 1f)
         val searchField = compose.onNodeWithText(strings.searchNotes).fetchSemanticsNode().boundsInRoot
+        assertEquals(0f, searchField.left, 1f)
+        val tagSearchField = compose.onNodeWithText(strings.filterSearch).fetchSemanticsNode().boundsInRoot
+        assertEquals(0f, tagSearchField.left, 1f)
+        assertEquals(windowWidth, tagSearchField.right, 1f)
+        val categoryLabel = compose.onNodeWithText("Source").fetchSemanticsNode().boundsInRoot
+        assertEquals(0f, categoryLabel.left, 1f)
         val searchAction = compose.onNodeWithContentDescription(strings.applySearch).fetchSemanticsNode().boundsInRoot
         val clearAction = compose.onNodeWithContentDescription(strings.clearAllSearchAndFilters).fetchSemanticsNode().boundsInRoot
+        assertEquals(windowWidth, clearAction.right, 1f)
         assertTrue(searchAction.top < searchField.bottom)
         assertTrue(clearAction.left > searchAction.left)
         compose.onNodeWithText(strings.filters).performTouchInput {

@@ -549,7 +549,7 @@ class AndroidSafVaultScanner(context: Context) {
                         }
                         val remaining = minOf(
                             MAX_BATCH_BYTES - reservedBatchBytes,
-                            MAX_SCAN_BYTES - scannedContentBytes,
+                            AndroidSafLimits.MAX_SCAN_NOTE_BYTES - scannedContentBytes,
                         ).coerceAtLeast(0)
                         val allocation = minOf(
                             expectedBytes,
@@ -719,7 +719,6 @@ class AndroidSafVaultScanner(context: Context) {
         const val MAX_NOTE_BYTES = 2 * 1024 * 1024
         const val MAX_BATCH_NOTES = 128
         const val MAX_BATCH_BYTES = 16L * 1024 * 1024
-        const val MAX_SCAN_BYTES = 128L * 1024 * 1024
         const val MAX_MEDIA_BYTES = 64 * 1024 * 1024
         const val MAX_CONCURRENT_THUMBNAIL_DECODES = 4
         private const val MAX_THUMBNAIL_MEMORY_BYTES = 32 * 1024 * 1024

@@ -7,5 +7,5 @@
   "max_read_batch_notes": 128,
   "max_read_batch_bytes": 16777216,
   "max_concurrent_note_reads": 16,
-  "max_scan_note_bytes": 134217728
+  "max_scan_note_bytes": 536870912
 }

@@ -138,7 +138,9 @@ selected tree and relative document paths before opening content. Rust
 revalidates every submitted relative path and enforces the existing shared
 limits: 100,000 entries, depth 64, 32 MiB aggregate relative-path bytes,
 2 MiB per note, 128 notes / 16 MiB per read batch, 16 concurrent note
-reads, and 128 MiB total note content per scan.
+reads, and 512 MiB total note content per scan.
+The scan-content bound is generated from the shared SAF limits file and is
+enforced while Kotlin reads notes and Rust stages batches.
 
 The current Flutter adapter gathers the bounded scan data before one
 `scan_saf` FFI call. Kotlin uses the staged scan-session operations
