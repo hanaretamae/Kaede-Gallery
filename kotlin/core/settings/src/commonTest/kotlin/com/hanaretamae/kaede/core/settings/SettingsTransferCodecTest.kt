@@ -14,7 +14,7 @@ class SettingsTransferCodecTest {
         val defaultExport = SettingsTransferCodec.encode(GallerySettings())
         assertTrue(defaultExport.contains(""""prefix":"source/art","color":"#4dd0e1""""))
         assertTrue(defaultExport.contains(""""prefix":"source/gender/female","color":"#f59eee""""))
-        assertTrue(defaultExport.contains(""""useSystemColor":false"""))
+        assertTrue(defaultExport.contains(""""useSystemColor":true"""))
         val settings = GallerySettings(
             appearance = AppearanceSettings(
                 theme = ThemePreference.DARK,
@@ -23,6 +23,7 @@ class SettingsTransferCodecTest {
                 pureBlack = true,
             ),
             pageSize = 90,
+            fixedColumnCount = 4,
             galleryTagPrefixes = listOf("portfolio", "set/"),
             showMissingMediaIcon = true,
             showLoadedRange = false,
@@ -35,6 +36,7 @@ class SettingsTransferCodecTest {
         val decoded = assertNotNull(SettingsTransferCodec.decode(encoded))
         assertEquals(settings.appearance, decoded.appearance)
         assertEquals(settings.pageSize, decoded.pageSize)
+        assertEquals(settings.fixedColumnCount, decoded.fixedColumnCount)
         assertEquals(settings.galleryTagPrefixes, decoded.galleryTagPrefixes)
         assertEquals(settings.showMissingMediaIcon, decoded.showMissingMediaIcon)
         assertEquals(settings.showLoadedRange, decoded.showLoadedRange)
@@ -138,6 +140,8 @@ class SettingsTransferCodecTest {
             valid.replace("\"version\":1", "\"version\":2"),
             valid.replace("\"pageSize\":24", "\"pageSize\":0"),
             valid.replace("\"pageSize\":24", "\"pageSize\":\"24\""),
+            valid.replace("\"fixedColumnCount\":0", "\"fixedColumnCount\":13"),
+            valid.replace("\"fixedColumnCount\":0", "\"fixedColumnCount\":1"),
             valid.replace("\"showMissingMediaIcon\":false", "\"showMissingMediaIcon\":\"maybe\""),
             valid.replace("\"includedPrefixes\":[\"*\"]", "\"includedPrefixes\":[false]"),
             valid.replace(

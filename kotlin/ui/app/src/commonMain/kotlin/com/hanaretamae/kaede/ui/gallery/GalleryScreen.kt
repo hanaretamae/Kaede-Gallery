@@ -2,10 +2,14 @@ package com.hanaretamae.kaede.ui.gallery
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -14,6 +18,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -29,25 +35,30 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Tab
-import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.StickyNote2
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DoneAll
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationSearching
@@ -63,6 +74,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
@@ -89,6 +102,24 @@ import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlin.math.floor
+
+private const val GALLERY_GRID_MIN_CELL_WIDTH_DP = 200f
+private const val GALLERY_GRID_HORIZONTAL_PADDING_DP = 24f
+private const val GALLERY_GRID_SPACING_DP = 12f
+private const val GALLERY_GRID_MINIMUM_COLUMN_COUNT = 2
+
+internal fun galleryAdaptiveColumnCount(availableWidthDp: Float): Int {
+    if (!availableWidthDp.isFinite() || availableWidthDp <= 0f) {
+        return GALLERY_GRID_MINIMUM_COLUMN_COUNT
+    }
+    val availableGridWidth = availableWidthDp - GALLERY_GRID_HORIZONTAL_PADDING_DP
+    val count = floor(
+        (availableGridWidth + GALLERY_GRID_SPACING_DP) /
+            (GALLERY_GRID_MIN_CELL_WIDTH_DP + GALLERY_GRID_SPACING_DP),
+    ).toInt()
+    return count.coerceAtLeast(GALLERY_GRID_MINIMUM_COLUMN_COUNT)
+}
 
 data class GalleryStrings(
     val title: String,
@@ -188,7 +219,7 @@ val EnglishGalleryStrings = GalleryStrings(
     image = "Image",
     video = "Video",
     missingMedia = "Media file unavailable",
-    counts = { media, memo, related -> "$media media · $memo memos · $related links" },
+    counts = { media, memo, related -> "$media media · $memo memos · $related related" },
     error = ::englishError,
     count = { first, last, total ->
         if (last == 0L) "0 of $total items" else "$first–$last of $total items"
@@ -243,7 +274,7 @@ val JapaneseGalleryStrings = GalleryStrings(
     image = "画像",
     video = "動画",
     missingMedia = "メディアファイルを利用できません",
-    counts = { media, memo, related -> "画像 $media · メモ $memo · 関連リンク $related" },
+    counts = { media, memo, related -> "画像 $media · メモ $memo · 関連 $related" },
     error = ::japaneseError,
     count = { first, last, total ->
         if (last == 0L) "0 / $total 件" else "$first〜$last / $total 件"
@@ -253,7 +284,7 @@ val JapaneseGalleryStrings = GalleryStrings(
     virtualLabel = ::japaneseVirtualLabel,
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun GalleryScreen(
     stateHolder: GalleryStateHolder,
@@ -265,6 +296,7 @@ fun GalleryScreen(
     showLoadedRange: Boolean = true,
     showCounts: Boolean = true,
     showMissingMediaIcon: Boolean = false,
+    fixedColumnCount: Int = 0,
     vaultName: String? = null,
     includedTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
     hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
@@ -274,8 +306,11 @@ fun GalleryScreen(
 ) {
     val state by stateHolder.state.collectAsState()
     var showFilters by remember(stateHolder) { mutableStateOf(false) }
+    var contentMenuExpanded by remember(stateHolder) { mutableStateOf(false) }
     var tagFilterSearch by remember(stateHolder) { mutableStateOf("") }
-    var listLayout by remember(stateHolder) { mutableStateOf(false) }
+    var expandedCategories by remember(stateHolder) { mutableStateOf(emptySet<String>()) }
+    var expandedBeforeTagSearch by remember(stateHolder) { mutableStateOf<Set<String>?>(null) }
+    var wasSearchingTags by remember(stateHolder) { mutableStateOf(false) }
     var noteSearchDraft by remember(stateHolder, showFilters) {
         mutableStateOf(state.query.searchText)
     }
@@ -288,6 +323,16 @@ fun GalleryScreen(
     var visibleItemIndex by remember(stateHolder) { mutableStateOf(0) }
     val gridState = rememberLazyGridState()
     val jumpFocusRequester = remember { FocusRequester() }
+    LaunchedEffect(tagFilterSearch) {
+        val searching = tagFilterSearch.isNotBlank()
+        if (searching && !wasSearchingTags) {
+            expandedBeforeTagSearch = expandedCategories
+        } else if (!searching && wasSearchingTags) {
+            expandedCategories = expandedBeforeTagSearch.orEmpty()
+            expandedBeforeTagSearch = null
+        }
+        wasSearchingTags = searching
+    }
     LaunchedEffect(stateHolder) {
         stateHolder.start()
     }
@@ -363,102 +408,130 @@ fun GalleryScreen(
         pageSize = state.query.pageSize,
     )
 
-    Scaffold(modifier = modifier.fillMaxSize()) { insets ->
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        topBar = {
+            Column {
+                TopAppBar(
+                    title = {
+                        Column(horizontalAlignment = Alignment.Start) {
+                            Text(
+                                text = vaultName ?: strings.title,
+                                style = MaterialTheme.typography.titleLarge,
+                                maxLines = 1,
+                            )
+                            Text(
+                                text = state.totalCount?.let { total ->
+                                    if (showLoadedRange) {
+                                        visibleRange?.let { range ->
+                                            strings.count(range.first, range.last, total)
+                                        } ?: strings.totalCount(total)
+                                    } else {
+                                        strings.totalCount(total)
+                                    }
+                                } ?: strings.loading,
+                                style = MaterialTheme.typography.labelMedium,
+                            )
+                        }
+                    },
+                    actions = {
+                        val activeCount = state.query.includeTags.size +
+                            state.query.andTags.size +
+                            state.query.excludedTags.size +
+                            state.query.virtualFilters.size +
+                            (if (state.query.searchText.isBlank()) 0 else 1)
+                        BadgedBox(
+                            badge = {
+                                if (activeCount > 0) {
+                                    Badge { Text(activeCount.toString()) }
+                                }
+                            },
+                        ) {
+                            IconButton(onClick = { showFilters = true }) {
+                                Icon(Icons.Filled.FilterList, strings.filters)
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                positionDraft = ""
+                                positionError = false
+                                showJumpDialog = true
+                            },
+                            enabled = !state.loading && (state.totalCount ?: 0L) > 0,
+                        ) {
+                            Icon(Icons.Filled.LocationSearching, strings.jump)
+                        }
+                        Box {
+                            IconButton(
+                                onClick = { contentMenuExpanded = true },
+                            ) {
+                                Icon(
+                                    imageVector = if (state.query.content == GalleryContent.NOTES) {
+                                        Icons.AutoMirrored.Filled.StickyNote2
+                                    } else {
+                                        Icons.Filled.Image
+                                    },
+                                    contentDescription = if (
+                                        state.query.content == GalleryContent.NOTES
+                                    ) {
+                                        strings.notes
+                                    } else {
+                                        strings.media
+                                    },
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = contentMenuExpanded,
+                                onDismissRequest = { contentMenuExpanded = false },
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(strings.notes) },
+                                    leadingIcon = {
+                                        Icon(Icons.AutoMirrored.Filled.StickyNote2, null)
+                                    },
+                                    onClick = {
+                                        contentMenuExpanded = false
+                                        stateHolder.setQuery(
+                                            state.query.copy(content = GalleryContent.NOTES),
+                                        )
+                                    },
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(strings.media) },
+                                    leadingIcon = { Icon(Icons.Filled.Image, null) },
+                                    onClick = {
+                                        contentMenuExpanded = false
+                                        stateHolder.setQuery(
+                                            state.query.copy(content = GalleryContent.MEDIA),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                        IconButton(
+                            onClick = {
+                                val rescan = onRescan
+                                if (rescan == null) {
+                                    stateHolder.refresh()
+                                } else {
+                                    stateHolder.rescan(rescan)
+                                }
+                            },
+                            enabled = !state.loading && !state.rescanning,
+                        ) {
+                            Icon(Icons.Filled.Refresh, strings.reload)
+                        }
+                        IconButton(onClick = onSettings) {
+                            Icon(Icons.Filled.Settings, strings.settings)
+                        }
+                    },
+                )
+            }
+        },
+    ) { insets ->
         Column(
             modifier = Modifier.fillMaxSize().padding(insets),
         ) {
-            TopAppBar(
-                title = {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(
-                            text = vaultName ?: strings.title,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = state.totalCount?.let { total ->
-                                if (showLoadedRange) {
-                                    visibleRange?.let { range ->
-                                        strings.count(range.first, range.last, total)
-                                    } ?: strings.totalCount(total)
-                                } else {
-                                    strings.totalCount(total)
-                                }
-                            } ?: strings.loading,
-                            style = MaterialTheme.typography.labelMedium,
-                        )
-                    }
-                },
-                actions = {
-                    val activeCount = state.query.includeTags.size +
-                        state.query.andTags.size +
-                        state.query.excludedTags.size +
-                        state.query.virtualFilters.size +
-                        (if (state.query.searchText.isBlank()) 0 else 1)
-                    BadgedBox(
-                        badge = {
-                            if (activeCount > 0) {
-                                Badge { Text(activeCount.toString()) }
-                            }
-                        },
-                    ) {
-                        IconButton(onClick = { showFilters = true }) {
-                            Icon(Icons.Filled.FilterList, strings.filters)
-                        }
-                    }
-                    IconButton(
-                        onClick = {
-                            positionDraft = ""
-                            positionError = false
-                            showJumpDialog = true
-                        },
-                        enabled = !state.loading && (state.totalCount ?: 0L) > 0,
-                    ) {
-                        Icon(Icons.Filled.LocationSearching, strings.jump)
-                    }
-                    IconButton(onClick = { listLayout = !listLayout }) {
-                        Icon(
-                            if (listLayout) Icons.Filled.GridView
-                            else Icons.AutoMirrored.Filled.ViewList,
-                            if (listLayout) strings.grid else strings.list,
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            val rescan = onRescan
-                            if (rescan == null) {
-                                stateHolder.refresh()
-                            } else {
-                                stateHolder.rescan(rescan)
-                            }
-                        },
-                        enabled = !state.loading && !state.rescanning,
-                    ) {
-                        Icon(Icons.Filled.Refresh, strings.reload)
-                    }
-                    IconButton(onClick = onSettings) {
-                        Icon(Icons.Filled.Settings, strings.settings)
-                    }
-                },
-            )
-            PrimaryTabRow(
-                selectedTabIndex = if (state.query.content == GalleryContent.NOTES) 0 else 1,
-            ) {
-                Tab(
-                    selected = state.query.content == GalleryContent.NOTES,
-                    onClick = {
-                        stateHolder.setQuery(state.query.copy(content = GalleryContent.NOTES))
-                    },
-                    text = { Text(strings.notes) },
-                )
-                Tab(
-                    selected = state.query.content == GalleryContent.MEDIA,
-                    onClick = {
-                        stateHolder.setQuery(state.query.copy(content = GalleryContent.MEDIA))
-                    },
-                    text = { Text(strings.media) },
-                )
-            }
             if (jumpProgressVisible) {
                 val targetOffset = pendingJumpOffset
                 AlertDialog(
@@ -530,14 +603,21 @@ fun GalleryScreen(
 
                 }
             } else {
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = if (listLayout) GridCells.Fixed(1) else GridCells.Adaptive(minSize = 176.dp),
+                BoxWithConstraints(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
-                    contentPadding = PaddingValues(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = if (fixedColumnCount == 0) {
+                            GridCells.Fixed(galleryAdaptiveColumnCount(maxWidth.value))
+                        } else {
+                            GridCells.Fixed(fixedColumnCount)
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
                     itemsIndexed(
                         items = state.entries,
                         key = { _, entry -> entry.stableKey() },
@@ -561,6 +641,7 @@ fun GalleryScreen(
                                 enabled = !state.loading && state.canLoadMore,
                             ) {
                                 Text(strings.loadMore)
+                            }
                             }
                         }
                     }
@@ -711,63 +792,91 @@ fun GalleryScreen(
                                     )
                             }
                             if (options.isNotEmpty()) {
+                                val expanded = tagFilterSearch.isNotBlank() ||
+                                    category.path in expandedCategories
                                 item(key = "category:${category.path}") {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth()
-                                            .padding(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 4.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Text(
-                                            text = category.displayName,
-                                            style = MaterialTheme.typography.titleSmall,
-                                        )
-                                        Spacer(Modifier.weight(1f))
-                                        Text(
-                                            strings.optionCount(category.count),
-                                            style = MaterialTheme.typography.labelSmall,
-                                        )
-                                    }
-                                }
-                                options.forEach { option ->
-                                    val virtual = option.virtualFilter
-                                    val selectedMode = when {
-                                        virtual != null && virtual in state.query.virtualFilters ->
-                                            strings.includeAny
-                                        virtual != null -> strings.inactive
-                                        option.fullTag in state.query.includeTags -> strings.includeAny
-                                        option.fullTag in state.query.andTags -> strings.includeAll
-                                        option.fullTag in state.query.excludedTags -> strings.exclude
-                                        else -> strings.inactive
-                                    }
-                                    item(
-                                        key = virtual?.let { "virtual:${it.name}" }
-                                            ?: "tag:${option.fullTag}",
-                                    ) {
-                                        FilterOption(
-                                            option = option,
-                                            label = virtual?.let { strings.virtualLabel(it) } ?: option.name,
-                                            category = option.fullTag.takeIf { virtual == null }
-                                                ?: category.displayName,
-                                            selectedMode = selectedMode,
-                                            optionCount = strings.optionCount(option.count),
-                                            color = Color(
-                                                GalleryTagColorCodec.colorFor(
-                                                    option.fullTag,
-                                                    tagColorRules,
-                                                ),
-                                            ),
-                                            strings = strings,
-                                            onClick = {
-                                                if (virtual == null) {
-                                                    stateHolder.cycleTagSelection(option.fullTag)
+                                    ListItem(
+                                        headlineContent = { Text(category.displayName) },
+                                        supportingContent = {
+                                            Text(strings.optionCount(category.count))
+                                        },
+                                        trailingContent = {
+                                            Icon(
+                                                imageVector = if (expanded) {
+                                                    Icons.Filled.ExpandLess
                                                 } else {
-                                                    stateHolder.setVirtualFilter(
-                                                        virtual,
-                                                        virtual !in state.query.virtualFilters,
-                                                    )
+                                                    Icons.Filled.ExpandMore
+                                                },
+                                                contentDescription = null,
+                                            )
+                                        },
+                                        modifier = Modifier.fillMaxWidth().clickable {
+                                                if (tagFilterSearch.isBlank()) {
+                                                    expandedCategories = if (expanded) {
+                                                        expandedCategories - category.path
+                                                    } else {
+                                                        expandedCategories + category.path
+                                                    }
                                                 }
                                             },
-                                        )
+                                        colors = ListItemDefaults.colors(
+                                            containerColor =
+                                                MaterialTheme.colorScheme.surfaceContainerLow,
+                                        ),
+                                    )
+                                }
+                                if (expanded) {
+                                    item(key = "category-options:${category.path}") {
+                                        FlowRow(
+                                            modifier = Modifier.fillMaxWidth()
+                                                .padding(horizontal = 12.dp),
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(4.dp),
+                                        ) {
+                                            options.forEach { option ->
+                                                val virtual = option.virtualFilter
+                                                val selectedMode = when {
+                                                    virtual != null &&
+                                                        virtual in state.query.virtualFilters ->
+                                                        strings.includeAny
+                                                    virtual != null -> strings.inactive
+                                                    option.fullTag in state.query.includeTags ->
+                                                        strings.includeAny
+                                                    option.fullTag in state.query.andTags ->
+                                                        strings.includeAll
+                                                    option.fullTag in state.query.excludedTags ->
+                                                        strings.exclude
+                                                    else -> strings.inactive
+                                                }
+                                                FilterOption(
+                                                    option = option,
+                                                    label = virtual?.let {
+                                                        strings.virtualLabel(it)
+                                                    } ?: option.name,
+                                                    selectedMode = selectedMode,
+                                                    optionCount = strings.optionCount(option.count),
+                                                    color = Color(
+                                                        GalleryTagColorCodec.colorFor(
+                                                            option.fullTag,
+                                                            tagColorRules,
+                                                        ),
+                                                    ),
+                                                    strings = strings,
+                                                    onClick = {
+                                                        if (virtual == null) {
+                                                            stateHolder.cycleTagSelection(
+                                                                option.fullTag,
+                                                            )
+                                                        } else {
+                                                            stateHolder.setVirtualFilter(
+                                                                virtual,
+                                                                virtual !in state.query.virtualFilters,
+                                                            )
+                                                        }
+                                                    },
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -835,41 +944,40 @@ fun GalleryScreen(
 
 private const val PREFETCH_THRESHOLD = 4
 private const val MAX_GALLERY_POSITION = 2_147_483_647L
-private const val JUMP_HIGHLIGHT_MILLIS = 1_500L
+private const val JUMP_HIGHLIGHT_MILLIS = 900L
 
 @Composable
 private fun FilterOption(
     option: GalleryCategoryOption,
     label: String,
-    category: String,
     selectedMode: String,
     optionCount: String,
     color: Color,
     strings: GalleryStrings,
     onClick: () -> Unit,
 ) {
-    TextButton(
+    val selected = selectedMode != strings.inactive
+    FilterChip(
+        selected = selected,
         onClick = onClick,
-        enabled = !option.disabled || selectedMode != strings.inactive,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(
-                    Modifier.padding(end = 8.dp).size(10.dp)
-                        .background(color, CircleShape),
+        enabled = !option.disabled || selected,
+        leadingIcon = {
+            if (selected) {
+                Icon(
+                    imageVector = when (selectedMode) {
+                        strings.includeAny -> Icons.Filled.Check
+                        strings.includeAll -> Icons.Filled.DoneAll
+                        strings.exclude -> Icons.Filled.Block
+                        else -> Icons.Filled.Check
+                    },
+                    contentDescription = selectedMode,
                 )
-                Text(label, style = MaterialTheme.typography.bodyLarge)
-                Spacer(Modifier.weight(1f))
-                Text(optionCount, style = MaterialTheme.typography.labelMedium)
+            } else {
+                Box(Modifier.size(10.dp).background(color, CircleShape))
             }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(category, style = MaterialTheme.typography.bodySmall)
-                Spacer(Modifier.weight(1f))
-                Text(selectedMode, style = MaterialTheme.typography.labelSmall)
-            }
-        }
-    }
+        },
+        label = { Text("$label · $optionCount") },
+    )
 }
 
 @Composable
@@ -884,16 +992,29 @@ private fun GalleryTile(
     highlighted: Boolean,
     onClick: () -> Unit,
 ) {
+    val blinkAlpha = remember { Animatable(0f) }
+    LaunchedEffect(highlighted) {
+        if (highlighted) {
+            repeat(2) {
+                blinkAlpha.animateTo(1f, tween(durationMillis = 180))
+                blinkAlpha.animateTo(0f, tween(durationMillis = 180))
+            }
+        } else {
+            blinkAlpha.snapTo(0f)
+        }
+    }
+    val shape = MaterialTheme.shapes.large
     Card(
         onClick = onClick,
-        colors = CardDefaults.cardColors(
-            containerColor = if (highlighted) {
-                MaterialTheme.colorScheme.secondaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            },
+        modifier = Modifier.border(
+            width = 3.dp,
+            color = MaterialTheme.colorScheme.primary.copy(alpha = blinkAlpha.value),
+            shape = shape,
         ),
-        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+        ),
+        shape = shape,
     ) {
         val (mediaId, isVideo, mediaCount, memoCount, relatedCount, exists) = when (entry) {
             is NoteSummary -> GalleryTileData(
@@ -914,7 +1035,7 @@ private fun GalleryTile(
             )
         }
         Box(
-            modifier = Modifier.fillMaxWidth().height(220.dp)
+            modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f)
                 .background(MaterialTheme.colorScheme.surfaceContainerLow),
             contentAlignment = Alignment.Center,
         ) {
@@ -1053,12 +1174,12 @@ private fun englishVirtualLabel(filter: VirtualFilter): String = when (filter) {
     VirtualFilter.MULTIPLE_MEDIA -> "Multiple media"
     VirtualFilter.HAS_MEMO -> "Has memo"
     VirtualFilter.HAS_VIDEO -> "Has video"
-    VirtualFilter.HAS_RELATED -> "Has related links"
+    VirtualFilter.HAS_RELATED -> "Has related"
 }
 
 private fun japaneseVirtualLabel(filter: VirtualFilter): String = when (filter) {
     VirtualFilter.MULTIPLE_MEDIA -> "複数メディア"
     VirtualFilter.HAS_MEMO -> "メモあり"
     VirtualFilter.HAS_VIDEO -> "動画あり"
-    VirtualFilter.HAS_RELATED -> "関連リンクあり"
+    VirtualFilter.HAS_RELATED -> "関連あり"
 }

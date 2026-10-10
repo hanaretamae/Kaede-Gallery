@@ -27,13 +27,14 @@ fun LanguagePreference.resolve(systemLanguage: LanguagePreference): LanguagePref
 data class AppearanceSettings(
     val theme: ThemePreference = ThemePreference.SYSTEM,
     val language: LanguagePreference = LanguagePreference.SYSTEM,
-    val useSystemColor: Boolean = false,
+    val useSystemColor: Boolean = true,
     val pureBlack: Boolean = false,
 )
 
 data class GallerySettings(
     val appearance: AppearanceSettings = AppearanceSettings(),
     val pageSize: Int = DEFAULT_PAGE_SIZE,
+    val fixedColumnCount: Int = 0,
     val galleryTagPrefixes: List<String> = GalleryTagPrefixesCodec.DEFAULT_PREFIXES,
     val includedTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
     val hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
@@ -45,6 +46,12 @@ data class GallerySettings(
 ) {
     init {
         require(pageSize in MIN_PAGE_SIZE..MAX_PAGE_SIZE) { "pageSize is out of range" }
+        require(
+            fixedColumnCount == 0 ||
+                fixedColumnCount in MIN_FIXED_COLUMN_COUNT..MAX_FIXED_COLUMN_COUNT,
+        ) {
+            "fixedColumnCount is out of range"
+        }
         require(GalleryTagPrefixesCodec.isValid(galleryTagPrefixes)) {
             "galleryTagPrefixes are invalid"
         }
@@ -65,5 +72,7 @@ data class GallerySettings(
         const val DEFAULT_PAGE_SIZE = 24
         const val MIN_PAGE_SIZE = 1
         const val MAX_PAGE_SIZE = 500
+        const val MAX_FIXED_COLUMN_COUNT = 12
+        const val MIN_FIXED_COLUMN_COUNT = 2
     }
 }

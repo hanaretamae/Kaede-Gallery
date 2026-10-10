@@ -1,6 +1,7 @@
 package com.hanaretamae.kaede.desktop
 
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,15 +10,30 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.RepeatOne
+import androidx.compose.material.icons.filled.VolumeOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -30,6 +46,7 @@ import androidx.compose.ui.awt.ComposeWindow
 import androidx.compose.ui.awt.LocalAwtWindow
 import androidx.compose.ui.awt.SwingPanel
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toComposeImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
@@ -54,11 +71,13 @@ import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.rust.RustGallerySessionRepository
 import com.hanaretamae.kaede.core.rust.RustVaultSelectionRepository
 import com.hanaretamae.kaede.core.settings.LanguagePreference
+import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
+import com.hanaretamae.kaede.ui.gallery.KaedeGalleryTheme
 
 import java.awt.Desktop
 import java.awt.Dimension
@@ -86,6 +105,7 @@ import javax.swing.Timer
 import javax.swing.filechooser.FileSystemView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicReference
@@ -94,41 +114,46 @@ private const val DESKTOP_VIEWER_THUMBNAIL_SIZE = 1_024
 private const val DESKTOP_GALLERY_THUMBNAIL_SIZE = 512
 internal val DESKTOP_MINIMUM_WINDOW_SIZE = DpSize(540.dp, 720.dp)
 private const val DESKTOP_LAYOUT_DEBUG_PROPERTY = "kaede.debugLayout"
+private const val PORTAL_REFRESH_INTERVAL_MILLIS = 15_000L
 
-fun main() = application {
-    val windowState = rememberWindowState(
-        width = 1_200.dp,
-        height = 820.dp,
-        position = WindowPosition(Alignment.Center),
-        placement = WindowPlacement.Floating,
-    )
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "Kaede Gallery",
-        state = windowState,
-        resizable = true,
-    ) {
-        val density = LocalDensity.current
-        val debugLayout = java.lang.Boolean.getBoolean(DESKTOP_LAYOUT_DEBUG_PROPERTY)
-        var composeRootSize by remember { mutableStateOf(IntSize.Zero) }
-        LaunchedEffect(composeRootSize, windowState.size, density) {
-            if (debugLayout && composeRootSize != IntSize.Zero) {
-                System.err.println(
-                    "Kaede Gallery layout: compose=${composeRootSize.width}x${composeRootSize.height}px, " +
-                        "density=${density.density}, windowState=${windowState.size}",
-                )
-            }
-        }
-        Box(
-            modifier = Modifier.fillMaxSize().onSizeChanged { size ->
-                if (composeRootSize != size) composeRootSize = size
-            },
+fun main() {
+    System.setProperty("awtAppClassName", "com.hanaretamae.kaede")
+    application {
+        val windowState = rememberWindowState(
+            width = 1_200.dp,
+            height = 820.dp,
+            position = WindowPosition(Alignment.Center),
+            placement = WindowPlacement.Floating,
+        )
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = "Kaede Gallery",
+            state = windowState,
+            resizable = true,
         ) {
-            DesktopApplication(windowState) { fullscreen ->
-                windowState.placement = if (fullscreen) {
-                    WindowPlacement.Fullscreen
-                } else {
-                    WindowPlacement.Floating
+            val density = LocalDensity.current
+            val debugLayout = java.lang.Boolean.getBoolean(DESKTOP_LAYOUT_DEBUG_PROPERTY)
+            var composeRootSize by remember { mutableStateOf(IntSize.Zero) }
+            LaunchedEffect(composeRootSize, windowState.size, density) {
+                if (debugLayout && composeRootSize != IntSize.Zero) {
+                    System.err.println(
+                        "Kaede Gallery layout: compose=${composeRootSize.width}x${composeRootSize.height}px, " +
+                            "density=${density.density}, windowState=${windowState.size}",
+                    )
+                }
+
+            }
+            Box(
+                modifier = Modifier.fillMaxSize().onSizeChanged { size ->
+                    if (composeRootSize != size) composeRootSize = size
+                },
+            ) {
+                DesktopApplication(windowState) { fullscreen ->
+                    windowState.placement = if (fullscreen) {
+                        WindowPlacement.Fullscreen
+                    } else {
+                        WindowPlacement.Floating
+                    }
                 }
             }
         }
@@ -141,8 +166,29 @@ private fun DesktopApplication(
     windowState: WindowState,
     onFullscreenChanged: (Boolean) -> Unit,
 ) {
+    val portalAppearance by produceState(DesktopSystemAppearance()) {
+        while (true) {
+            value = withContext(Dispatchers.IO) { readDesktopSystemAppearance() }
+            delay(PORTAL_REFRESH_INTERVAL_MILLIS)
+        }
+    }
     val awtWindow = LocalAwtWindow.current
     val density = LocalDensity.current
+    val awtFrame = awtWindow as? java.awt.Frame
+    if (awtFrame != null) {
+        DisposableEffect(awtFrame) {
+            val previousIcon = awtFrame.iconImage
+            val iconUrl = requireNotNull(
+                Thread.currentThread().contextClassLoader
+                    .getResource("branding/kaede-gallery-icon.png"),
+            ) { "The bundled application icon is missing." }
+            val icon = requireNotNull(ImageIO.read(iconUrl)) {
+                "The bundled application icon is invalid."
+            }
+            awtFrame.iconImage = icon
+            onDispose { awtFrame.iconImage = previousIcon }
+        }
+    }
     val minimumWidthPx = with(density) { DESKTOP_MINIMUM_WINDOW_SIZE.width.roundToPx() }
     val minimumHeightPx = with(density) { DESKTOP_MINIMUM_WINDOW_SIZE.height.roundToPx() }
     if (awtWindow != null) {
@@ -364,6 +410,7 @@ private fun DesktopApplication(
             loading = loading,
             loadingMessage = loadingMessage,
             error = error,
+            systemAppearance = portalAppearance,
             onChooseVault = {
                 scope.launch {
                     loading = true
@@ -395,6 +442,16 @@ private fun DesktopApplication(
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
+            dynamicColorSchemeProvider = { themePreference ->
+                val darkTheme = when (themePreference) {
+                    com.hanaretamae.kaede.core.settings.ThemePreference.SYSTEM ->
+                        portalAppearance.darkTheme ?: false
+                    com.hanaretamae.kaede.core.settings.ThemePreference.LIGHT -> false
+                    com.hanaretamae.kaede.core.settings.ThemePreference.DARK -> true
+                }
+                desktopSystemColorScheme(portalAppearance.accentColor, darkTheme)
+            },
+            systemDarkTheme = portalAppearance.darkTheme,
             vaultName = Path.of(vaultPath).fileName?.toString(),
             scanWarningCount = activeSession.initialScan.warnings.coerceAtMost(Int.MAX_VALUE.toLong())
                 .toInt(),
@@ -665,7 +722,7 @@ internal fun obsidianOpenUri(note: Path): URI? {
     }
 }
 
-private fun isLinuxDesktop(): Boolean =
+internal fun isLinuxDesktop(): Boolean =
     System.getProperty("os.name").lowercase(java.util.Locale.ROOT).contains("linux")
 
 private fun isWindowsDesktop(): Boolean =
@@ -779,9 +836,17 @@ private fun DesktopWelcome(
     loading: Boolean,
     loadingMessage: String?,
     error: String?,
+    systemAppearance: DesktopSystemAppearance,
     onChooseVault: () -> Unit,
 ) {
-    MaterialTheme {
+    KaedeGalleryTheme(
+        appearance = AppearanceSettings(),
+        dynamicColorScheme = desktopSystemColorScheme(
+            systemAppearance.accentColor,
+            systemAppearance.darkTheme ?: isSystemInDarkTheme(),
+        ),
+        systemDarkTheme = systemAppearance.darkTheme,
+    ) {
         Surface(modifier = Modifier.fillMaxSize()) {
             Column(
                 modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -820,17 +885,45 @@ private fun DesktopMediaContent(
         return
     }
     val videoPanel = remember { AtomicReference<MpvVideoPanel?>() }
-    DisposableEffect(videoPanel) {
-        onDispose { videoPanel.getAndSet(null)?.close() }
+    var activeVideoPanel by remember { mutableStateOf<MpvVideoPanel?>(null) }
+    DisposableEffect(videoPanel, mediaState.media.id) {
+        onDispose {
+            videoPanel.getAndSet(null)?.close()
+            activeVideoPanel = null
+        }
     }
     if (mediaState.media.isVideo) {
-        SwingPanel(
-            factory = {
-                MpvVideoPanel().also(videoPanel::set)
-            },
-            update = { panel -> panel.play(mediaState.location) },
-            modifier = Modifier.fillMaxSize(),
-        )
+        Column(modifier = Modifier.fillMaxSize()) {
+            SwingPanel(
+                factory = {
+                    MpvVideoPanel().also {
+                        videoPanel.set(it)
+                        activeVideoPanel = it
+                    }
+                },
+                update = { panel -> panel.play(mediaState.location) },
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+            )
+            val panel = activeVideoPanel
+            if (panel == null) {
+                Text(
+                    "Starting video player…",
+                    modifier = Modifier.padding(16.dp),
+                )
+            } else {
+                val playbackState by panel.playbackState.collectAsState()
+                if (MpvVideoCommand.supportsInAppControls()) {
+                    DesktopVideoControls(
+                        state = playbackState,
+                        onPlayPause = panel::togglePlayback,
+                        onSeek = panel::seekTo,
+                        onSpeed = panel::setPlaybackSpeed,
+                        onLoop = panel::setLooping,
+                        onMute = panel::setMuted,
+                    )
+                }
+            }
+        }
         return
     }
     val imageState by produceState(
@@ -879,6 +972,113 @@ private fun DesktopMediaContent(
             "Image unavailable or unsupported.",
             color = androidx.compose.ui.graphics.Color.White,
         )
+    }
+}
+
+@Composable
+private fun DesktopVideoControls(
+    state: DesktopVideoPlaybackState,
+    onPlayPause: () -> Unit,
+    onSeek: (Float) -> Unit,
+    onSpeed: (Float) -> Unit,
+    onLoop: (Boolean) -> Unit,
+    onMute: (Boolean) -> Unit,
+) {
+    var seekPreview by remember { mutableStateOf<Float?>(null) }
+    var speedMenuExpanded by remember { mutableStateOf(false) }
+    val duration = state.durationSeconds
+    val position = seekPreview ?: state.positionSeconds
+    Surface(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.large,
+    ) {
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+            Slider(
+                value = if (duration > 0f) (position / duration).coerceIn(0f, 1f) else 0f,
+                onValueChange = { fraction ->
+                    seekPreview = fraction * duration
+                },
+                onValueChangeFinished = {
+                    seekPreview?.let(onSeek)
+                    seekPreview = null
+                },
+                enabled = state.connected && duration > 0f,
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                FilledIconButton(
+                    onClick = onPlayPause,
+                    enabled = state.connected,
+                ) {
+                    Icon(
+                        imageVector = if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                        contentDescription = if (state.playing) "Pause video" else "Play video",
+                    )
+                }
+                Text(
+                    "${formatDesktopVideoDuration(position)} / ${formatDesktopVideoDuration(duration)}",
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(start = 12.dp),
+                )
+                Spacer(Modifier.weight(1f))
+                Box {
+                    TextButton(
+                        onClick = { speedMenuExpanded = true },
+                        enabled = state.connected,
+                    ) {
+                        Text("${state.playbackSpeed}×")
+                    }
+                    DropdownMenu(
+                        expanded = speedMenuExpanded,
+                        onDismissRequest = { speedMenuExpanded = false },
+                    ) {
+                        listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                            DropdownMenuItem(
+                                text = { Text("${speed}×") },
+                                onClick = {
+                                    speedMenuExpanded = false
+                                    onSpeed(speed)
+                                },
+                            )
+                        }
+                    }
+                }
+                IconButton(
+                    onClick = { onLoop(!state.looping) },
+                    enabled = state.connected,
+                ) {
+                    Icon(
+                        Icons.Filled.RepeatOne,
+                        contentDescription = if (state.looping) "Turn looping off" else "Loop video",
+                        tint = if (state.looping) {
+                            MaterialTheme.colorScheme.primary
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+                IconButton(
+                    onClick = { onMute(!state.muted) },
+                    enabled = state.connected,
+                ) {
+                    Icon(
+                        imageVector = if (state.muted) {
+                            Icons.Filled.VolumeOff
+                        } else {
+                            Icons.Filled.VolumeUp
+                        },
+                        contentDescription = if (state.muted) "Unmute video" else "Mute video",
+                    )
+                }
+            }
+            state.errorMessage?.let { message ->
+                Text(
+                    text = message,
+                    color = MaterialTheme.colorScheme.error,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 
@@ -935,7 +1135,7 @@ private fun DesktopGalleryThumbnail(
             bitmap = requireNotNull(imageState.bitmap),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(220.dp),
+            modifier = Modifier.fillMaxSize(),
         )
         imageState.error != null -> Text(
             requireNotNull(imageState.error),

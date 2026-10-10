@@ -64,6 +64,7 @@ class DesktopSettingsRepositoryTest {
                     pureBlack = true,
                 ),
                 pageSize = 72,
+                fixedColumnCount = 4,
                 galleryTagPrefixes = listOf("collection/", "portfolio"),
                 includedTagPrefixes = listOf("source"),
                 hiddenTagPrefixes = listOf("private"),

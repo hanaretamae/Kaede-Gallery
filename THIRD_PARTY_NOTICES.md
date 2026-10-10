@@ -25,7 +25,7 @@ excludes build-only and development-only dependencies.
 | ----------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Android APK       | AndroidX Media3, Kotlin/Compose, Rust UniFFI bindings                            | AndroidX and Kotlin/Compose runtime components use Apache-2.0. Rust notices and license texts are included in the APK's offline license viewer and release archive.                                                                            |
 | Windows x64 ZIP   | Compose Desktop, JNA 5.19.1, Rust UniFFI bindings                                | JNA is dual-licensed under Apache-2.0 or LGPL-2.1-or-later. The ZIP includes both license choices. Windows runtime video playback and thumbnail extraction require `mpv` and `ffmpeg` on `PATH`; those executables are not bundled in the ZIP. |
-| Linux Nix package | Compose Desktop, JNA 5.19.1, nixpkgs `mpv`, `ffmpeg`, `libass`, and `libplacebo` | The package wrapper uses the pinned nixpkgs runtime dependencies. FFmpeg is built with GPL support, so the Linux package is distributed under GPL-3.0-or-later; see `GPL-3.0.txt`, `LGPL-2.1.txt`, and `ISC.txt`.                              |
+| Linux Nix package | Compose Desktop, MaterialKolor 6.0.0-beta01, JNA 5.19.1, nixpkgs `mpv`, `ffmpeg`, `libass`, and `libplacebo` | MaterialKolor and its upstream Material Color Utilities are used to generate the KDE/XDG accent-based M3 Expressive color scheme; both use MIT/Apache-2.0 terms. The package wrapper uses pinned nixpkgs runtime dependencies. FFmpeg is built with GPL support, so the Linux package is distributed under GPL-3.0-or-later; see `Apache-2.0.txt`, `GPL-3.0.txt`, `LGPL-2.1.txt`, and `ISC.txt`. |
 
 The Compose Desktop Linux and Windows distributions bundle JNA 5.19.1. Its JAR
 also contains the `META-INF/LICENSE` notice and license references. Source:
@@ -35,7 +35,8 @@ also contains the `META-INF/LICENSE` notice and license references. Source:
 
 The KMP applications package the shared license assets from
 `kotlin/shared-assets/licenses/`. They include Apache-2.0 for Kotlin, Compose,
-AndroidX, and Media3 runtime groups; Apache-2.0 and LGPL-2.1-or-later for JNA;
+AndroidX, Media3, and Material Color Utilities; MIT and Apache-2.0 for
+MaterialKolor; Apache-2.0 and LGPL-2.1-or-later for JNA;
 platform/runtime notices where applicable; and the generated Rust dependency
 report, including the MPL-2.0 UniFFI entry. The Linux Nix package and Windows ZIP
 also include the project license and this notice file.

@@ -145,12 +145,23 @@
 
             installPhase = ''
               runHook preInstall
-              mkdir -p "$out/share/kaede-gallery"
-              cp -a desktopApp/build/compose/binaries/main/app/desktopApp/. \
-                "$out/share/kaede-gallery/"
-              makeWrapper "$out/share/kaede-gallery/bin/desktopApp" "$out/bin/kaede-gallery" \
-                --prefix LD_LIBRARY_PATH : "${
-                  pkgs.lib.makeLibraryPath [
+              app_dir="$out/share/kaede-gallery"
+              mkdir -p "$app_dir"
+              cp -a desktopApp/build/compose/binaries/main/app/desktopApp/. "$app_dir/"
+              rm -f "$app_dir/lib/libapplauncher.so" "$app_dir/lib/app/.jpackage.xml"
+
+              cat > "$app_dir/bin/desktopApp" <<'EOF'
+              #!${pkgs.bash}/bin/bash
+              set -euo pipefail
+              export PATH="${pkgs.lib.makeBinPath [
+                pkgs.ffmpeg
+                pkgs.mpv
+                pkgs.coreutils
+                pkgs.glib
+              ]}''${PATH:+:$PATH}"
+              launcher_path="$(readlink -f -- "$0")"
+              app_dir="$(cd -- "$(dirname -- "$launcher_path")/../lib/app" && pwd -P)"
+              export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
                     pkgs.fontconfig
                     pkgs.glib.out
                     pkgs.libGL
@@ -161,14 +172,19 @@
                     pkgs.libXtst
                     pkgs.libxkbcommon
                     pkgs.stdenv.cc.cc.lib
-                  ]
-                }" \
-                --prefix PATH : "${
-                  pkgs.lib.makeBinPath [
-                    pkgs.ffmpeg
-                    pkgs.mpv
-                  ]
-                }"
+                ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+              exec ${pkgs.jdk17}/bin/java \
+                -Djpackage.app-version=${version} \
+                -Dcompose.application.resources.dir="$app_dir/resources" \
+                -Dcompose.application.configure.swing.globals=true \
+                -Dskiko.library.path="$app_dir" \
+                -cp "$app_dir/*" \
+                com.hanaretamae.kaede.desktop.MainKt "$@"
+              EOF
+              chmod 755 "$app_dir/bin/desktopApp"
+              mkdir -p "$out/bin"
+              ln -s "$app_dir/bin/desktopApp" "$out/bin/kaede-gallery"
+
               install -Dm644 \
                 ${self}/kotlin/shared-assets/branding/kaede-gallery-icon.png \
                 "$out/share/icons/hicolor/512x512/apps/kaede-gallery.png"
@@ -287,7 +303,14 @@
                     cat > "$app_dir/bin/desktopApp" <<'EOF'
                     #!${targetPkgs.bash}/bin/bash
                     set -euo pipefail
-                    app_dir="$(cd -- "$(dirname -- "$0")/../lib/app" && pwd -P)"
+                    export PATH="${targetPkgs.lib.makeBinPath [
+                      targetPkgs.ffmpeg
+                      targetPkgs.mpv
+                      targetPkgs.coreutils
+                      targetPkgs.glib
+                    ]}''${PATH:+:$PATH}"
+                    launcher_path="$(readlink -f -- "$0")"
+                    app_dir="$(cd -- "$(dirname -- "$launcher_path")/../lib/app" && pwd -P)"
                     export LD_LIBRARY_PATH="${targetPkgs.lib.makeLibraryPath [
                       targetPkgs.fontconfig
                       targetPkgs.glib.out
@@ -300,10 +323,6 @@
                       targetPkgs.libxkbcommon
                       targetPkgs.stdenv.cc.cc.lib
                     ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-                    export PATH="${targetPkgs.lib.makeBinPath [
-                      targetPkgs.ffmpeg
-                      targetPkgs.mpv
-                    ]}''${PATH:+:$PATH}"
                     exec "$app_dir/../runtime/bin/java" \
                       -Djpackage.app-version=${version} \
                       -Dcompose.application.resources.dir="$app_dir/resources" \

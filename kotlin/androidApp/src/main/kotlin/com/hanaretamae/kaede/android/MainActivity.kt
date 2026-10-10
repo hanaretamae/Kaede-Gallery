@@ -14,7 +14,8 @@ import android.system.Os
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
+import androidx.activity.BackEventCompat
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
@@ -87,6 +88,7 @@ import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import com.hanaretamae.kaede.ui.gallery.androidDynamicColorScheme
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -131,9 +133,21 @@ private fun AndroidGalleryRoot() {
     var pendingSettingsExport by remember { mutableStateOf<String?>(null) }
     var pendingSettingsExportVault by remember { mutableStateOf<Uri?>(null) }
     var systemBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var backGestureProgress by remember { mutableStateOf(0f) }
 
-    BackHandler(enabled = systemBackHandler != null) {
-        systemBackHandler?.invoke()
+    PredictiveBackHandler(enabled = systemBackHandler != null) { progress ->
+        try {
+            progress.collect { event ->
+                backGestureProgress = if (event.swipeEdge == BackEventCompat.EDGE_RIGHT) {
+                    -event.progress
+                } else {
+                    event.progress
+                }
+            }
+            systemBackHandler?.invoke()
+        } finally {
+            backGestureProgress = 0f
+        }
     }
 
     val settingsImporter = rememberLauncherForActivityResult(
@@ -585,6 +599,7 @@ private fun AndroidGalleryRoot() {
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
+            backGestureProgress = backGestureProgress,
             vaultName = DocumentsContract.getTreeDocumentId(vaultUri)
                 .substringAfter(':', vaultUri.toString())
                 .substringAfterLast('/'),
@@ -961,21 +976,23 @@ private fun AndroidGalleryThumbnail(
         repository,
         mediaId,
     ) {
-        value = try {
-            when (val location = repository.mediaLocation(mediaId)) {
-                is RepositoryResult.Failure -> null
-                is RepositoryResult.Success -> location.value?.let {
-                    if (isVideo) {
-                        scanner.decodeVideoFrame(treeUri, it, MAX_GALLERY_THUMBNAIL_SIZE)
-                    } else {
-                        scanner.decodeImage(treeUri, it, MAX_GALLERY_THUMBNAIL_SIZE)
+        value = scanner.withThumbnailPermit {
+            try {
+                when (val location = repository.mediaLocation(mediaId)) {
+                    is RepositoryResult.Failure -> null
+                    is RepositoryResult.Success -> location.value?.let {
+                        if (isVideo) {
+                            scanner.decodeVideoFrame(treeUri, it, MAX_GALLERY_THUMBNAIL_SIZE)
+                        } else {
+                            scanner.decodeImage(treeUri, it, MAX_GALLERY_THUMBNAIL_SIZE)
+                        }
                     }
                 }
+            } catch (_: IOException) {
+                null
+            } catch (_: SecurityException) {
+                null
             }
-        } catch (_: IOException) {
-            null
-        } catch (_: SecurityException) {
-            null
         }
     }
     if (bitmap != null) {
@@ -983,7 +1000,7 @@ private fun AndroidGalleryThumbnail(
             bitmap = bitmap!!.asImageBitmap(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.fillMaxWidth().height(220.dp),
+            modifier = Modifier.fillMaxSize(),
         )
     }
 }

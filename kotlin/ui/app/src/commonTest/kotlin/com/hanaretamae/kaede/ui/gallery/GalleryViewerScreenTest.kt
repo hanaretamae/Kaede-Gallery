@@ -109,6 +109,20 @@ class GalleryViewerScreenTest {
     }
 
     @Test
+    fun horizontalTrackpadScrollSwitchesMediaButRespectsThresholdAndZoom() {
+        assertEquals(
+            GalleryViewerSwipeDirection.NEXT,
+            galleryViewerTrackpadSwipeDirection(-56f, 48f, imageZoomed = false),
+        )
+        assertEquals(
+            GalleryViewerSwipeDirection.PREVIOUS,
+            galleryViewerTrackpadSwipeDirection(56f, 48f, imageZoomed = false),
+        )
+        assertEquals(null, galleryViewerTrackpadSwipeDirection(47f, 48f, imageZoomed = false))
+        assertEquals(null, galleryViewerTrackpadSwipeDirection(-56f, 48f, imageZoomed = true))
+    }
+
+    @Test
     fun wallpaperActionIsLimitedToSupportedImageFiles() {
         assertTrue(galleryCanSetWallpaper("media/photo.webp", isVideo = false))
         assertFalse(galleryCanSetWallpaper("media/clip.mp4", isVideo = false))

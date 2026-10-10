@@ -63,6 +63,26 @@ class SettingsStateHolderTest {
     }
 
     @Test
+    fun validatesAndPersistsFixedColumnCount() = runTest {
+        val repository = FakeSettingsRepository()
+        val holder = SettingsStateHolder(repository, this)
+        holder.load()
+        advanceUntilIdle()
+
+        holder.setFixedColumnCount(4)
+        advanceUntilIdle()
+
+        assertEquals(4, holder.state.value.settings?.fixedColumnCount)
+        assertEquals(4, repository.saved.single().fixedColumnCount)
+        holder.setFixedColumnCount(GallerySettings.MAX_FIXED_COLUMN_COUNT + 1)
+        advanceUntilIdle()
+        assertEquals(RepositoryError.INVALID_REQUEST, holder.state.value.error)
+        holder.setFixedColumnCount(1)
+        advanceUntilIdle()
+        assertEquals(1, repository.saved.size)
+    }
+
+    @Test
     fun savesValidatedTagDisplayPrefixesWithoutReplacingOtherSettings() = runTest {
         val original = GallerySettings(pageSize = 48, showCounts = false)
         val repository = FakeSettingsRepository(settings = original)

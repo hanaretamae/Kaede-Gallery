@@ -108,6 +108,18 @@ warnings. These Rust CLI figures do not measure Compose rendering, Android SAF
 provider I/O, memory use, or frame timings; the KMP Android measurements below
 cover those platform-specific checks.
 
+## 2026-10-10 thumbnail loading redesign
+
+The Android gallery now asks the SAF provider for a bounded thumbnail before
+reading and decoding the full media stream, limits concurrent gallery thumbnail
+work to four items, and keeps a 32 MiB private in-memory decoded-thumbnail LRU
+alongside the existing bounded private disk cache. Gallery image children now
+fill their measured 3:4 tile instead of forcing a fixed 220dp height. Android
+video thumbnails try provider previews and multiple sync-frame timestamps to
+handle MP4 files whose first frame is not decodable. These are implementation
+changes, not measured performance results; rerun a generated fictional
+image/video fixture benchmark before claiming that slow-media loading is fixed.
+
 ## KMP Android SAF and Compose acceptance
 
 Measured on 2026-10-07 on the connected RMX6688 (Android 16 / API 36,

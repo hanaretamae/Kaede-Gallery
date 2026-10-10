@@ -15,10 +15,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
@@ -26,6 +28,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -52,6 +55,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
@@ -100,6 +104,7 @@ data class GallerySettingsStrings(
     val openSourceLicenses: String,
     val licenseOfflineDescription: String,
     val licenseApacheEntry: String,
+    val licenseMaterialKolorEntry: String,
     val licenseJnaEntry: String,
     val licenseRustEntry: String,
     val licenseTextUnavailable: String,
@@ -115,6 +120,7 @@ data class GallerySettingsStrings(
     val systemColor: String,
     val pureBlack: String,
     val pagination: String,
+    val fixedColumns: String,
     val galleryEligibility: String,
     val galleryTagPrefixes: String,
     val galleryTagPrefixesHelp: String,
@@ -219,7 +225,8 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     importExportReset = "Import, export, and reset",
     openSourceLicenses = "Open-source licenses",
     licenseOfflineDescription = "License texts are bundled with the app and available offline.",
-    licenseApacheEntry = "Apache License 2.0 — Kotlin, Compose, AndroidX, Media3, and JNA option",
+    licenseApacheEntry = "Apache License 2.0 — Kotlin, Compose, AndroidX, Material Color Utilities, Media3, and JNA option",
+    licenseMaterialKolorEntry = "MaterialKolor — MIT License",
     licenseJnaEntry = "JNA — GNU LGPL 2.1-or-later alternative",
     licenseRustEntry = "Rust and UniFFI dependency notices",
     licenseTextUnavailable = "This license text is unavailable in this installation.",
@@ -235,6 +242,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     systemColor = "Use system accent color",
     pureBlack = "Pure black in dark mode",
     pagination = "Gallery list",
+    fixedColumns = "Fixed gallery columns (0 = automatic, or 2–12)",
     galleryEligibility = "Gallery eligibility",
     galleryTagPrefixes = "Target tag prefixes (one per line)",
     galleryTagPrefixesHelp = "Only notes with a matching tag are shown. Leave empty to show no notes.",
@@ -281,7 +289,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     postTextBlock = "Post text",
     postTextEndBlock = "Post text end",
     memoBlock = "Memo",
-    relatedBlock = "Related links",
+    relatedBlock = "Related",
     moveUp = "Up",
     moveDown = "Down",
     showBlock = { "Show $it" },
@@ -339,7 +347,8 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     importExportReset = "設定のインポート・エクスポート・リセット",
     openSourceLicenses = "オープンソースライセンス",
     licenseOfflineDescription = "ライセンス本文はアプリに同梱され、オフラインで確認できます。",
-    licenseApacheEntry = "Apache License 2.0 — Kotlin、Compose、AndroidX、Media3、JNA の選択肢",
+    licenseApacheEntry = "Apache License 2.0 — Kotlin、Compose、AndroidX、Material Color Utilities、Media3、JNA の選択肢",
+    licenseMaterialKolorEntry = "MaterialKolor — MIT License",
     licenseJnaEntry = "JNA — GNU LGPL 2.1以降の選択肢",
     licenseRustEntry = "Rust・UniFFI依存関係の通知",
     licenseTextUnavailable = "このライセンス本文はインストール内で利用できません。",
@@ -355,6 +364,7 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     systemColor = "システムのアクセントカラーを使用",
     pureBlack = "ダークモードで純黒を使用",
     pagination = "ギャラリー一覧",
+    fixedColumns = "ギャラリー列数（0で自動、または2〜12）",
     galleryEligibility = "ギャラリー対象",
     galleryTagPrefixes = "対象タグの接頭辞（1行に1つ）",
     galleryTagPrefixesHelp = "一致するタグを持つノートだけを表示します。空欄では対象ノートがありません。",
@@ -401,7 +411,7 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     postTextBlock = "本文",
     postTextEndBlock = "本文終端",
     memoBlock = "メモ",
-    relatedBlock = "関連リンク",
+    relatedBlock = "関連",
     moveUp = "上へ",
     moveDown = "下へ",
     showBlock = { "$it を表示" },
@@ -446,6 +456,10 @@ internal fun galleryLicenseDocuments(strings: GallerySettingsStrings): List<Gall
         GalleryLicenseDocument(
             title = strings.licenseApacheEntry,
             assetPath = "licenses/Apache-2.0.txt",
+        ),
+        GalleryLicenseDocument(
+            title = strings.licenseMaterialKolorEntry,
+            assetPath = "licenses/MaterialKolor-MIT.txt",
         ),
         GalleryLicenseDocument(
             title = strings.licenseJnaEntry,
@@ -520,12 +534,10 @@ fun GallerySettingsScreen(
             modifier = Modifier.fillMaxSize().padding(insets)
                 .verticalScroll(rememberScrollState()).padding(16.dp),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    selectedLicense?.title ?: page.displayName(strings),
-                    style = MaterialTheme.typography.headlineSmall,
-                )
-                Spacer(Modifier.weight(1f))
+            Row(
+                modifier = Modifier.fillMaxWidth().heightIn(min = 64.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 IconButton(
                     onClick = {
                         when {
@@ -537,6 +549,10 @@ fun GallerySettingsScreen(
                 ) {
                     Icon(Icons.AutoMirrored.Filled.ArrowBack, strings.close)
                 }
+                Text(
+                    selectedLicense?.title ?: page.displayName(strings),
+                    style = MaterialTheme.typography.headlineSmall,
+                )
             }
             if (state.loading && state.settings == null) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
@@ -556,80 +572,116 @@ fun GallerySettingsScreen(
             state.settings?.let { settings ->
                 if (page == GallerySettingsPage.HOME) {
                 SettingsHeading(strings.appearance)
-                Text(strings.theme, style = MaterialTheme.typography.titleMedium)
-                ChoiceRow {
-                    ThemePreference.entries.forEach { value ->
-                        FilterChip(
-                            selected = settings.appearance.theme == value,
-                            onClick = { stateHolder.setTheme(value) },
-                            label = {
-                                Text(
-                                    when (value) {
-                                        ThemePreference.SYSTEM -> strings.system
-                                        ThemePreference.LIGHT -> strings.light
-                                        ThemePreference.DARK -> strings.dark
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        Text(strings.theme, style = MaterialTheme.typography.titleMedium)
+                        ChoiceRow {
+                            ThemePreference.entries.forEach { value ->
+                                FilterChip(
+                                    selected = settings.appearance.theme == value,
+                                    onClick = { stateHolder.setTheme(value) },
+                                    label = {
+                                        Text(
+                                            when (value) {
+                                                ThemePreference.SYSTEM -> strings.system
+                                                ThemePreference.LIGHT -> strings.light
+                                                ThemePreference.DARK -> strings.dark
+                                            },
+                                        )
                                     },
                                 )
-                            },
-                        )
-                    }
-                }
-                Text(strings.language, style = MaterialTheme.typography.titleMedium)
-                ChoiceRow {
-                    LanguagePreference.entries.forEach { value ->
-                        FilterChip(
-                            selected = settings.appearance.language == value,
-                            onClick = { stateHolder.setLanguage(value) },
-                            label = {
-                                Text(
-                                    when (value) {
-                                        LanguagePreference.SYSTEM -> strings.system
-                                        LanguagePreference.JAPANESE -> strings.japanese
-                                        LanguagePreference.ENGLISH -> strings.english
+                            }
+                        }
+                        Text(strings.language, style = MaterialTheme.typography.titleMedium)
+                        ChoiceRow {
+                            LanguagePreference.entries.forEach { value ->
+                                FilterChip(
+                                    selected = settings.appearance.language == value,
+                                    onClick = { stateHolder.setLanguage(value) },
+                                    label = {
+                                        Text(
+                                            when (value) {
+                                                LanguagePreference.SYSTEM -> strings.system
+                                                LanguagePreference.JAPANESE -> strings.japanese
+                                                LanguagePreference.ENGLISH -> strings.english
+                                            },
+                                        )
                                     },
                                 )
-                            },
+                            }
+                        }
+                        SettingsSwitch(
+                            label = strings.systemColor,
+                            checked = settings.appearance.useSystemColor,
+                            onCheckedChange = stateHolder::setUseSystemColor,
                         )
+                        if (settings.appearance.theme != ThemePreference.LIGHT) {
+                            SettingsSwitch(
+                                label = strings.pureBlack,
+                                checked = settings.appearance.pureBlack,
+                                onCheckedChange = stateHolder::setPureBlack,
+                            )
+                        }
                     }
                 }
-                SettingsSwitch(
-                    label = strings.systemColor,
-                    checked = settings.appearance.useSystemColor,
-                    onCheckedChange = stateHolder::setUseSystemColor,
-                )
-                if (settings.appearance.theme != ThemePreference.LIGHT) {
-                    SettingsSwitch(
-                        label = strings.pureBlack,
-                        checked = settings.appearance.pureBlack,
-                        onCheckedChange = stateHolder::setPureBlack,
-                    )
-                }
-                listOf(
+                Spacer(Modifier.height(16.dp))
+                val settingsPages = listOf(
                     GallerySettingsPage.PAGINATION to Icons.Filled.SwapVert,
                     GallerySettingsPage.VAULT to Icons.Filled.Storage,
                     GallerySettingsPage.NOTES to Icons.AutoMirrored.Filled.Label,
                     GallerySettingsPage.ABOUT to Icons.Filled.Info,
                     GallerySettingsPage.DATA to Icons.Filled.Settings,
                     GallerySettingsPage.HELP to Icons.AutoMirrored.Filled.Help,
-                ).forEach { (destination, icon) ->
-                    ListItem(
-                        leadingContent = { Icon(icon, contentDescription = null) },
-                        trailingContent = {
-                            Icon(Icons.Filled.ChevronRight, contentDescription = null)
-                        },
-                        modifier = Modifier.fillMaxWidth().clickable {
-                            page = destination
-                        },
-                        colors = ListItemDefaults.colors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
-                        ),
-                    ) {
-                        Text(destination.displayName(strings))
+                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                ) {
+                    Column {
+                        settingsPages.forEachIndexed { index, (destination, icon) ->
+                            ListItem(
+                                leadingContent = { Icon(icon, contentDescription = null) },
+                                trailingContent = {
+                                    Icon(Icons.Filled.ChevronRight, contentDescription = null)
+                                },
+                                modifier = Modifier.fillMaxWidth().clickable {
+                                    page = destination
+                                },
+                                colors = ListItemDefaults.colors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                                ),
+                            ) {
+                                Text(destination.displayName(strings))
+                            }
+                            if (index < settingsPages.lastIndex) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(start = 72.dp, end = 16.dp),
+                                    color = MaterialTheme.colorScheme.outlineVariant,
+                                )
+                            }
+                        }
                     }
-                    Spacer(Modifier.height(4.dp))
                 }
                 }
 
+                if (page != GallerySettingsPage.HOME) {
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
                 if (page == GallerySettingsPage.NOTES) {
                 SettingsHeading(strings.galleryEligibility)
                 OutlinedTextField(
@@ -1137,6 +1189,32 @@ fun GallerySettingsScreen(
                         !state.saving,
                     modifier = Modifier.padding(top = 8.dp),
                 ) { Text(strings.save) }
+                var fixedColumnDraft by remember(settings.fixedColumnCount) {
+                    mutableStateOf(settings.fixedColumnCount.toString())
+                }
+                OutlinedTextField(
+                    value = fixedColumnDraft,
+                    onValueChange = { value ->
+                        if (value.all { it in '0'..'9' }) fixedColumnDraft = value
+                    },
+                    label = { Text(strings.fixedColumns) },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                )
+                val fixedColumnCount = fixedColumnDraft.toIntOrNull()
+                Button(
+                    onClick = { fixedColumnCount?.let(stateHolder::setFixedColumnCount) },
+                    enabled = fixedColumnCount != null &&
+                        (
+                            fixedColumnCount == 0 ||
+                                fixedColumnCount in
+                                GallerySettings.MIN_FIXED_COLUMN_COUNT..
+                                GallerySettings.MAX_FIXED_COLUMN_COUNT
+                            ) &&
+                        fixedColumnCount != settings.fixedColumnCount &&
+                        !state.saving,
+                    modifier = Modifier.padding(top = 8.dp),
+                ) { Text(strings.save) }
                 SettingsSwitch(
                     label = strings.showLoadedRange,
                     checked = settings.showLoadedRange,
@@ -1296,6 +1374,9 @@ fun GallerySettingsScreen(
                     Text("${strings.noteStructure}: ${strings.noteStructureUsageHelp}")
                     Text("${strings.searchAndFiltering}: ${strings.searchAndFilteringHelp}")
                 }
+                        }
+                    }
+                }
                 if (showScanWarningDetails) {
                     AlertDialog(
                         onDismissRequest = { showScanWarningDetails = false },
@@ -1446,11 +1527,16 @@ private fun SettingsSwitch(
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
 ) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(label, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-    }
+    ListItem(
+        headlineContent = { Text(label) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = null) },
+        modifier = Modifier.fillMaxWidth().toggleable(
+                value = checked,
+                onValueChange = onCheckedChange,
+                role = Role.Switch,
+            ),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    )
 }

@@ -23,10 +23,11 @@ import com.hanaretamae.kaede.core.settings.ThemePreference
 fun KaedeGalleryTheme(
     appearance: AppearanceSettings,
     dynamicColorScheme: ColorScheme? = null,
+    systemDarkTheme: Boolean? = null,
     content: @Composable () -> Unit,
 ) {
     val darkTheme = when (appearance.theme) {
-        ThemePreference.SYSTEM -> isSystemInDarkTheme()
+        ThemePreference.SYSTEM -> systemDarkTheme ?: isSystemInDarkTheme()
         ThemePreference.LIGHT -> false
         ThemePreference.DARK -> true
     }

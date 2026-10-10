@@ -88,6 +88,17 @@ class SettingsStateHolder(
         update { it.copy(pageSize = pageSize) }
     }
 
+    fun setFixedColumnCount(count: Int) {
+        if (
+            count != 0 &&
+            count !in GallerySettings.MIN_FIXED_COLUMN_COUNT..GallerySettings.MAX_FIXED_COLUMN_COUNT
+        ) {
+            mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+            return
+        }
+        update { it.copy(fixedColumnCount = count) }
+    }
+
     fun setGalleryTagPrefixes(prefixes: List<String>) {
         if (!GalleryTagPrefixesCodec.isValid(prefixes)) {
             mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)

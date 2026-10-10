@@ -1,5 +1,11 @@
 package com.hanaretamae.kaede.ui.gallery
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +25,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import com.hanaretamae.kaede.core.model.GalleryEntry
 import com.hanaretamae.kaede.core.model.GalleryQuery
 import com.hanaretamae.kaede.core.model.MediaId
@@ -38,6 +45,13 @@ import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.core.settings.SettingsStateHolder
 import com.hanaretamae.kaede.core.settings.resolve
 import com.hanaretamae.kaede.core.settings.ThemePreference
+import kotlin.math.abs
+
+private sealed interface GalleryDestination {
+    data object Gallery : GalleryDestination
+    data object Settings : GalleryDestination
+    data class Viewer(val entries: List<GalleryEntry>) : GalleryDestination
+}
 
 @Composable
 fun KaedeGalleryApp(
@@ -50,6 +64,7 @@ fun KaedeGalleryApp(
     systemLanguage: LanguagePreference = platformSystemLanguagePreference(),
     dynamicColorScheme: ColorScheme? = null,
     dynamicColorSchemeProvider: (@Composable (ThemePreference) -> ColorScheme?)? = null,
+    systemDarkTheme: Boolean? = null,
     galleryStrings: GalleryStrings? = null,
     viewerStrings: GalleryViewerStrings? = null,
     settingsStrings: GallerySettingsStrings? = null,
@@ -68,6 +83,7 @@ fun KaedeGalleryApp(
     onImportSettings: (((String) -> Unit) -> Unit)? = null,
     onExportSettings: ((String) -> Unit)? = null,
     onBackHandlerChanged: (((() -> Unit)?) -> Unit)? = null,
+    backGestureProgress: Float = 0f,
 ) {
     val scope = rememberCoroutineScope()
     val settingsStateHolder = remember(settingsRepository, scope) {
@@ -176,6 +192,7 @@ fun KaedeGalleryApp(
     KaedeGalleryTheme(
         appearance = settings?.appearance ?: AppearanceSettings(),
         dynamicColorScheme = activeDynamicColorScheme,
+        systemDarkTheme = systemDarkTheme,
     ) {
         if (settings == null) {
             Box(modifier = Modifier.fillMaxSize()) {
@@ -204,24 +221,59 @@ fun KaedeGalleryApp(
                     initialQuery = GalleryQuery(pageSize = settings.pageSize),
                 )
             }
-            when {
-                showSettings -> GallerySettingsScreen(
-                    stateHolder = settingsStateHolder,
-                    onClose = { showSettings = false },
-                    strings = activeSettingsStrings,
-                    loadOnEnter = false,
-                    onExternalLink = onExternalLink,
-                    loadLicenseText = loadLicenseText,
-                    onImportSettings = onImportSettings,
-                    onExportSettings = onExportSettings,
-                    onRescan = rescanWithSummary,
-                    onChangeVault = onChangeVault,
-                    onForgetVault = onForgetVault,
-                    vaultName = vaultName,
-                    scanWarningCount = latestScanWarningCount,
-                )
-                selectedEntries.isNotEmpty() -> {
-                    val entry = selectedEntries.last()
+            val destination = when {
+                showSettings -> GalleryDestination.Settings
+                selectedEntries.isNotEmpty() -> GalleryDestination.Viewer(selectedEntries.toList())
+                else -> GalleryDestination.Gallery
+            }
+            AnimatedContent(
+                targetState = destination,
+                modifier = Modifier.fillMaxSize().graphicsLayer {
+                    val progress = backGestureProgress.coerceIn(-1f, 1f)
+                    translationX = size.width * progress
+                    alpha = 1f - abs(progress) * 0.08f
+                },
+                transitionSpec = {
+                    val target = targetState
+                    val initial = initialState
+                    val forward = when {
+                        target is GalleryDestination.Viewer &&
+                            initial !is GalleryDestination.Viewer -> true
+                        target is GalleryDestination.Viewer &&
+                            initial is GalleryDestination.Viewer ->
+                            target.entries.size > initial.entries.size
+                        target is GalleryDestination.Settings &&
+                            initial !is GalleryDestination.Settings -> true
+                        else -> false
+                    }
+                    if (forward) {
+                        (slideInHorizontally { it / 5 } + fadeIn()) togetherWith
+                            (slideOutHorizontally { -it / 5 } + fadeOut())
+                    } else {
+                        (slideInHorizontally { -it / 5 } + fadeIn()) togetherWith
+                            (slideOutHorizontally { it / 5 } + fadeOut())
+                    }
+                },
+                label = "gallery-navigation",
+            ) { currentDestination ->
+                when (currentDestination) {
+                    GalleryDestination.Settings -> GallerySettingsScreen(
+                        stateHolder = settingsStateHolder,
+                        onClose = { showSettings = false },
+                        strings = activeSettingsStrings,
+                        loadOnEnter = false,
+                        onExternalLink = onExternalLink,
+                        loadLicenseText = loadLicenseText,
+                        onImportSettings = onImportSettings,
+                        onExportSettings = onExportSettings,
+                        onRescan = rescanWithSummary,
+                        onChangeVault = onChangeVault,
+                        onForgetVault = onForgetVault,
+                        vaultName = vaultName,
+                        scanWarningCount = latestScanWarningCount,
+                    )
+                    is GalleryDestination.Viewer -> {
+                    val entry = currentDestination.entries.last()
                     val viewerStateHolder = remember(repository, scope, entry) {
                         GalleryViewerStateHolder(repository, scope, entry)
                     }
@@ -245,22 +297,24 @@ fun KaedeGalleryApp(
                         noteStructure = noteStructure,
                     )
                 }
-                else -> GalleryScreen(
-                    stateHolder = galleryStateHolder,
-                    onEntrySelected = { selectedEntries = selectedEntries + it },
-                    onSettings = { showSettings = true },
-                    vaultName = vaultName,
-                    strings = activeGalleryStrings,
-                    showTilePosition = settings.showTilePosition,
-                    showLoadedRange = settings.showLoadedRange,
-                    showCounts = settings.showCounts,
-                    showMissingMediaIcon = settings.showMissingMediaIcon,
-                    includedTagPrefixes = settings.includedTagPrefixes,
-                    hiddenTagPrefixes = settings.hiddenTagPrefixes,
-                    tagColorRules = tagColorRules,
-                    galleryThumbnail = galleryThumbnail,
-                    onRescan = rescanWithSummary,
-                )
+                    GalleryDestination.Gallery -> GalleryScreen(
+                        stateHolder = galleryStateHolder,
+                        onEntrySelected = { selectedEntries = selectedEntries + it },
+                        onSettings = { showSettings = true },
+                        vaultName = vaultName,
+                        strings = activeGalleryStrings,
+                        showTilePosition = settings.showTilePosition,
+                        showLoadedRange = settings.showLoadedRange,
+                        showCounts = settings.showCounts,
+                        showMissingMediaIcon = settings.showMissingMediaIcon,
+                        fixedColumnCount = settings.fixedColumnCount,
+                        includedTagPrefixes = settings.includedTagPrefixes,
+                        hiddenTagPrefixes = settings.hiddenTagPrefixes,
+                        tagColorRules = tagColorRules,
+                        galleryThumbnail = galleryThumbnail,
+                        onRescan = rescanWithSummary,
+                    )
+                }
             }
         }
 

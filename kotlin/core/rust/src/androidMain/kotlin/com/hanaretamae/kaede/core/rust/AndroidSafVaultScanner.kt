@@ -9,9 +9,12 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.os.Build
+import android.os.CancellationSignal
 import android.os.SystemClock
 import android.provider.DocumentsContract
 import android.util.Log
+import android.util.LruCache
+import android.util.Size
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -36,6 +39,13 @@ data class AndroidSafScanSnapshot(
 class AndroidSafVaultScanner(context: Context) {
     private val resolver: ContentResolver = context.applicationContext.contentResolver
     private val mediaUriCache = AndroidSafMediaUriCache(context)
+    private val thumbnailDecodeLimit = Semaphore(MAX_CONCURRENT_THUMBNAIL_DECODES)
+    private val decodedThumbnails = object : LruCache<String, Bitmap>(MAX_THUMBNAIL_MEMORY_BYTES) {
+        override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+    }
+
+    suspend fun <T> withThumbnailPermit(block: suspend () -> T): T =
+        thumbnailDecodeLimit.withPermit { block() }
 
     fun hasPersistedReadPermission(treeUri: Uri): Boolean = try {
         resolver.persistedUriPermissions.any {
@@ -164,6 +174,7 @@ class AndroidSafVaultScanner(context: Context) {
         )
         try {
             mediaUriCache.replace(treeUri.toString(), documentIdsByPath)
+            decodedThumbnails.evictAll()
         } catch (_: SQLiteException) {
             throw SafAccessException()
         }
@@ -235,6 +246,7 @@ class AndroidSafVaultScanner(context: Context) {
         validateTreeUri(treeUri)
         try {
             mediaUriCache.clear(treeUri.toString())
+            decodedThumbnails.evictAll()
         } catch (_: SQLiteException) {
             throw SafAccessException()
         }
@@ -265,6 +277,8 @@ class AndroidSafVaultScanner(context: Context) {
         validateTreeUri(treeUri)
         validateRelativePath(relativePath)
         val cacheThumbnails = maxDimension == MAX_GALLERY_THUMBNAIL_DIMENSION
+        val memoryCacheKey = thumbnailCacheKey("image", treeUri, relativePath, maxDimension)
+        decodedThumbnails.get(memoryCacheKey)?.let { return@withContext it }
         if (cacheThumbnails) {
             val cachedThumbnail = try {
                 mediaUriCache.getThumbnail(treeUri.toString(), relativePath)
@@ -277,7 +291,10 @@ class AndroidSafVaultScanner(context: Context) {
                     0,
                     cachedThumbnail.size,
                 )
-                if (cachedBitmap != null) return@withContext cachedBitmap
+                if (cachedBitmap != null) {
+                    decodedThumbnails.put(memoryCacheKey, cachedBitmap)
+                    return@withContext cachedBitmap
+                }
                 try {
                     mediaUriCache.removeThumbnail(treeUri.toString(), relativePath)
                 } catch (_: SQLiteException) {
@@ -286,6 +303,31 @@ class AndroidSafVaultScanner(context: Context) {
             }
         }
         val uri = resolveMedia(treeUri, relativePath)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val providerThumbnail = try {
+                resolver.loadThumbnail(
+                    uri,
+                    Size(maxDimension, maxDimension),
+                    CancellationSignal(),
+                )
+            } catch (_: IOException) {
+                null
+            } catch (_: UnsupportedOperationException) {
+                null
+            }
+            val boundedProviderThumbnail = providerThumbnail?.takeIf {
+                it.width <= maxDimension &&
+                    it.height <= maxDimension &&
+                    it.width.toLong() * it.height <= MAX_IMAGE_PIXELS
+            }
+            if (boundedProviderThumbnail != null) {
+                decodedThumbnails.put(memoryCacheKey, boundedProviderThumbnail)
+                if (cacheThumbnails) {
+                    cacheThumbnail(treeUri, relativePath, boundedProviderThumbnail)
+                }
+                return@withContext boundedProviderThumbnail
+            }
+        }
         val input = resolver.openInputStream(uri) ?: return@withContext null
         val bytes = input.use { it.readBounded(MAX_MEDIA_BYTES) }
         if (bytes.size > MAX_MEDIA_BYTES) return@withContext null
@@ -312,20 +354,8 @@ class AndroidSafVaultScanner(context: Context) {
                 inPreferredConfig = Bitmap.Config.ARGB_8888
             },
         )
-        if (cacheThumbnails && bitmap != null) {
-            val encoded = ByteArrayOutputStream().use { output ->
-                val format = if (bitmap.hasAlpha()) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
-                val quality = if (format == Bitmap.CompressFormat.PNG) 100 else 88
-                if (bitmap.compress(format, quality, output)) output.toByteArray() else null
-            }
-            if (encoded != null) {
-                try {
-                    mediaUriCache.putThumbnail(treeUri.toString(), relativePath, encoded)
-                } catch (_: SQLiteException) {
-                    throw SafAccessException()
-                }
-            }
-        }
+        if (cacheThumbnails && bitmap != null) cacheThumbnail(treeUri, relativePath, bitmap)
+        bitmap?.let { decodedThumbnails.put(memoryCacheKey, it) }
         bitmap
     }
 
@@ -340,7 +370,60 @@ class AndroidSafVaultScanner(context: Context) {
         ) {
             return@withContext null
         }
+        validateTreeUri(treeUri)
+        validateRelativePath(relativePath)
+        val cacheThumbnail = maxDimension == MAX_GALLERY_THUMBNAIL_DIMENSION
+        val memoryCacheKey = thumbnailCacheKey("video", treeUri, relativePath, maxDimension)
+        decodedThumbnails.get(memoryCacheKey)?.let { return@withContext it }
+        if (cacheThumbnail) {
+            val cachedThumbnail = try {
+                mediaUriCache.getThumbnail(treeUri.toString(), relativePath)
+            } catch (_: SQLiteException) {
+                throw SafAccessException()
+            }
+            if (cachedThumbnail != null) {
+                val cachedBitmap = BitmapFactory.decodeByteArray(
+                    cachedThumbnail,
+                    0,
+                    cachedThumbnail.size,
+                )
+                if (cachedBitmap != null) {
+                    decodedThumbnails.put(memoryCacheKey, cachedBitmap)
+                    return@withContext cachedBitmap
+                }
+                try {
+                    mediaUriCache.removeThumbnail(treeUri.toString(), relativePath)
+                } catch (_: SQLiteException) {
+                    throw SafAccessException()
+                }
+            }
+        }
         val uri = resolveMedia(treeUri, relativePath)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val providerThumbnail = try {
+                resolver.loadThumbnail(
+                    uri,
+                    Size(maxDimension, maxDimension),
+                    CancellationSignal(),
+                )
+            } catch (_: IOException) {
+                null
+            } catch (_: UnsupportedOperationException) {
+                null
+            }
+            val boundedProviderThumbnail = providerThumbnail?.takeIf {
+                it.width <= maxDimension &&
+                    it.height <= maxDimension &&
+                    it.width.toLong() * it.height <= MAX_IMAGE_PIXELS
+            }
+            if (boundedProviderThumbnail != null) {
+                decodedThumbnails.put(memoryCacheKey, boundedProviderThumbnail)
+                if (cacheThumbnail) {
+                    cacheThumbnail(treeUri, relativePath, boundedProviderThumbnail)
+                }
+                return@withContext boundedProviderThumbnail
+            }
+        }
         val descriptor = try {
             resolver.openFileDescriptor(uri, "r") ?: return@withContext null
         } catch (_: SecurityException) {
@@ -348,16 +431,29 @@ class AndroidSafVaultScanner(context: Context) {
         } catch (_: IOException) {
             throw SafAccessException()
         }
-        descriptor.use { file ->
+        val bitmap = descriptor.use { file ->
             val retriever = MediaMetadataRetriever()
             try {
                 retriever.setDataSource(file.fileDescriptor)
-                retriever.getScaledFrameAtTime(
+                val firstFrame = retriever.getScaledFrameAtTime(
                     0,
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                     maxDimension,
                     maxDimension,
                 )
+                firstFrame
+                    ?: retriever.getScaledFrameAtTime(
+                        -1,
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        maxDimension,
+                        maxDimension,
+                    )
+                    ?: retriever.getScaledFrameAtTime(
+                        1_000_000,
+                        MediaMetadataRetriever.OPTION_CLOSEST,
+                        maxDimension,
+                        maxDimension,
+                    )
             } catch (_: IllegalArgumentException) {
                 null
             } catch (_: IllegalStateException) {
@@ -366,7 +462,32 @@ class AndroidSafVaultScanner(context: Context) {
                 retriever.release()
             }
         }
+        if (cacheThumbnail && bitmap != null) cacheThumbnail(treeUri, relativePath, bitmap)
+        bitmap?.let { decodedThumbnails.put(memoryCacheKey, it) }
+        bitmap
     }
+
+    private fun cacheThumbnail(treeUri: Uri, relativePath: String, bitmap: Bitmap) {
+        val encoded = ByteArrayOutputStream().use { output ->
+            val format = if (bitmap.hasAlpha()) Bitmap.CompressFormat.PNG else Bitmap.CompressFormat.JPEG
+            val quality = if (format == Bitmap.CompressFormat.PNG) 100 else 88
+            if (bitmap.compress(format, quality, output)) output.toByteArray() else null
+        }
+        if (encoded != null) {
+            try {
+                mediaUriCache.putThumbnail(treeUri.toString(), relativePath, encoded)
+            } catch (_: SQLiteException) {
+                throw SafAccessException()
+            }
+        }
+    }
+
+    private fun thumbnailCacheKey(
+        kind: String,
+        treeUri: Uri,
+        relativePath: String,
+        maxDimension: Int,
+    ): String = "$kind:${treeUri}:$relativePath:$maxDimension"
 
     private fun readBatches(
         documents: List<NoteDocument>,
@@ -561,6 +682,8 @@ class AndroidSafVaultScanner(context: Context) {
         const val MAX_BATCH_BYTES = 16L * 1024 * 1024
         const val MAX_SCAN_BYTES = 128L * 1024 * 1024
         const val MAX_MEDIA_BYTES = 64 * 1024 * 1024
+        const val MAX_CONCURRENT_THUMBNAIL_DECODES = 4
+        private const val MAX_THUMBNAIL_MEMORY_BYTES = 32 * 1024 * 1024
         const val MAX_IMAGE_DIMENSION = 16_384
         const val MAX_IMAGE_PIXELS = 32L * 1024 * 1024
         const val NANOS_PER_MILLI = 1_000_000L

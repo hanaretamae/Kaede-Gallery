@@ -3,6 +3,24 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.0b4] - 2026-10-10 (Beta)
+
+### Added
+
+- Added XDG Desktop Portal system color-scheme and accent-color support on Linux, including KDE Plasma, GNOME, and COSMIC portal backends, with an Expressive Material 3 color scheme.
+- Added Compose video controls on Linux for play/pause, seeking, playback speed, looping, and mute; mpv is retained only as the embedded video renderer.
+- Added selectable fixed gallery column counts and responsive columns with a 200dp minimum tile width.
+
+### Fixed
+
+- Improved Android SAF media thumbnail loading with provider-generated previews, bounded concurrent decoding, a private in-memory cache, and additional MP4 frame fallbacks.
+- Corrected gallery and detail toolbar layout, filter category expansion behavior, and trackpad media navigation.
+
+### Changed
+
+- Refined gallery, filters, settings, and viewer surfaces to use Material 3 Expressive components and layouts; moved the Notes/Media menu next to position navigation.
+- Updated system-color defaults and documented the Linux appearance and in-app video behavior.
+
 ## [2.0.0b3] - 2026-10-10 (Beta)
 
 ### Added

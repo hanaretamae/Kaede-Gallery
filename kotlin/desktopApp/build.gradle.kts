@@ -27,6 +27,9 @@ dependencies {
         implementation(targetDesktopDependency)
     }
     implementation(libs.compose.material3)
+    implementation(libs.compose.material.icons.extended)
+    implementation(libs.material.kolor.material3)
+    implementation(libs.kotlinx.serialization.json)
     implementation(libs.jna)
     testImplementation(kotlin("test"))
     testImplementation(libs.kotlinx.coroutines.test)

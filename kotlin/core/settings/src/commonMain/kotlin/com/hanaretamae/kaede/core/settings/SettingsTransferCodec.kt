@@ -93,6 +93,7 @@ object SettingsTransferCodec {
                     buildJsonObject {
                         put("showLoadedRange", JsonPrimitive(settings.showLoadedRange))
                         put("showCounts", JsonPrimitive(settings.showCounts))
+                        put("fixedColumnCount", JsonPrimitive(settings.fixedColumnCount))
                     },
                 )
             },
@@ -189,6 +190,15 @@ object SettingsTransferCodec {
                 if (legacyKmpExport) "showItemCount" else "showCounts",
                 true,
             ) ?: return null
+            val fixedColumnCount = kmp["fixedColumnCount"]?.let(::integerValue)
+                ?: if (kmp["fixedColumnCount"] == null) 0 else return null
+            if (
+                fixedColumnCount != 0 &&
+                fixedColumnCount !in
+                GallerySettings.MIN_FIXED_COLUMN_COUNT..GallerySettings.MAX_FIXED_COLUMN_COUNT
+            ) {
+                return null
+            }
             val showTilePosition = optionalBoolean(
                 pagination,
                 "showItemNumberOnTiles",
@@ -206,6 +216,7 @@ object SettingsTransferCodec {
                     pureBlack = pureBlack,
                 ),
                 pageSize = pageSize,
+                fixedColumnCount = fixedColumnCount,
                 galleryTagPrefixes = galleryTagPrefixes,
                 includedTagPrefixes = includedTagPrefixes,
                 hiddenTagPrefixes = hiddenTagPrefixes,

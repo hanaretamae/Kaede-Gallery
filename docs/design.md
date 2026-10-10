@@ -104,7 +104,7 @@ integrations.
     never signs production Android packages or publishes releases. The prior Android and Windows Actions runs
     passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-    Do not mark this phase complete until the `2.0.0b3` GitHub prerelease exists
+    Do not mark this phase complete until the `2.0.0b4` GitHub prerelease exists
     and the Windows release archive is attached successfully. An earlier
     aarch64 attempt could not fetch pinned OpenJDK/Nix-cache artifacts because
     cache.nixos.org connections timed out; that failure was later resolved.
@@ -123,7 +123,7 @@ Android debug and Linux AArch64 build artifacts available only through explicit
 manual dispatch, either in the Actions UI or via `tools/run-optional-builds.sh`.
 Local builds remain primary, and the manual workflow does not sign or publish
 Android releases. The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
-must not be moved. The `2.0.0b3` GitHub prerelease and Windows beta archive are
+must not be moved. The `2.0.0b4` GitHub prerelease and Windows beta archive are
 still pending. Full Actions-only
 production release is not implemented: the current signing flow uses the local
 KeePassXC database. See `docs/releasing.md` for the supported local/remote paths
@@ -232,7 +232,7 @@ completed and its JSON output parsed successfully. No real signing key or Vault
 was used.
 
 **Still pending before Phase 14 can be marked complete:** create the
-`2.0.0b3` GitHub prerelease and successfully attach the Windows ZIP. The owner
+`2.0.0b4` GitHub prerelease and successfully attach the Windows ZIP. The owner
 verified the declared AArch64 Linux Desktop build on 2026-10-09 with
 `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
 (exit status 0); the exact builder mechanism was not recorded. The previous
@@ -295,13 +295,24 @@ its magenta video frame. Desktop video playback uses the embedded mpv child
 window on Linux and Windows; Windows runtime playback still requires
 independent runtime acceptance. The 2026-10-07 KMP fixture run completes visual
 acceptance for gallery/search/note-detail surfaces; media playback and
-thumbnail behavior were separately smoke-tested on API 36.
+thumbnail behavior were separately smoke-tested on API 36. Android gallery
+thumbnails first request bounded provider-generated previews on API 29+, with
+bounded SAF decode fallback, four concurrent thumbnail jobs, a 32 MiB in-memory
+decoded-thumbnail LRU, and the existing private disk cache. The memory and disk
+caches are invalidated on rescan or Vault removal. Video previews also fall
+back across multiple sync-frame timestamps when the first MP4 frame cannot be
+decoded. These changes still require a fresh large-media latency benchmark.
 Linux and Windows video are rendered in an embedded native child window from a
 separate `mpv` process; desktop runtime requires `mpv` and `ffmpeg` on `PATH`.
 Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
-and automatic sidecar loading. Desktop video thumbnails limit ffmpeg to local
+and automatic sidecar loading. Linux playback forces mpv's X11 video output so
+its `--wid` targets the Swing canvas under XWayland instead of creating a
+separate Wayland window. Desktop video thumbnails limit ffmpeg to local
 file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
-timeout, and two concurrent extraction processes. A basic localized About
+timeout, and two concurrent extraction processes. Linux playback controls are
+rendered by Compose rather than mpv's on-screen display; a private Unix-domain
+IPC connection controls play/pause, seeking, speed, looping, and mute while
+mpv supplies embedded video rendering. A basic localized About
 section now links to the project and license. Windows x64 CI passed for the
 current migration branch at commit `076436a`
 ([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37559570910)).
@@ -545,41 +556,85 @@ selection opens the selected media document with a read-only grant instead of
 opening a folder picker.
 
 The maintained UI uses Compose Multiplatform Material 3 Expressive and Material
-You. The shared UI uses `MaterialExpressiveTheme`, the expressive
-`MotionScheme`, expressive light color roles, and an expanded shape system.
-Android dynamic color is supplied by the platform; fallback colors and pure
-black remain legible in light and dark modes. Current dependency versions are
-listed in `kotlin/gradle/libs.versions.toml`: Compose Multiplatform and its
-Material 3 library are `1.13.0-alpha02`, AndroidX Material 3 is `1.5.0-beta01`,
-and the shared icon artifact is `1.7.3`. The Android Compose artifacts require
-compile SDK 37.1, configured for both the KMP UI module and Android app. The
-Android Material 3 dependency raises the application minimum SDK to 24.
+You. Follow the official Compose Material 3 guidance for semantic color roles,
+typography, and shape theming rather than inventing per-control treatments:
+https://developer.android.com/develop/ui/compose/designsystems/material3.
+The shared UI uses `MaterialExpressiveTheme`, the expressive `MotionScheme`,
+expressive light color roles, and the expanded Material shape system. Prefer
+Material components for app bars and dropdown menus, modal bottom sheets,
+selectable filter chips, grouped detail surfaces, list rows, switches, and
+navigation transitions; keep selected states and
+foreground/background roles accessible. Android dynamic color is supplied by
+the platform; fallback colors and pure black remain legible in light and dark
+modes. Current dependency versions are listed in
+`kotlin/gradle/libs.versions.toml`: Compose Multiplatform and its Material 3
+library are `1.13.0-alpha02`, AndroidX Material 3 is `1.5.0-beta01`, and the
+shared icon artifact is `1.7.3`; desktop portal accent generation uses
+MaterialKolor `6.0.0-beta01` with the Expressive palette and 2025 color spec.
+The Android Compose artifacts require compile SDK 37.1, configured for both
+the KMP UI module and Android app. The Android Material 3 dependency raises the
+application minimum SDK to 24.
 
 The launcher uses the supplied leaf artwork through Android adaptive-icon
 resources. Keep the foreground inside the 66dp mask-safe region:
 https://developer.android.com/develop/ui/views/launch/launcher-icons#design_adaptive_icons.
 
 Gallery navigation shows the selected Vault name and item count in the app bar,
-without the app name. Notes and media are switched with tabs. Gallery tiles
+without the app name. Notes and media are switched with a dropdown menu at the
+top app bar using an icon button; the switch no longer adds a second toolbar
+row. The app-bar title and count are leading-aligned. Gallery tiles
 prioritize media and show no note title or Vault path; media, memo, and related
 counts use icon badges with tonal backgrounds, and videos use an accessible
-video icon. Search, tag filters, publication/creation date, and sort order are
-available in the filter surface. Vault change and forget actions are available
-only in Settings. The app bar uses icon buttons for filters, item jump,
-grid/list layout, rescan, and settings.
+video icon. Tiles use a 3:4 aspect ratio and at least two adaptive columns;
+users may choose an explicit column count in Settings, with zero selecting
+adaptive columns. Search, tag filters, publication/creation date, and sort
+order are available in the standard Material modal bottom sheet. Tag filters
+use selectable chips with distinct selected-mode icons, and categories start
+collapsed. Matching categories temporarily expand during tag search before
+restoring the prior expansion state. Vault change and forget
+actions are available only in Settings. The app bar uses icon buttons for
+filters, item jump, rescan, and settings.
+Gallery, settings, and detail-view toolbars share a 64dp content height below
+their platform status-bar insets.
+Adaptive gallery columns use a 200dp minimum tile width, 12dp spacing, and
+24dp horizontal content padding, with at least two columns. This yields four
+columns at an 866dp content width; users can still select a fixed count in
+Settings.
 
-Settings navigation uses Material list rows with leading and trailing icons.
-Vault selection, rescan, and forget are grouped in the Vault settings page.
+Settings navigation uses Material list rows with leading and trailing icons;
+the back action is placed before the page title. Appearance controls and page
+destinations use grouped, rounded surface-container sections; switch rows are
+whole-row accessible controls rather than independent custom switch visuals.
+Every settings subpage uses rounded surface-container grouping and Material
+list-item switch rows, including Vault selection, rescan, and forget.
 Pure black applies only to dark mode: the app background is true black while
 item surfaces retain subtle separation and dynamic roles supply accent and
 foreground colors. The initial Vault-selection screen uses the system theme
-and Android dynamic color just like the gallery.
+and Android dynamic color just like the gallery. Linux Desktop reads the
+standard `org.freedesktop.portal.Settings` `color-scheme` and `accent-color`
+settings through `gdbus`; GNOME, KDE Plasma, and COSMIC can supply these values
+through their portal backends. Linux system color is enabled by default, and
+the accent color seeds a Material 3 Expressive 2025 scheme; users can disable
+system color in Appearance settings. Portal absence, unsupported keys, and
+invalid accent values fall back to the built-in scheme. The Linux portal
+integration has not been runtime-tested.
 
-The viewer starts in media-only mode, exposes a detail toggle, centers note
-loading feedback, supports horizontal media swipes, and keeps fullscreen and
-detail transitions within the viewer. Android and Desktop video playback loops
-the current media. Android SAF document IDs and bounded image thumbnails are
-cached only in private app data and invalidated on rescan or Vault removal.
+Navigation between the gallery, settings, and nested viewer notes uses a
+horizontal motion transition. Android predictive-back gestures also track
+gesture progress and move the current route for left- and right-edge swipes
+before popping the viewer stack. The viewer starts with note details visible, shows tags as a
+wrapping row of chips, and groups dates, post text, memos, and related content
+into tonal surfaces. Author text is merged into the leading date/details
+surface without an "Author:" prefix; profile and source actions remain at the
+bottom. Its toolbar keeps back and the title on the left and all actions on the
+right. Trackpad horizontal scroll events and touch swipes both navigate among
+media in a note. Its toolbar uses icons for
+fullscreen, a media-action menu, and opening the note in Obsidian; author,
+profile, source-page, and copy-URL actions remain at the bottom of the details.
+Media navigation is by swipe/keyboard rather than toolbar previous/next
+buttons. Android and Desktop video playback loop the current media. Android
+SAF document IDs and bounded image/video thumbnails are cached only in private
+app data and invalidated on rescan or Vault removal.
 External media actions resolve validated paths through the same cache; Vault
 files remain read-only. Pull-to-refresh is disabled; rescanning remains an
 explicit toolbar/Settings action.
@@ -676,15 +731,16 @@ note tiles also show a separate media-count badge when a note contains multiple
 media items. Note memo and related counts remain visible in both grouped and
 all-media tile modes. The gallery shows the indexed total and
 currently loaded range, with a direct start-position jump beside the filter
-control; display mode is triggered by an icon without a filled button surface.
+control. A fixed count is configurable in Settings; adaptive columns are the
+default.
 Counts, ranges, and jump limits reflect active filters and search. A
 jump loads the target page and its immediately preceding page (when available),
 then scrolls to the target so earlier items remain reachable; normal
 scrolling loads subsequent pages and scrolling above the target loads preceding
 pages while preserving the visible position before the data update to avoid
 rebuilding visible media placeholders during prepends. Progress appears in a cancellable
-dialog that closes on success and remains open on failure; the target is
-briefly highlighted. The count range follows the visible configured page, not
+dialog that closes on success and remains open on failure; the target receives
+two animated outline flashes. The count range follows the visible configured page, not
 the number of items prefetched into memory. Thumbnail loading never disables
 gallery scrolling. Pull-to-refresh is disabled; use the explicit rescan action.
 General usage guidance is grouped under a separate Help screen rather than shown
@@ -759,24 +815,25 @@ occurs only after an explicit user action. HTTP(S) source links are also
 explicit user actions;
 relative Markdown note links and Obsidian wikilinks in `関連` resolve to
 parseable paths inside the Vault and open in a new in-app viewer. X/Twitter post
-URLs produce an explicit profile link for the author. The viewer can choose an
-application to open the current media or reveal the selected item in the file
-manager, also only after an explicit action.
+URLs produce an explicit profile link for the author. The viewer offers a
+dropdown for choosing an application to open the current media or revealing the
+selected item in the file manager, also only after an explicit action.
 When a note filename follows `<username>-on-X-<excerpt>`, the viewer title
 uses the excerpt. A leading standalone author link is extracted and excluded
 from the post text before the `文書`/`関連`/`覚書` section;
 unordered/ordered list markers and two-space indentation levels are retained
 for memo and related-list presentation without drawing bullet glyphs. The viewer
 shows the author above the media by default; the configured block order can
-place it in the detail area instead. Post text appears in the detail area
-without a post-text label or duplicated author. It fills the app window on
-entry, with black background and centered, fit-contained media; details are
-initially hidden so media fills the app window. While an image's note details,
-source path, or display-sized decode is loading, keep the viewer black rather
-than showing the smaller gallery thumbnail. A tap reveals a Material 3
-colored details interface with an animated media and details transition.
-Opening details resets image zoom. Post text and memo cards use elevated
-Material 3 surface containers so they contrast with their parent panel. A post
+place it in the detail area instead, where profile, source-page, and copy-link
+actions are also available. Post text appears in the detail area without a
+post-text label or duplicated author. It fills the app window on entry, with
+black background and centered, fit-contained media; details are visible by
+default and can be hidden to maximize the media area. While an image's note
+details, source path, or display-sized decode is loading, keep the viewer black
+rather than showing the smaller gallery thumbnail. The viewer uses an animated
+transition between media and details. Opening details resets image zoom. Dates,
+post text, memo, and related content use grouped Material 3 surface containers.
+A post
 body containing only empty blockquote markers is not displayed. The appearance
 settings independently select system/light/dark brightness, use of the OS
 Material You system color, and an optional pure-black dark surface style.

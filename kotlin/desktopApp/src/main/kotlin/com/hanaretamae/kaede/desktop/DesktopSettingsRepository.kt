@@ -85,6 +85,23 @@ class DesktopSettingsRepository(
                             RepositoryError.OPERATION_FAILED,
                         )
                 }
+                val fixedColumnCount = properties.getProperty(KEY_FIXED_COLUMN_COUNT)
+                    ?.toIntOrNull() ?: if (properties.getProperty(KEY_FIXED_COLUMN_COUNT) == null) {
+                    defaults.fixedColumnCount
+                } else {
+                    return@withContext RepositoryResult.Failure(
+                        RepositoryError.OPERATION_FAILED,
+                    )
+                }
+                if (
+                    fixedColumnCount != 0 &&
+                    fixedColumnCount !in
+                    GallerySettings.MIN_FIXED_COLUMN_COUNT..GallerySettings.MAX_FIXED_COLUMN_COUNT
+                ) {
+                    return@withContext RepositoryResult.Failure(
+                        RepositoryError.OPERATION_FAILED,
+                    )
+                }
                 val useSystemColor = properties.strictBoolean(
                     KEY_SYSTEM_COLOR,
                     defaults.appearance.useSystemColor,
@@ -165,6 +182,7 @@ class DesktopSettingsRepository(
                             pureBlack = pureBlack,
                         ),
                         pageSize = pageSize,
+                        fixedColumnCount = fixedColumnCount,
                         galleryTagPrefixes = galleryTagPrefixes,
                         includedTagPrefixes = includedTagPrefixes,
                         hiddenTagPrefixes = hiddenTagPrefixes,
@@ -208,6 +226,10 @@ class DesktopSettingsRepository(
                             )
                             setProperty(KEY_PURE_BLACK, settings.appearance.pureBlack.toString())
                             setProperty(KEY_PAGE_SIZE, settings.pageSize.toString())
+                            setProperty(
+                                KEY_FIXED_COLUMN_COUNT,
+                                settings.fixedColumnCount.toString(),
+                            )
                             setProperty(
                                 KEY_GALLERY_TAG_PREFIXES,
                                 GalleryTagPrefixesCodec.encodeStorage(settings.galleryTagPrefixes),
@@ -297,6 +319,7 @@ class DesktopSettingsRepository(
         const val KEY_SYSTEM_COLOR = "use_system_color"
         const val KEY_PURE_BLACK = "pure_black"
         const val KEY_PAGE_SIZE = "page_size"
+        const val KEY_FIXED_COLUMN_COUNT = "fixed_column_count"
         const val KEY_GALLERY_TAG_PREFIXES = "gallery_tag_prefixes"
         const val KEY_INCLUDED_TAG_PREFIXES = "included_tag_prefixes"
         const val KEY_HIDDEN_TAG_PREFIXES = "hidden_tag_prefixes"

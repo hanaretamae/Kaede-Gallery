@@ -31,6 +31,14 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
             if (pageSize !in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE) {
                 return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
             }
+            val fixedColumnCount = preferences.getInt(KEY_FIXED_COLUMN_COUNT, 0)
+            if (
+                fixedColumnCount != 0 &&
+                fixedColumnCount !in
+                GallerySettings.MIN_FIXED_COLUMN_COUNT..GallerySettings.MAX_FIXED_COLUMN_COUNT
+            ) {
+                return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            }
             val galleryTagPrefixes = preferences.getString(
                 KEY_GALLERY_TAG_PREFIXES,
                 GalleryTagPrefixesCodec.encodeStorage(GalleryTagPrefixesCodec.DEFAULT_PREFIXES),
@@ -70,6 +78,7 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                         pureBlack = preferences.getBoolean(KEY_PURE_BLACK, false),
                     ),
                     pageSize = pageSize,
+                    fixedColumnCount = fixedColumnCount,
                     galleryTagPrefixes = galleryTagPrefixes,
                     includedTagPrefixes = includedTagPrefixes,
                     hiddenTagPrefixes = hiddenTagPrefixes,
@@ -96,6 +105,7 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                     .putBoolean(KEY_SYSTEM_COLOR, settings.appearance.useSystemColor)
                     .putBoolean(KEY_PURE_BLACK, settings.appearance.pureBlack)
                     .putInt(KEY_PAGE_SIZE, settings.pageSize)
+                    .putInt(KEY_FIXED_COLUMN_COUNT, settings.fixedColumnCount)
                     .putString(
                         KEY_GALLERY_TAG_PREFIXES,
                         GalleryTagPrefixesCodec.encodeStorage(settings.galleryTagPrefixes),
@@ -140,6 +150,7 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
         const val KEY_SYSTEM_COLOR = "use_system_color"
         const val KEY_PURE_BLACK = "pure_black"
         const val KEY_PAGE_SIZE = "page_size"
+        const val KEY_FIXED_COLUMN_COUNT = "fixed_column_count"
         const val KEY_GALLERY_TAG_PREFIXES = "gallery_tag_prefixes"
         const val KEY_INCLUDED_TAG_PREFIXES = "included_tag_prefixes"
         const val KEY_HIDDEN_TAG_PREFIXES = "hidden_tag_prefixes"
