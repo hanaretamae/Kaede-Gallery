@@ -1,10 +1,11 @@
 use gallery_core::{
     Category as CoreCategory, CoreError, DetailLine as CoreDetailLine, Gallery,
-    MediaSummary as CoreMediaSummary, NoteDetail as CoreNoteDetail, NoteSort, NoteSortField,
-    NoteSummary as CoreNoteSummary, SafNoteDocument, ScanReport as CoreScanReport,
-    SortDirection as CoreSortDirection, VirtualFilter as CoreVirtualFilter, forget_selected_vault,
-    load_selected_vault, prepare_private_app_directory, prepare_private_app_directory_for_saf,
-    save_selected_vault, save_selected_vault_saf,
+    MAX_SAF_SCAN_NOTE_BYTES, MediaSummary as CoreMediaSummary, NoteDetail as CoreNoteDetail,
+    NoteSort, NoteSortField, NoteSummary as CoreNoteSummary, SafNoteDocument,
+    ScanReport as CoreScanReport, SortDirection as CoreSortDirection,
+    VirtualFilter as CoreVirtualFilter, forget_selected_vault, load_selected_vault,
+    prepare_private_app_directory, prepare_private_app_directory_for_saf, save_selected_vault,
+    save_selected_vault_saf,
 };
 use std::fs::{self, File, OpenOptions};
 use std::io::{BufReader, BufWriter, Read, Write};
@@ -20,7 +21,6 @@ const MAX_SAF_AGGREGATE_PATH_BYTES: usize = 32 * 1024 * 1024;
 const MAX_SAF_NOTE_BYTES: usize = 2 * 1024 * 1024;
 const MAX_SAF_BATCH_NOTES: usize = 128;
 const MAX_SAF_BATCH_BYTES: usize = 16 * 1024 * 1024;
-const MAX_SAF_SCAN_BYTES: usize = 128 * 1024 * 1024;
 static NEXT_SCAN_FILE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Clone, Error, uniffi::Error)]
@@ -541,7 +541,7 @@ impl GallerySession {
             total.checked_add(note.path.len())
         });
         if new_count > MAX_SAF_DOCUMENTS
-            || new_note_bytes > MAX_SAF_SCAN_BYTES
+            || new_note_bytes > MAX_SAF_SCAN_NOTE_BYTES
             || new_path_bytes.is_none_or(|bytes| bytes > MAX_SAF_AGGREGATE_PATH_BYTES)
         {
             return Err(GalleryError::InvalidRequest);
@@ -920,7 +920,7 @@ uniffi::setup_scaffolding!();
 mod tests {
     use super::{
         GalleryContent, GalleryQuery, GallerySession, GallerySortDirection, GallerySortField,
-        SafNote,
+        MAX_SAF_NOTE_BYTES, SafNote,
     };
     use std::fs;
     use std::sync::atomic::{AtomicUsize, Ordering};
@@ -1094,6 +1094,52 @@ mod tests {
             .expect("query last committed index");
         assert_eq!(page.total_count, 1);
         assert_eq!(page.notes[0].title, "Fictional SAF note");
+
+        drop(session);
+        fs::remove_dir_all(root).expect("remove fictional fixture");
+    }
+
+    #[test]
+    fn saf_scan_accepts_more_than_128_mib_of_fictional_note_content() {
+        let root = std::env::temp_dir().join(format!(
+            "gallery-ffi-saf-large-{}-{}",
+            std::process::id(),
+            NEXT_TEST.fetch_add(1, Ordering::Relaxed),
+        ));
+        let private = root.join("private");
+        fs::create_dir_all(&private).expect("create private app data");
+        let session = GallerySession::open(
+            "content://com.android.externalstorage.documents/tree/primary%3AFictional".to_owned(),
+            private.join("index.sqlite").to_string_lossy().into_owned(),
+            private.join("thumbnails").to_string_lossy().into_owned(),
+        )
+        .expect("open fictional SAF vault");
+        let paths = (0..65)
+            .map(|index| format!("fictional-{index:02}.md"))
+            .collect::<Vec<_>>();
+        session
+            .begin_saf_scan(paths.clone())
+            .expect("begin large fictional scan");
+        let content = vec![b'x'; MAX_SAF_NOTE_BYTES];
+        let stage_result = paths.chunks(8).try_for_each(|batch_paths| {
+            let notes = batch_paths
+                .iter()
+                .map(|path| SafNote {
+                    path: path.clone(),
+                    modified_nanos: 0,
+                    size: content.len() as i64,
+                    content: Some(content.clone()),
+                })
+                .collect();
+            session.append_saf_scan_batch(notes)
+        });
+        session
+            .cancel_saf_scan()
+            .expect("cancel staged fictional scan");
+        assert!(
+            stage_result.is_ok(),
+            "bounded SAF staging should accept over 128 MiB while remaining under 512 MiB",
+        );
 
         drop(session);
         fs::remove_dir_all(root).expect("remove fictional fixture");

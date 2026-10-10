@@ -39,6 +39,7 @@ package com.hanaretamae.kaede.core.rust
 
 internal object AndroidSafLimits {{
     const val MAX_CONCURRENT_NOTE_READS = {values["max_concurrent_note_reads"]}
+    const val MAX_SCAN_NOTE_BYTES = {values["max_scan_note_bytes"]}L
 }}
 """
 

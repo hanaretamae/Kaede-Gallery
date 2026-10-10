@@ -533,9 +533,11 @@ so users can refresh after changing Vault contents. Keep this behavior
 read-only and do not request broad all-files access.
 The SAF resource contract is: at most 100,000 entries, depth 64, 32 MiB of
 aggregate relative-path bytes, 2 MiB per note, 128 notes and 16 MiB per read
-batch, at most 16 concurrent note reads, and 128 MiB of total note content
-per scan. Kotlin and Rust must enforce compatible bounds; contract tests must
-prevent these limits from drifting.
+batch, at most 16 concurrent note reads, and 512 MiB of total note content
+per scan. The scan-wide content bound is larger than one batch but remains
+finite, and scan batches are staged on disk rather than retained together in
+memory. Kotlin and Rust must use the generated shared limit; contract tests
+must prevent these limits from drifting.
 Android performance checks use generated fictional notes/media in a dedicated
 test location, never a user's Vault. Record only aggregate duration, peak
 memory, cache-hit rate, and frame timings; do not log paths or note content.

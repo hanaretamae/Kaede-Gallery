@@ -215,3 +215,10 @@ read/decode, while decoded results continue to use the existing bounded memory
 caches. These scheduling and request-coalescing changes have automated
 regression coverage but have not been benchmarked on representative media
 Vaults.
+
+Android's previous 128 MiB total note-content scan cap could silently leave
+later notes without parsed content in larger Vaults. The shared, still-bounded
+SAF limit is now 512 MiB, generated for Android and Rust from `saf-limits.json`.
+A fictional staged-scan regression exceeds the old limit without reading a
+user Vault; representative device scans are still needed to confirm the
+reported missing-note case.

@@ -724,8 +724,7 @@ fun GalleryScreen(
         val expanded = filterSheetState.currentValue == SheetValue.Expanded ||
             filterSheetState.targetValue == SheetValue.Expanded
         ModalBottomSheet(
-            modifier = Modifier.padding(horizontal = if (expanded) 0.dp else 12.dp)
-                .testTag("GalleryFilterSheet"),
+            modifier = Modifier.testTag("GalleryFilterSheet"),
             onDismissRequest = { showFilters = false },
             sheetState = filterSheetState,
             dragHandle = if (
@@ -757,7 +756,7 @@ fun GalleryScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .heightIn(min = 72.dp)
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        .padding(vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AnimatedVisibility(
@@ -793,12 +792,14 @@ fun GalleryScreen(
                     Text(strings.filters, style = MaterialTheme.typography.titleLarge)
                 }
                 Surface(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                        .testTag("GalleryFilterSortSurface"),
                     shape = MaterialTheme.shapes.large,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
                     Column(
-                        Modifier.padding(12.dp),
+                        Modifier.padding(vertical = 12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                     ConnectedChoiceGroup(
@@ -816,7 +817,7 @@ fun GalleryScreen(
                     }
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -893,13 +894,13 @@ fun GalleryScreen(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                     ),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                 )
                 state.categoriesError?.let {
                     Text(
                         strings.error(it),
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(vertical = 8.dp),
                     )
                 }
                 if (state.categoriesLoading && state.categories.isEmpty()) {
@@ -907,7 +908,7 @@ fun GalleryScreen(
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(16.dp),
                     )
                 } else if (state.categories.isEmpty()) {
-                    Text(strings.noTags, modifier = Modifier.padding(16.dp))
+                    Text(strings.noTags, modifier = Modifier.padding(vertical = 16.dp))
                 } else {
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -939,7 +940,7 @@ fun GalleryScreen(
                                 item(key = "category:${category.path}") {
                                     Surface(
                                         modifier = Modifier.fillMaxWidth()
-                                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                                            .padding(vertical = 4.dp),
                                         shape = MaterialTheme.shapes.large,
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     ) {
@@ -959,6 +960,7 @@ fun GalleryScreen(
                                                 colors = ListItemDefaults.segmentedColors(
                                                     containerColor = Color.Transparent,
                                                 ),
+                                                contentPadding = PaddingValues(0.dp),
                                                 trailingContent = {
                                                     Row(
                                                         verticalAlignment = Alignment.CenterVertically,
@@ -982,8 +984,6 @@ fun GalleryScreen(
                                                 FlowRow(
                                                     modifier = Modifier.fillMaxWidth()
                                                         .padding(
-                                                            start = 16.dp,
-                                                            end = 16.dp,
                                                             top = 8.dp,
                                                             bottom = 12.dp,
                                                         ),

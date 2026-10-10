@@ -22,6 +22,8 @@ use thiserror::Error;
 #[allow(dead_code)]
 mod saf_limits;
 
+pub use saf_limits::MAX_SAF_SCAN_NOTE_BYTES;
+
 use saf_limits::*;
 
 const INDEX_SCHEMA_VERSION: &str = "5";
