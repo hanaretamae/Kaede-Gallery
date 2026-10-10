@@ -13,6 +13,8 @@ import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -23,6 +25,21 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GalleryStateHolderTest {
+    @Test
+    fun initialScanRunsOnlyOnceBeforeRequestingTheGallery() = runTest {
+        var scans = 0
+        val repository = FakeGalleryRepository { query ->
+            assertEquals(1, scans)
+            RepositoryResult.Success(GalleryPage(emptyList(), 0, query.offset))
+        }
+        val holder = testGalleryStateHolder(repository)
+        holder.start { scans++; RepositoryResult.Success(Unit) }
+        advanceUntilIdle()
+        holder.start { scans++; RepositoryResult.Success(Unit) }
+        advanceUntilIdle()
+        assertEquals(1, scans)
+        assertEquals(1, repository.queries.size)
+    }
     @Test
     fun visibleRangeTracksConfiguredPageRatherThanPrefetchedItems() {
         assertEquals(1L..24L, galleryVisibleRange(0, 80, 100, 5, 24))
@@ -43,7 +60,7 @@ class GalleryStateHolderTest {
                 ),
             )
         }
-        val holder = GalleryStateHolder(repository, this)
+        val holder = testGalleryStateHolder(repository)
 
         holder.start()
         advanceUntilIdle()
@@ -59,6 +76,24 @@ class GalleryStateHolderTest {
     }
 
     @Test
+    fun restartingGalleryCompositionKeepsTheLoadedWindow() = runTest {
+        val repository = FakeGalleryRepository { query ->
+            RepositoryResult.Success(
+                GalleryPage((1L..12L).map(::note), totalCount = 12, offset = query.offset),
+            )
+        }
+        val holder = testGalleryStateHolder(repository)
+
+        holder.start()
+        advanceUntilIdle()
+        holder.start()
+        advanceUntilIdle()
+
+        assertEquals(1, repository.queries.size)
+        assertEquals(12, holder.state.value.entries.size)
+    }
+
+    @Test
     fun jumpLoadsPreviousAndTargetPagesThenContinuesForward() = runTest {
         val repository = FakeGalleryRepository { query ->
             RepositoryResult.Success(
@@ -70,9 +105,8 @@ class GalleryStateHolderTest {
                 ),
             )
         }
-        val holder = GalleryStateHolder(
+        val holder = testGalleryStateHolder(
             repository,
-            this,
             initialQuery = GalleryQuery(pageSize = 3),
         )
 
@@ -109,7 +143,7 @@ class GalleryStateHolderTest {
                 ),
             )
         }
-        val holder = GalleryStateHolder(repository, this, GalleryQuery(pageSize = 3))
+        val holder = testGalleryStateHolder(repository, GalleryQuery(pageSize = 3))
         holder.start()
         advanceUntilIdle()
         holder.jumpTo(10)
@@ -137,9 +171,8 @@ class GalleryStateHolderTest {
                 ),
             )
         }
-        val holder = GalleryStateHolder(
+        val holder = testGalleryStateHolder(
             repository,
-            this,
             GalleryQuery(pageSize = 3),
         )
         holder.start()
@@ -172,9 +205,8 @@ class GalleryStateHolderTest {
                 ),
             )
         }
-        val holder = GalleryStateHolder(
+        val holder = testGalleryStateHolder(
             repository,
-            this,
             initialQuery = GalleryQuery(pageSize = 3),
         )
         holder.start()
@@ -194,7 +226,7 @@ class GalleryStateHolderTest {
                 GalleryPage((1L..4L).map(::note), totalCount = 4, offset = it.offset),
             )
         }
-        val holder = GalleryStateHolder(repository, this)
+        val holder = testGalleryStateHolder(repository)
         holder.start()
         advanceUntilIdle()
 
@@ -216,7 +248,7 @@ class GalleryStateHolderTest {
                 ),
             )
         }
-        val holder = GalleryStateHolder(repository, this)
+        val holder = testGalleryStateHolder(repository)
         holder.start()
         advanceUntilIdle()
 
@@ -236,9 +268,8 @@ class GalleryStateHolderTest {
                 GalleryPage(emptyList(), totalCount = 0, offset = query.offset),
             )
         }
-        val holder = GalleryStateHolder(
+        val holder = testGalleryStateHolder(
             repository,
-            this,
             initialQuery = GalleryQuery(offset = 12),
         )
 
@@ -259,11 +290,52 @@ class GalleryStateHolderTest {
     }
 
     @Test
+    fun coalescesRapidTagChangesIntoOneRepositoryRefresh() = runTest {
+        val repository = FakeGalleryRepository { query ->
+            RepositoryResult.Success(
+                GalleryPage(emptyList(), totalCount = 0, offset = query.offset),
+            )
+        }
+        val holder = testGalleryStateHolder(repository)
+
+        holder.start()
+        advanceUntilIdle()
+        holder.cycleTagSelection("type/image")
+        holder.cycleTagSelection("source/x")
+        advanceTimeBy(249)
+        assertEquals(1, repository.queries.size)
+        advanceTimeBy(1)
+        advanceUntilIdle()
+
+        assertEquals(2, repository.queries.size)
+        assertEquals(setOf("type/image", "source/x"), repository.queries.last().includeTags)
+    }
+
+    @Test
+    fun keepsVisibleEntriesUntilFilteredPageArrives() = runTest {
+        val repository = FakeGalleryRepository { query ->
+            val entry = note(if (query.includeTags.isEmpty()) 1 else 2)
+            RepositoryResult.Success(GalleryPage(listOf(entry), 1, query.offset))
+        }
+        val holder = testGalleryStateHolder(repository)
+        holder.start()
+        advanceUntilIdle()
+        val originalEntries = holder.state.value.entries
+
+        holder.cycleTagSelection("type/image")
+        assertEquals(originalEntries, holder.state.value.entries)
+        advanceTimeBy(250)
+        advanceUntilIdle()
+
+        assertEquals(listOf(NoteId(2)), holder.state.value.entries.map { (it as NoteSummary).id })
+    }
+
+    @Test
     fun exposesSanitizedRepositoryFailure() = runTest {
         val repository = FakeGalleryRepository {
             RepositoryResult.Failure(RepositoryError.INDEX_UNAVAILABLE)
         }
-        val holder = GalleryStateHolder(repository, this)
+        val holder = testGalleryStateHolder(repository)
 
         holder.start()
         advanceUntilIdle()
@@ -277,7 +349,7 @@ class GalleryStateHolderTest {
         val repository = FakeGalleryRepository {
             RepositoryResult.Success(GalleryPage(emptyList(), totalCount = 0, offset = it.offset))
         }
-        val holder = GalleryStateHolder(repository, this)
+        val holder = testGalleryStateHolder(repository)
         holder.start()
         advanceUntilIdle()
         var scanCount = 0
@@ -300,7 +372,7 @@ class GalleryStateHolderTest {
         val repository = FakeGalleryRepository {
             RepositoryResult.Success(GalleryPage(emptyList(), totalCount = 0, offset = it.offset))
         }
-        val holder = GalleryStateHolder(repository, this)
+        val holder = testGalleryStateHolder(repository)
         holder.start()
         advanceUntilIdle()
 
@@ -319,7 +391,7 @@ class GalleryStateHolderTest {
         val repository = FakeGalleryRepository {
             RepositoryResult.Success(GalleryPage(emptyList(), totalCount = 0, offset = 0))
         }
-        val holder = GalleryStateHolder(repository, this)
+        val holder = testGalleryStateHolder(repository)
 
         holder.cycleTagSelection("type/image")
         assertEquals(setOf("type/image"), holder.state.value.query.includeTags)
@@ -338,6 +410,16 @@ class GalleryStateHolderTest {
         assertTrue(holder.state.value.query.virtualFilters.isEmpty())
     }
 }
+
+private fun TestScope.testGalleryStateHolder(
+    repository: GalleryRepository,
+    initialQuery: GalleryQuery = GalleryQuery(),
+) = GalleryStateHolder(
+    repository = repository,
+    scope = this,
+    initialQuery = initialQuery,
+    repositoryDispatcher = StandardTestDispatcher(testScheduler),
+)
 
 private class FakeGalleryRepository(
     private val query: suspend (GalleryQuery) -> RepositoryResult<GalleryPage>,

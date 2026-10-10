@@ -38,19 +38,21 @@
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Browsing       | Switch between per-note and all-media views. Tiles can show a running number and counts of images, memos and related links                                             |
 | Paging         | Configurable page size, "N–M of Total" indicator, jump to any position, and automatic loading of neighbouring pages while scrolling                                    |
-| Search         | Note name, `#tag`, `-#tag`, `&#tag` and fuzzy tag-name search                                                                                                          |
+| Search         | Fuzzy note names/paths; `#tag` (OR), `+#tag` (AND), `-#tag` (exclude), and fuzzy tag-name search; `&#tag` remains an AND alias                                      |
 | Filtering      | Hierarchical tags with include / exclude / AND / none. OR within a category, AND across categories. Sort by created or published date (default: created, newest first) |
 | Viewer         | Full-size media on a black background. Tap to show the author, post text, memos and related links. Swipe, arrow keys or trackpad to switch media                       |
 | Related links  | Markdown links and wikilinks (including `![[…]]` and `![](…)`) that point to a note open in the in-app detail view                                                     |
 | Video          | Playback with mpv: speed, single-item loop, mute. Thumbnails use FFmpeg                                                                                                |
-| Appearance     | Material 3 Expressive-inspired colours, shapes and motion; Material You dynamic colour; system / light / dark / pure black                                             |
-| Language       | English and Japanese. English is the default unless the system language is Japanese; switch it in Settings → Appearance                                                |
+| Display        | Material 3 Expressive-inspired colours, shapes and motion; Material You dynamic colour; system / light / dark / pure black; system or Google Sans Flex font            |
+| Language       | English and Japanese. English is the default unless the system language is Japanese; switch it in Settings → Display                                                   |
 | Note structure | Configurable block order (author, media, post text, post-text end, related, memo), heading names/levels/bullets and frontmatter keys                                   |
 
 > [!NOTE]
 > The active UI is Kotlin Multiplatform / Compose. Android and Linux Desktop build paths are available.
 > Windows x64 tests, packaging, and a manual release workflow are configured; physical Windows runtime behavior has not
-> been verified. Signed Android release publication uses the local release script and must be verified with release credentials.
+> been verified. The latest published KMP prerelease is `2.0.0b3`; `2.0.0b4` is tagged in the repository but has no
+> published Release yet. Production-signed releases use the local release script and require release credentials.
+> See [the release guide](docs/releasing.md) for verified build paths and remaining release prerequisites.
 
 ## Using the app
 
@@ -100,19 +102,22 @@ The post text goes here.
 
 ### Settings
 
-1. **Appearance** — language (system / 日本語 / English), theme (system / light / dark), pure black, Material You
-2. **Paging and list** — page size, count display, tile numbers
-3. **Vault** — choose the Vault, rescan
-4. **Notes** — note structure and display (block order, headings, frontmatter) and tag settings
+1. **Appearance** — separate theme, language, and font lists at the top of Settings. Pure black changes only the background; other colours retain Material You. Paging, gallery-list controls, and the unavailable-media icon are in a separate page
+2. **Vault** — choose the Vault, rescan
+3. **Notes** — note structure and display (block order, headings, frontmatter) and tag settings
    (gallery tags, filter categories, hidden tags, tag colours). Each page has "Reset to defaults"
-5. **About** — information and licences, import / export / reset settings, help
+4. **About** — information and licences, import / export / reset settings, help
+
+On Linux, settings import and export use the system file chooser portal; Android uses the system
+Storage Access Framework.
 
 Filter categories (count, art style, gender, meta, rating, source, type, work, other) can be edited by exact
 path (`source/art`) or whole subtree (`source/count/*`). Per category you can choose whether tags at the third
 level and deeper are split by parent tag (off by default).
 
-The note-structure screen shows a fictional sample note and its Markdown reflecting your settings (nothing is
-written to the Vault). Changing the structure triggers a rescan. Tag settings only affect display; the Vault and
+Frontmatter aliases are edited at the top of Note structure. Tag rules use add/edit/remove lists.
+A separate card at the bottom shows a copyable fictional sample reflecting your settings; the Vault picker
+shows the default sample instead (nothing is written to the Vault). Changing the structure triggers a rescan. Tag settings only affect display; the Vault and
 the index contents are unchanged.
 
 ### Notes and the parser

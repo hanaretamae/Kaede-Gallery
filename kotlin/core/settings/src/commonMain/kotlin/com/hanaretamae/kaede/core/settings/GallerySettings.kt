@@ -12,6 +12,11 @@ enum class LanguagePreference {
     ENGLISH,
 }
 
+enum class FontPreference {
+    SYSTEM,
+    GOOGLE_SANS_FLEX,
+}
+
 fun LanguagePreference.resolve(systemLanguage: LanguagePreference): LanguagePreference =
     when (this) {
         LanguagePreference.SYSTEM ->
@@ -29,6 +34,7 @@ data class AppearanceSettings(
     val language: LanguagePreference = LanguagePreference.SYSTEM,
     val useSystemColor: Boolean = true,
     val pureBlack: Boolean = false,
+    val font: FontPreference = FontPreference.SYSTEM,
 )
 
 data class GallerySettings(

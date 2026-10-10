@@ -14,7 +14,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{Cursor, Read, Write};
 use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex, mpsc};
+use std::sync::{Arc, Mutex, RwLock, mpsc};
 use std::thread;
 use std::time::UNIX_EPOCH;
 use thiserror::Error;
@@ -30,7 +30,8 @@ const MAX_THUMBNAIL_PIXELS: u64 = 32 * 1024 * 1024;
 const MAX_THUMBNAIL_DIMENSION: u32 = 16_384;
 const MAX_THUMBNAIL_ALLOCATION: u64 = 192 * 1024 * 1024;
 const MAX_THUMBNAIL_SIZE: u32 = 1_024;
-static THUMBNAIL_LOCK: Mutex<()> = Mutex::new(());
+static THUMBNAIL_LOCK: RwLock<()> = RwLock::new(());
+static THUMBNAIL_CACHE_LOCK: Mutex<()> = Mutex::new(());
 const VIRTUAL_FILTERS: [(VirtualFilter, &str); 4] = [
     (VirtualFilter::MultipleMedia, "複数画像"),
     (VirtualFilter::HasMemo, "覚書あり"),
@@ -197,6 +198,15 @@ pub struct Gallery {
     note_structure: NoteStructureSettings,
 }
 
+pub struct ThumbnailRequest {
+    root: PathBuf,
+    source: PathBuf,
+    media_identity: String,
+    media_id: i64,
+    size: u32,
+    cache_root: PathBuf,
+}
+
 pub fn prepare_private_app_directory(directory: &Path, vault: &Path) -> Result<(), CoreError> {
     let vault_root = fs::canonicalize(vault).map_err(|_| CoreError::VaultUnavailable)?;
     let canonical = ensure_private_child_directory(directory, Some(&vault_root))?;
@@ -309,7 +319,7 @@ pub fn forget_selected_vault(directory: &Path, expected_vault: &str) -> Result<(
     }
     set_private_directory(&directory)?;
 
-    let _guard = THUMBNAIL_LOCK.lock().map_err(|_| CoreError::Worker)?;
+    let _guard = THUMBNAIL_LOCK.write().map_err(|_| CoreError::Worker)?;
     for name in [
         "index.sqlite-journal",
         "index.sqlite-wal",
@@ -1690,15 +1700,52 @@ impl Gallery {
         size: u32,
         cache_root: &Path,
     ) -> Result<Option<Vec<u8>>, CoreError> {
+        self.prepare_thumbnail(media_id, size, cache_root)?
+            .map(ThumbnailRequest::load)
+            .transpose()
+            .map(Option::flatten)
+    }
+
+    pub fn prepare_thumbnail(
+        &self,
+        media_id: i64,
+        size: u32,
+        cache_root: &Path,
+    ) -> Result<Option<ThumbnailRequest>, CoreError> {
         if size == 0 || size > MAX_THUMBNAIL_SIZE {
             return Err(CoreError::Io);
         }
-        let _guard = THUMBNAIL_LOCK.lock().map_err(|_| CoreError::Worker)?;
         let Some((source, media_identity, is_video)) = self.media_path(media_id)? else {
             return Ok(None);
         };
         if is_video {
             return Ok(None);
+        }
+        Ok(Some(ThumbnailRequest {
+            root: self.root.clone(),
+            source,
+            media_identity,
+            media_id,
+            size,
+            cache_root: cache_root.to_path_buf(),
+        }))
+    }
+}
+
+impl ThumbnailRequest {
+    pub fn load(self) -> Result<Option<Vec<u8>>, CoreError> {
+        let _load_guard = THUMBNAIL_LOCK.read().map_err(|_| CoreError::Worker)?;
+        let Self {
+            root,
+            source,
+            media_identity,
+            media_id,
+            size,
+            cache_root,
+        } = self;
+        let source = fs::canonicalize(source).map_err(|_| CoreError::Io)?;
+        if !source.starts_with(&root) {
+            return Err(CoreError::Io);
         }
         let metadata = fs::metadata(&source).map_err(|_| CoreError::Io)?;
         if !metadata.is_file() || metadata.len() > MAX_THUMBNAIL_SOURCE_BYTES {
@@ -1709,7 +1756,8 @@ impl Gallery {
             .ok()
             .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
             .map_or(0, |duration| duration.as_nanos());
-        let cache_root = prepare_thumbnail_cache(cache_root, &self.root)?;
+        let cache_guard = THUMBNAIL_CACHE_LOCK.lock().map_err(|_| CoreError::Worker)?;
+        let cache_root = prepare_thumbnail_cache(&cache_root, &root)?;
         let media_shard = cache_root.join(format!("{:02x}", media_id.rem_euclid(256)));
         match fs::symlink_metadata(&media_shard) {
             Ok(metadata) if metadata.file_type().is_dir() => {}
@@ -1743,6 +1791,7 @@ impl Gallery {
             }
             return fs::read(cache_file).map(Some).map_err(|_| CoreError::Io);
         }
+        drop(cache_guard);
 
         let mut input = Vec::with_capacity(metadata.len() as usize);
         File::open(source)
@@ -1789,6 +1838,13 @@ impl Gallery {
         if encoded.get_ref().len() > 4 * 1024 * 1024 {
             return Ok(None);
         }
+        let _cache_guard = THUMBNAIL_CACHE_LOCK.lock().map_err(|_| CoreError::Worker)?;
+        if let Ok(cache_metadata) = fs::symlink_metadata(&cache_file) {
+            if !cache_metadata.file_type().is_file() || cache_metadata.len() > 4 * 1024 * 1024 {
+                return Err(CoreError::Io);
+            }
+            return fs::read(cache_file).map(Some).map_err(|_| CoreError::Io);
+        }
         match fs::symlink_metadata(&temporary_file) {
             Ok(_) => fs::remove_file(&temporary_file).map_err(|_| CoreError::Io)?,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
@@ -1810,7 +1866,9 @@ impl Gallery {
         fs::rename(&temporary_file, &cache_file).map_err(|_| CoreError::Io)?;
         Ok(Some(encoded.into_inner()))
     }
+}
 
+impl Gallery {
     pub fn video_source_path(&self, media_id: i64) -> Result<Option<PathBuf>, CoreError> {
         let Some((source, _, is_video)) = self.media_path(media_id)? else {
             return Ok(None);
@@ -2605,7 +2663,11 @@ fn parse_note_search_query(query: &str) -> (String, Vec<String>, Vec<String>, Ve
     let mut all_tags = Vec::new();
     let mut excluded_tags = Vec::new();
     for term in query.split_whitespace() {
-        if let Some(tag) = term.strip_prefix("&#").filter(|tag| !tag.is_empty()) {
+        if let Some(tag) = term
+            .strip_prefix("+#")
+            .or_else(|| term.strip_prefix("&#"))
+            .filter(|tag| !tag.is_empty())
+        {
             all_tags.push(tag.to_owned());
         } else if let Some(tag) = term.strip_prefix("-#").filter(|tag| !tag.is_empty()) {
             excluded_tags.push(tag.to_owned());
@@ -4056,6 +4118,18 @@ mod tests {
             .expect("AND tag search");
         assert_eq!(all_tag_search.len(), 1);
         assert_eq!(all_tag_search[0].title, "Fictional Portrait");
+        let plus_all_tag_search = gallery
+            .query_filtered_page_search(
+                &[],
+                &[],
+                &[],
+                "+#source/type/animal +#source/service/pixiv",
+                0,
+                10,
+            )
+            .expect("plus-prefixed AND tag search");
+        assert_eq!(plus_all_tag_search.len(), 1);
+        assert_eq!(plus_all_tag_search[0].title, "Fictional Portrait");
         let combined_search = gallery
             .query_filtered_page_search(&[], &[], &[], "Fictional #source/type/animal", 0, 10)
             .expect("combined title and tag search");
@@ -4330,10 +4404,41 @@ mod tests {
         gallery.scan().expect("scan");
         let note = gallery.query(&[], 1).expect("query").remove(0);
         let media_id = note.representative_media_id.expect("media id");
-        let thumbnail = gallery
-            .get_thumbnail(media_id, 320, &cache)
-            .expect("thumbnail")
-            .expect("decoded image");
+        let (request, duplicate_request) = {
+            let _lifecycle_guard = super::THUMBNAIL_LOCK
+                .write()
+                .expect("hold thumbnail lifecycle lock");
+            let request = gallery
+                .prepare_thumbnail(media_id, 320, &cache)
+                .expect("prepare without waiting for a decoder")
+                .expect("image request");
+            let duplicate_request = gallery
+                .prepare_thumbnail(media_id, 320, &cache)
+                .expect("prepare duplicate image request")
+                .expect("duplicate image request");
+            assert!(
+                gallery
+                    .note_detail(note.id)
+                    .expect("detail while thumbnail lifecycle is locked")
+                    .is_some()
+            );
+            (request, duplicate_request)
+        };
+        let (thumbnail_result, duplicate_thumbnail_result) = std::thread::scope(|scope| {
+            let first = scope.spawn(move || request.load());
+            let duplicate = scope.spawn(move || duplicate_request.load());
+            (
+                first.join().expect("thumbnail worker"),
+                duplicate.join().expect("duplicate thumbnail worker"),
+            )
+        });
+        let thumbnail = thumbnail_result.expect("thumbnail").expect("decoded image");
+        assert_eq!(
+            thumbnail,
+            duplicate_thumbnail_result
+                .expect("duplicate thumbnail")
+                .expect("duplicate decoded image"),
+        );
         assert_eq!(&thumbnail[..8], b"\x89PNG\r\n\x1a\n");
         assert_eq!(
             gallery
@@ -4367,6 +4472,15 @@ mod tests {
                 fs::metadata(shard).expect("shard metadata").mode() & 0o777,
                 0o700
             );
+            let request = gallery
+                .prepare_thumbnail(media_id, 640, &cache)
+                .expect("prepare image")
+                .expect("request");
+            let outside = cache.join("fictional-outside.png");
+            fs::write(&outside, b"fictional").expect("write outside fixture");
+            fs::remove_file(root.join("tiny.png")).expect("replace fictional source");
+            std::os::unix::fs::symlink(&outside, root.join("tiny.png")).expect("symlink fixture");
+            assert!(matches!(request.load(), Err(CoreError::Io)));
         }
         fs::remove_dir_all(&cache).expect("remove thumbnail cache");
         fs::remove_file(&database).expect("remove index");

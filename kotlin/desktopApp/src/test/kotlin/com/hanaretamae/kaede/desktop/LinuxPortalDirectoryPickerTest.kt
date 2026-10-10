@@ -30,6 +30,16 @@ class LinuxPortalDirectoryPickerTest {
                 "{'directory': <true>, 'multiple': <false>, 'modal': <true>})",
             linuxPortalOpenOptions("A 'Vault'"),
         )
+        assertEquals(
+            "('', 'Import settings', " +
+                "{'directory': <false>, 'multiple': <false>, 'modal': <true>})",
+            linuxPortalOpenFileOptions("Import settings"),
+        )
+        assertEquals(
+            "('', 'Export settings', " +
+                "{'current_name': <'settings.kgsettings'>, 'modal': <true>})",
+            linuxPortalSaveFileOptions("Export settings", "settings.kgsettings"),
+        )
     }
 
     @Test
@@ -58,14 +68,17 @@ class LinuxPortalDirectoryPickerTest {
 
         assertNotNull(NativeApis.gio)
         val glib = NativeApis.glib
-        val parameters = LinuxPortalDirectoryPicker.openFileParameters(
-            glib,
-            "Select an existing Vault",
-        )
-        try {
-            assertEquals(3L, glib.g_variant_n_children(parameters).toLong())
-        } finally {
-            glib.g_variant_unref(parameters)
+        listOf(
+            linuxPortalOpenOptions("Select an existing Vault"),
+            linuxPortalOpenFileOptions("Import settings"),
+            linuxPortalSaveFileOptions("Export settings", "settings.kgsettings"),
+        ).forEach { options ->
+            val parameters = LinuxPortalDirectoryPicker.fileChooserParameters(glib, options)
+            try {
+                assertEquals(3L, glib.g_variant_n_children(parameters).toLong())
+            } finally {
+                glib.g_variant_unref(parameters)
+            }
         }
     }
 
@@ -153,6 +166,23 @@ class LinuxPortalDirectoryPickerTest {
             assertNull(resolvePortalDirectory(java.net.URI("https://example.invalid/vault")))
             assertFalse(Files.exists(directory.resolve("missing")))
             assertTrue(Files.isDirectory(directory))
+        } finally {
+            Files.deleteIfExists(file)
+            Files.deleteIfExists(directory)
+        }
+    }
+
+    @Test
+    fun resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris() {
+        val directory = Files.createTempDirectory("kaede-portal-settings")
+        val file = Files.write(directory.resolve("settings.kgsettings"), byteArrayOf(1))
+        val newFile = directory.resolve("new-settings.kgsettings")
+        try {
+            assertEquals(file.toRealPath(), resolvePortalRegularFile(file.toUri()))
+            assertNull(resolvePortalRegularFile(directory.toUri()))
+            assertEquals(newFile, resolvePortalSaveFile(newFile.toUri()))
+            assertEquals(file.toRealPath(), resolvePortalSaveFile(file.toUri()))
+            assertNull(resolvePortalSaveFile(java.net.URI("https://example.invalid/settings")))
         } finally {
             Files.deleteIfExists(file)
             Files.deleteIfExists(directory)

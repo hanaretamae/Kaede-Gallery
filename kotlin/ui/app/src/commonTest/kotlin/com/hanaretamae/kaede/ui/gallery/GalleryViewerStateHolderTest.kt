@@ -2,6 +2,7 @@ package com.hanaretamae.kaede.ui.gallery
 
 import com.hanaretamae.kaede.core.model.GalleryCategory
 import com.hanaretamae.kaede.core.model.GalleryDetailLine
+import com.hanaretamae.kaede.core.model.GalleryEntry
 import com.hanaretamae.kaede.core.model.GalleryNoteDetail
 import com.hanaretamae.kaede.core.model.GalleryPage
 import com.hanaretamae.kaede.core.model.GalleryQuery
@@ -13,12 +14,17 @@ import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.CompletableDeferred
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class GalleryViewerStateHolderTest {
@@ -30,7 +36,7 @@ class GalleryViewerStateHolderTest {
             detail = detail(listOf(first, second)),
             locations = mapOf(first.id to "media/first.jpg", second.id to "media/second.jpg"),
         )
-        val holder = GalleryViewerStateHolder(repository, this, note(first.id))
+        val holder = testGalleryViewerStateHolder(repository, note(first.id))
 
         holder.start()
         advanceUntilIdle()
@@ -53,9 +59,8 @@ class GalleryViewerStateHolderTest {
 
     @Test
     fun missingDetailReturnsSanitizedFailure() = runTest {
-        val holder = GalleryViewerStateHolder(
+        val holder = testGalleryViewerStateHolder(
             ViewerRepository(detail = null),
-            this,
             note(MediaId(21)),
         )
 
@@ -71,9 +76,8 @@ class GalleryViewerStateHolderTest {
     fun mediaEntrySelectsItsOwnMedia() = runTest {
         val first = media(21)
         val selected = media(22)
-        val holder = GalleryViewerStateHolder(
+        val holder = testGalleryViewerStateHolder(
             ViewerRepository(detail = detail(listOf(first, selected))),
-            this,
             selected,
         )
 
@@ -83,7 +87,101 @@ class GalleryViewerStateHolderTest {
         assertEquals(selected, holder.state.value.selectedMedia)
         assertEquals(1, holder.state.value.selectedMediaIndex)
     }
+
+    @Test
+    fun viewerResolvesAdjacentImageLocationsInParallelForPrefetch() = runTest {
+        val first = media(21)
+        val second = media(22)
+        val third = media(23)
+        val neighborGate = CompletableDeferred<Unit>()
+        val requestedLocations = mutableSetOf<MediaId>()
+        val repository = object : GalleryRepository by ViewerRepository(
+            detail = detail(listOf(first, second, third)),
+        ) {
+            override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> {
+                requestedLocations += mediaId
+                if (mediaId != first.id) neighborGate.await()
+                return RepositoryResult.Success("media/${mediaId.value}.jpg")
+            }
+        }
+        val holder = testGalleryViewerStateHolder(repository, first)
+
+        holder.start()
+        runCurrent()
+
+        assertEquals(listOf(second.id, third.id), holder.state.value.neighborMediaIds)
+        assertTrue(
+            requestedLocations.containsAll(listOf(second.id, third.id)),
+            "Adjacent locations should resolve concurrently while the selected image loads.",
+        )
+
+        neighborGate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(
+            listOf("media/22.jpg", "media/23.jpg"),
+            holder.state.value.neighborMediaLocations,
+        )
+        holder.dispose()
+    }
+
+    @Test
+    fun noteDetailBecomesVisibleBeforeSlowMediaLocationFinishes() = runTest {
+        val media = media(21)
+        val locationGate = CompletableDeferred<Unit>()
+        val repository = object : GalleryRepository by ViewerRepository(detail(listOf(media))) {
+            override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> {
+                locationGate.await()
+                return RepositoryResult.Success("media/fictional.png")
+            }
+        }
+        val holder = testGalleryViewerStateHolder(repository, media)
+        holder.start()
+        runCurrent()
+        assertEquals("Sample note", holder.state.value.note?.title)
+        assertFalse(holder.state.value.loading)
+        assertNull(holder.state.value.mediaLocation)
+        locationGate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals("media/fictional.png", holder.state.value.mediaLocation)
+        holder.dispose()
+    }
+
+    @Test
+    fun lateInitialLocationDoesNotReplaceMediaSelectedWhileLoading() = runTest {
+        val first = media(21)
+        val second = media(22)
+        val locationGate = CompletableDeferred<Unit>()
+        val repository = object : GalleryRepository by ViewerRepository(detail(listOf(first, second))) {
+            override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> {
+                if (mediaId == first.id) locationGate.await()
+                return RepositoryResult.Success(
+                    if (mediaId == first.id) "media/first.png" else "media/second.png",
+                )
+            }
+        }
+        val holder = testGalleryViewerStateHolder(repository, first)
+        holder.start()
+        runCurrent()
+        holder.showNextMedia()
+        runCurrent()
+        assertEquals("media/second.png", holder.state.value.mediaLocation)
+        locationGate.complete(Unit)
+        advanceUntilIdle()
+        assertEquals(second, holder.state.value.selectedMedia)
+        assertEquals("media/second.png", holder.state.value.mediaLocation)
+        holder.dispose()
+    }
 }
+
+private fun TestScope.testGalleryViewerStateHolder(
+    repository: GalleryRepository,
+    entry: GalleryEntry,
+) = GalleryViewerStateHolder(
+    repository = repository,
+    scope = this,
+    entry = entry,
+    repositoryDispatcher = StandardTestDispatcher(testScheduler),
+)
 
 private class ViewerRepository(
     private val detail: GalleryNoteDetail?,

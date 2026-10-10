@@ -12,9 +12,15 @@
 
 ## Current 2.0.0b4 status
 
-The `2.0.0b4` source commit and matching tag are pushed separately from production release publication. Run the local release script after verifying the tag to create signed artifacts and the GitHub prerelease. The prior `2.0.0b3` and `2.0.0b2` tags are historical; do not move or recreate them.
+As checked on 2026-10-11, `2.0.0b3` is the latest published KMP prerelease. The `2.0.0b4` source commit and matching tag exist, but no GitHub Release has been published for that tag. Run the local release script only after verifying the tag and completing the release gates below. The prior `2.0.0b3` and `2.0.0b2` tags are historical; do not move or recreate them.
 
 The release script permits Markdown-only documentation commits after the tag, except changes to `CHANGELOG.md`; it requires the current commit to match `origin/main`. Keep the release notes and all non-documentation release code at the tagged commit.
+
+## Preparing the stable 2.0.0 release
+
+The repository remains on `2.0.0b4`; this guide update does not change `VERSION`, create a tag, or publish anything. Do not begin the stable release until the Phase 14 acceptance gate in `docs/design.md` is satisfied, including the required prerelease and Windows archive checks. Then review and finalize the draft in `CHANGELOG.md` against the release commit, update `VERSION` to `2.0.0`, and include both in a reviewed release commit. Commit and push that exact source, create and push the matching `2.0.0` tag, and run the full local release procedure below with `tools/release.sh 2.0.0`. Unlike beta tags, `2.0.0` is published as a stable release.
+
+Before publishing, verify the generated Android APK signatures and package permissions, the Linux x86_64/AArch64 bundles, generated license notices, checksums, and the Kotlin/Rust test results. Attach the Windows archive only after the stable GitHub Release exists. Record only target checks that actually completed; Windows runtime execution and any untested hardware/provider combinations remain unverified. The exact release assets and checksums should be checked on the public Release page after upload.
 
 ## Full release from a local Linux host
 

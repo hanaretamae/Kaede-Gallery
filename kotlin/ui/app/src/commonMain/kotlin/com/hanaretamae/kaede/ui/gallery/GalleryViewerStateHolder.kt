@@ -10,16 +10,29 @@ import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class GalleryViewerMediaState(
     val media: MediaSummary,
     val location: String?,
     val locationLoading: Boolean,
+    /** Whether the viewer is in full screen; video players show it on their own control. */
+    val fullscreen: Boolean = false,
+    val onToggleFullscreen: (() -> Unit)? = null,
+    /** Locations of adjacent media that platforms may decode ahead of time. */
+    val prefetchLocations: List<String> = emptyList(),
+    /** IDs of adjacent media that platforms may load ahead of time. */
+    val prefetchMediaIds: List<MediaId> = emptyList(),
 )
 
 data class GalleryViewerUiState(
@@ -28,6 +41,8 @@ data class GalleryViewerUiState(
     val selectedMediaIndex: Int = -1,
     val mediaLocation: String? = null,
     val mediaLocationLoading: Boolean = false,
+    val neighborMediaLocations: List<String> = emptyList(),
+    val neighborMediaIds: List<MediaId> = emptyList(),
     val loading: Boolean = false,
     val error: RepositoryError? = null,
 ) {
@@ -39,6 +54,7 @@ class GalleryViewerStateHolder(
     private val repository: GalleryRepository,
     private val scope: CoroutineScope,
     private val entry: GalleryEntry,
+    private val repositoryDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val mutableState = MutableStateFlow(GalleryViewerUiState(loading = true))
     val state: StateFlow<GalleryViewerUiState> = mutableState.asStateFlow()
@@ -46,6 +62,10 @@ class GalleryViewerStateHolder(
     private var revision = 0L
     private var loadJob: Job? = null
     private var locationJob: Job? = null
+    private var prefetchJob: Job? = null
+    private val locationCache = LinkedHashMap<MediaId, String>()
+
+    fun cachedMediaLocation(mediaId: MediaId): String? = locationCache[mediaId]
 
     fun start() {
         val noteId = when (entry) {
@@ -56,7 +76,11 @@ class GalleryViewerStateHolder(
         val currentRevision = ++revision
         mutableState.value = GalleryViewerUiState(loading = true)
         loadJob = scope.launch {
-            when (val result = repository.noteDetail(noteId)) {
+            val earlyLocation = (entry as? MediaSummary)?.let { media ->
+                async(repositoryDispatcher) { media.id to repository.mediaLocation(media.id) }
+            }
+            val detailResult = withContext(repositoryDispatcher) { repository.noteDetail(noteId) }
+            when (val result = detailResult) {
                 is RepositoryResult.Failure -> {
                     if (currentRevision == revision) {
                         mutableState.value = GalleryViewerUiState(error = result.error)
@@ -88,8 +112,20 @@ class GalleryViewerStateHolder(
                             note = detail,
                             media = detail.media,
                             selectedMediaIndex = selectedIndex,
+                            mediaLocation = detail.media.getOrNull(selectedIndex)?.id?.let(locationCache::get),
+                            mediaLocationLoading = selectedIndex >= 0 &&
+                                detail.media[selectedIndex].id !in locationCache,
+                            neighborMediaIds = neighborIndices(detail.media, selectedIndex)
+                                .map { detail.media[it].id },
                         )
-                        loadMediaLocation(currentRevision, detail.media.getOrNull(selectedIndex)?.id)
+                        prefetchNeighbors(currentRevision)
+                        earlyLocation?.await()?.let { (id, location) ->
+                            if (currentRevision != revision) return@launch
+                            if (location is RepositoryResult.Success) {
+                                location.value?.let { rememberLocation(id, it) }
+                            }
+                        }
+                        loadMediaLocation(currentRevision, mutableState.value.selectedMedia?.id)
                     }
                 }
             }
@@ -108,26 +144,47 @@ class GalleryViewerStateHolder(
         revision++
         loadJob?.cancel()
         locationJob?.cancel()
+        prefetchJob?.cancel()
+        locationCache.clear()
     }
 
     private fun selectMedia(index: Int) {
         val current = mutableState.value
         if (index !in current.media.indices || index == current.selectedMediaIndex) return
         locationJob?.cancel()
+        val cached = locationCache[current.media[index].id]
         mutableState.value = current.copy(
             selectedMediaIndex = index,
-            mediaLocation = null,
-            mediaLocationLoading = true,
+            mediaLocation = cached,
+            mediaLocationLoading = cached == null,
+            neighborMediaIds = neighborIndices(current.media, index)
+                .map { current.media[it].id },
+            neighborMediaLocations = emptyList(),
             error = null,
         )
-        loadMediaLocation(revision, current.media[index].id)
+        prefetchNeighbors(revision)
+        if (cached == null) {
+            loadMediaLocation(revision, current.media[index].id)
+        }
     }
 
     private fun loadMediaLocation(currentRevision: Long, mediaId: MediaId?) {
-        if (mediaId == null) return
+        if (mediaId == null || currentRevision != revision ||
+            mutableState.value.selectedMedia?.id != mediaId
+        ) return
         locationJob?.cancel()
+        locationCache[mediaId]?.let { cached ->
+            mutableState.value = mutableState.value.copy(
+                mediaLocation = cached,
+                mediaLocationLoading = false,
+                error = null,
+            )
+            return
+        }
         locationJob = scope.launch {
-            when (val result = repository.mediaLocation(mediaId)) {
+            when (val result = withContext(repositoryDispatcher) {
+                repository.mediaLocation(mediaId)
+            }) {
                 is RepositoryResult.Failure -> {
                     if (currentRevision == revision &&
                         mutableState.value.selectedMedia?.id == mediaId
@@ -142,6 +199,7 @@ class GalleryViewerStateHolder(
                     if (currentRevision == revision &&
                         mutableState.value.selectedMedia?.id == mediaId
                     ) {
+                        result.value?.let { rememberLocation(mediaId, it) }
                         mutableState.value = mutableState.value.copy(
                             mediaLocation = result.value,
                             mediaLocationLoading = false,
@@ -150,6 +208,48 @@ class GalleryViewerStateHolder(
                     }
                 }
             }
+        }
+    }
+
+    private fun rememberLocation(mediaId: MediaId, location: String) {
+        locationCache.remove(mediaId)
+        locationCache[mediaId] = location
+        while (locationCache.size > MAX_CACHED_LOCATIONS) {
+            locationCache.remove(locationCache.keys.first())
+        }
+    }
+
+    private fun neighborLocations(media: List<MediaSummary>, index: Int): List<String> =
+        neighborIndices(media, index).mapNotNull { locationCache[media[it].id] }
+
+    private fun neighborIndices(media: List<MediaSummary>, index: Int): List<Int> =
+        listOf(index + 1, index - 1, index + 2).filter { it in media.indices && !media[it].isVideo }
+
+    /** Resolves adjacent media locations so switching does not wait on the repository. */
+    private fun prefetchNeighbors(currentRevision: Long) {
+        prefetchJob?.cancel()
+        val snapshot = mutableState.value
+        val missing = neighborIndices(snapshot.media, snapshot.selectedMediaIndex)
+            .map { snapshot.media[it].id }
+            .filterNot(locationCache::containsKey)
+        prefetchJob = scope.launch {
+            val results = coroutineScope {
+                missing.map { mediaId ->
+                    async(repositoryDispatcher) {
+                        mediaId to repository.mediaLocation(mediaId)
+                    }
+                }.awaitAll()
+            }
+            if (currentRevision != revision) return@launch
+            results.forEach { (mediaId, result) ->
+                if (result is RepositoryResult.Success) {
+                    result.value?.let { rememberLocation(mediaId, it) }
+                }
+            }
+            val current = mutableState.value
+            mutableState.value = current.copy(
+                neighborMediaLocations = neighborLocations(current.media, current.selectedMediaIndex),
+            )
         }
     }
 
@@ -167,3 +267,4 @@ class GalleryViewerStateHolder(
         }
     }
 }
+private const val MAX_CACHED_LOCATIONS = 64

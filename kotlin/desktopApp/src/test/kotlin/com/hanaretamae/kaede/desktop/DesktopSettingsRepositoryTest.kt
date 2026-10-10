@@ -4,6 +4,7 @@ import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.GallerySettings
+import com.hanaretamae.kaede.core.settings.FontPreference
 import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.SettingsTransferCodec
 import com.hanaretamae.kaede.core.settings.ThemePreference
@@ -62,6 +63,7 @@ class DesktopSettingsRepositoryTest {
                     language = LanguagePreference.JAPANESE,
                     useSystemColor = false,
                     pureBlack = true,
+                    font = FontPreference.GOOGLE_SANS_FLEX,
                 ),
                 pageSize = 72,
                 fixedColumnCount = 4,

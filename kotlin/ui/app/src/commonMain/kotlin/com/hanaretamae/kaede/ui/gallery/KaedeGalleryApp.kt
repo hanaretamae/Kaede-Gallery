@@ -1,15 +1,21 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.hanaretamae.kaede.ui.gallery
 
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.ColorScheme
@@ -54,10 +60,11 @@ private sealed interface GalleryDestination {
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 fun KaedeGalleryApp(
     repository: GalleryRepository,
     settingsRepository: SettingsRepository,
-    galleryThumbnail: @Composable (MediaId, Boolean) -> Unit = { _, _ -> },
+    galleryThumbnail: @Composable (MediaId, Boolean, Boolean) -> Unit = { _, _, _ -> },
     mediaContent: @Composable (GalleryViewerMediaState) -> Unit,
     onExternalLink: (String) -> Unit,
     loadLicenseText: (String) -> String? = { null },
@@ -75,6 +82,7 @@ fun KaedeGalleryApp(
     onSetWallpaperMedia: ((GalleryViewerMediaState) -> Unit)? = null,
     onOpenVaultNote: ((String) -> Unit)? = null,
     onRescan: (suspend () -> RepositoryResult<*>)? = null,
+    rescanOnStart: Boolean = false,
     onChangeVault: (() -> Unit)? = null,
     onForgetVault: (suspend () -> RepositoryResult<*>)? = null,
     vaultName: String? = null,
@@ -84,14 +92,18 @@ fun KaedeGalleryApp(
     onExportSettings: ((String) -> Unit)? = null,
     onBackHandlerChanged: (((() -> Unit)?) -> Unit)? = null,
     backGestureProgress: Float = 0f,
+    onReady: () -> Unit = {},
+    settingsStateHolder: SettingsStateHolder? = null,
 ) {
     val scope = rememberCoroutineScope()
-    val settingsStateHolder = remember(settingsRepository, scope) {
-        SettingsStateHolder(settingsRepository, scope)
+    val ownsSettingsStateHolder = settingsStateHolder == null
+    val activeSettingsStateHolder = remember(settingsRepository, scope, settingsStateHolder) {
+        settingsStateHolder ?: SettingsStateHolder(settingsRepository, scope)
     }
-    val settingsState by settingsStateHolder.state.collectAsState()
+    val settingsState by activeSettingsStateHolder.state.collectAsState()
     var selectedEntries by remember { mutableStateOf<List<GalleryEntry>>(emptyList()) }
     var showSettings by remember { mutableStateOf(false) }
+    var viewerBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var latestScanWarningCount by remember(repository) { mutableStateOf(scanWarningCount) }
     LaunchedEffect(repository, scanWarningCount) {
         latestScanWarningCount = scanWarningCount
@@ -115,12 +127,20 @@ fun KaedeGalleryApp(
         update ->
         suspend { settings -> recordScanSummary(update(settings)) }
     }
-    LaunchedEffect(settingsStateHolder) { settingsStateHolder.load() }
-    DisposableEffect(settingsStateHolder) {
-        onDispose(settingsStateHolder::dispose)
+    LaunchedEffect(activeSettingsStateHolder, ownsSettingsStateHolder) {
+        if (ownsSettingsStateHolder) activeSettingsStateHolder.load()
+    }
+    DisposableEffect(activeSettingsStateHolder, ownsSettingsStateHolder) {
+        if (ownsSettingsStateHolder) {
+            onDispose(activeSettingsStateHolder::dispose)
+        } else {
+            onDispose {}
+        }
     }
 
     val settings = settingsState.settings
+    val settingsResolved = settings != null || !settingsState.loading
+    LaunchedEffect(settingsResolved) { if (settingsResolved) onReady() }
     val systemBackHandler = remember(showSettings, selectedEntries) {
         when {
             showSettings -> ({ showSettings = false })
@@ -129,7 +149,7 @@ fun KaedeGalleryApp(
         }
     }
     SideEffect {
-        onBackHandlerChanged?.invoke(systemBackHandler)
+        onBackHandlerChanged?.invoke(viewerBackHandler ?: systemBackHandler)
     }
     val tagColorRules = remember(settings?.flutterTagSettingsJson) {
         try {
@@ -172,7 +192,7 @@ fun KaedeGalleryApp(
                 is RepositoryResult.Success<*> -> {
                     appliedRustTagSettings = currentRustTagSettings
                 }
-                is RepositoryResult.Failure -> settingsStateHolder.reportError(result.error)
+                is RepositoryResult.Failure -> activeSettingsStateHolder.reportError(result.error)
             }
         }
     }
@@ -197,7 +217,7 @@ fun KaedeGalleryApp(
         if (settings == null) {
             Box(modifier = Modifier.fillMaxSize()) {
                 if (settingsState.loading) {
-                    CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+                    LoadingIndicator(modifier = Modifier.align(Alignment.Center))
                 } else {
                     Column(
                         modifier = Modifier.align(Alignment.Center),
@@ -207,7 +227,10 @@ fun KaedeGalleryApp(
                             settingsState.error?.let(activeGalleryStrings.error)
                                 ?: activeGalleryStrings.loading,
                         )
-                        TextButton(onClick = settingsStateHolder::load) {
+                        TextButton(
+                            shapes = ButtonDefaults.shapes(),
+                            onClick = activeSettingsStateHolder::load,
+                        ) {
                             Text(activeSettingsStrings.retry)
                         }
                     }
@@ -221,6 +244,11 @@ fun KaedeGalleryApp(
                     initialQuery = GalleryQuery(pageSize = settings.pageSize),
                 )
             }
+            DisposableEffect(galleryStateHolder) {
+                onDispose(galleryStateHolder::dispose)
+            }
+            val galleryGridState = rememberLazyGridState()
+            val motionScheme = remember { MotionScheme.expressive() }
             val destination = when {
                 showSettings -> GalleryDestination.Settings
                 selectedEntries.isNotEmpty() -> GalleryDestination.Viewer(selectedEntries.toList())
@@ -246,22 +274,47 @@ fun KaedeGalleryApp(
                             initial !is GalleryDestination.Settings -> true
                         else -> false
                     }
-                    if (forward) {
-                        (slideInHorizontally { it / 5 } + fadeIn()) togetherWith
-                            (slideOutHorizontally { -it / 5 } + fadeOut())
+                    if (
+                        target is GalleryDestination.Viewer &&
+                        initial !is GalleryDestination.Viewer
+                    ) {
+                        fadeIn(animationSpec = motionScheme.defaultEffectsSpec()) togetherWith
+                            fadeOut(animationSpec = motionScheme.defaultEffectsSpec())
+                    } else if (forward) {
+                        (
+                            slideInHorizontally(
+                                animationSpec = motionScheme.defaultSpatialSpec(),
+                            ) { it / 3 } +
+                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
+                            ) togetherWith (
+                            slideOutHorizontally(
+                                animationSpec = motionScheme.defaultSpatialSpec(),
+                            ) { -it / 3 } +
+                                fadeOut(animationSpec = motionScheme.defaultEffectsSpec())
+                            )
                     } else {
-                        (slideInHorizontally { -it / 5 } + fadeIn()) togetherWith
-                            (slideOutHorizontally { it / 5 } + fadeOut())
+                        (
+                            slideInHorizontally(
+                                animationSpec = motionScheme.defaultSpatialSpec(),
+                            ) { -it / 3 } +
+                                fadeIn(animationSpec = motionScheme.defaultEffectsSpec())
+                            ) togetherWith (
+                            slideOutHorizontally(
+                                animationSpec = motionScheme.defaultSpatialSpec(),
+                            ) { it / 3 } +
+                                fadeOut(animationSpec = motionScheme.defaultEffectsSpec())
+                            )
                     }
                 },
                 label = "gallery-navigation",
             ) { currentDestination ->
                 when (currentDestination) {
                     GalleryDestination.Settings -> GallerySettingsScreen(
-                        stateHolder = settingsStateHolder,
+                        stateHolder = activeSettingsStateHolder,
                         onClose = { showSettings = false },
                         strings = activeSettingsStrings,
                         loadOnEnter = false,
+                        disposeStateHolderOnExit = false,
                         onExternalLink = onExternalLink,
                         loadLicenseText = loadLicenseText,
                         onImportSettings = onImportSettings,
@@ -279,7 +332,10 @@ fun KaedeGalleryApp(
                     }
                     GalleryViewerScreen(
                         stateHolder = viewerStateHolder,
-                        onClose = { selectedEntries = selectedEntries.dropLast(1) },
+                        onClose = {
+                            viewerBackHandler = null
+                            selectedEntries = selectedEntries.dropLast(1)
+                        },
                         strings = activeViewerStrings,
                         onFullscreenChanged = onViewerFullscreenChanged,
                         onMediaOnlyChanged = onViewerMediaOnlyChanged,
@@ -292,6 +348,10 @@ fun KaedeGalleryApp(
                         onOpenNote = { noteId ->
                             selectedEntries = selectedEntries + noteId.asNoteEntry()
                         },
+                        onBackHandlerChanged = { backHandler ->
+                            viewerBackHandler = backHandler
+                            onBackHandlerChanged?.invoke(backHandler ?: systemBackHandler)
+                        },
                         tagColorRules = tagColorRules,
                         hiddenTagPrefixes = settings.hiddenTagPrefixes,
                         noteStructure = noteStructure,
@@ -299,6 +359,7 @@ fun KaedeGalleryApp(
                 }
                     GalleryDestination.Gallery -> GalleryScreen(
                         stateHolder = galleryStateHolder,
+                        gridState = galleryGridState,
                         onEntrySelected = { selectedEntries = selectedEntries + it },
                         onSettings = { showSettings = true },
                         vaultName = vaultName,
@@ -313,6 +374,7 @@ fun KaedeGalleryApp(
                         tagColorRules = tagColorRules,
                         galleryThumbnail = galleryThumbnail,
                         onRescan = rescanWithSummary,
+                        rescanOnStart = rescanOnStart,
                     )
                 }
             }

@@ -75,9 +75,18 @@ android {
     }
 
     sourceSets.getByName("main").assets.directories.add(rootProject.file("shared-assets").path)
+    sourceSets.getByName("main").assets.directories.add(
+        rootProject.layout.buildDirectory.dir("generated/distribution-assets").get().asFile.path,
+    )
 
     buildFeatures {
         compose = true
+    }
+
+    tasks.configureEach {
+        if (name.startsWith("merge") && name.endsWith("Assets")) {
+            dependsOn(rootProject.tasks.named("prepareDistributionNotices"))
+        }
     }
 }
 
@@ -88,6 +97,7 @@ dependencies {
     implementation(project(":ui:app"))
     implementation(libs.androidx.activity.compose)
     implementation(libs.compose.foundation.android)
+    implementation(libs.compose.material.icons.extended)
     implementation(libs.compose.material3.android)
     implementation(libs.compose.ui.android)
     implementation(libs.kotlinx.coroutines.android)

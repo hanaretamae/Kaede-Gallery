@@ -21,6 +21,7 @@ class SettingsTransferCodecTest {
                 language = LanguagePreference.JAPANESE,
                 useSystemColor = false,
                 pureBlack = true,
+                font = FontPreference.GOOGLE_SANS_FLEX,
             ),
             pageSize = 90,
             fixedColumnCount = 4,
@@ -93,6 +94,7 @@ class SettingsTransferCodecTest {
         val imported = assertNotNull(SettingsTransferCodec.decode(flutterJson))
         assertEquals(ThemePreference.LIGHT, imported.appearance.theme)
         assertEquals(LanguagePreference.ENGLISH, imported.appearance.language)
+        assertEquals(FontPreference.SYSTEM, imported.appearance.font)
         assertEquals(listOf("source/art"), imported.galleryTagPrefixes)
         assertEquals(48, imported.pageSize)
         assertEquals(false, imported.showLoadedRange)

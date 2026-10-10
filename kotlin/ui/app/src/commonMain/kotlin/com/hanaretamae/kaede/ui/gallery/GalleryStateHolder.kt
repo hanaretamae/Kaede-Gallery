@@ -8,12 +8,15 @@ import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 data class GalleryUiState(
     val query: GalleryQuery = GalleryQuery(),
@@ -36,6 +39,7 @@ class GalleryStateHolder(
     private val repository: GalleryRepository,
     private val scope: CoroutineScope,
     initialQuery: GalleryQuery = GalleryQuery(),
+    private val repositoryDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
     private val mutableState = MutableStateFlow(GalleryUiState(query = initialQuery.copy(offset = 0)))
     val state: StateFlow<GalleryUiState> = mutableState.asStateFlow()
@@ -48,9 +52,12 @@ class GalleryStateHolder(
     private var pendingJumpPageOffset: Long? = null
     private var pendingJumpItemOffset: Long? = null
     private var jumpRestoreState: GalleryUiState? = null
+    private var started = false
 
-    fun start() {
-        refresh()
+    fun start(initialRescan: (suspend () -> RepositoryResult<*>)? = null) {
+        if (started) return
+        started = true
+        if (initialRescan == null) refresh() else rescan(initialRescan)
     }
 
     fun setQuery(query: GalleryQuery, debounceSearch: Boolean = false) {
@@ -65,20 +72,20 @@ class GalleryStateHolder(
         searchJob?.cancel()
         mutableState.value = mutableState.value.copy(
             query = normalized,
-            entries = emptyList(),
-            pageOffset = 0,
-            totalCount = null,
             loading = false,
             error = null,
         )
-        requestCategories()
         if (debounceSearch) {
             val currentRevision = revision
             searchJob = scope.launch {
                 delay(SEARCH_DEBOUNCE_MILLIS)
-                if (revision == currentRevision) requestPage(reset = true)
+                if (revision == currentRevision) {
+                    requestCategories()
+                    requestPage(reset = true)
+                }
             }
         } else {
+            requestCategories()
             requestPage(reset = true)
         }
     }
@@ -208,7 +215,7 @@ class GalleryStateHolder(
             tag in query.excludedTags -> query.copy(excludedTags = query.excludedTags - tag)
             else -> query.copy(includeTags = query.includeTags + tag)
         }
-        setQuery(updated)
+        setQuery(updated, debounceSearch = true)
     }
 
     fun setVirtualFilter(filter: VirtualFilter, enabled: Boolean) {
@@ -217,6 +224,7 @@ class GalleryStateHolder(
             mutableState.value.query.copy(
                 virtualFilters = if (enabled) filters + filter else filters - filter,
             ),
+            debounceSearch = true,
         )
     }
 
@@ -256,7 +264,9 @@ class GalleryStateHolder(
         val query = current.query.copy(offset = offset)
         mutableState.value = current.copy(loading = true, error = null)
         requestJob = scope.launch {
-            val result = repository.queryPage(query)
+            val result = withContext(repositoryDispatcher) {
+                repository.queryPage(query)
+            }
             if (requestRevision != revision) return@launch
             val latest = mutableState.value
             when (result) {
@@ -316,7 +326,13 @@ class GalleryStateHolder(
                 is RepositoryResult.Failure -> {
                     pendingJumpPageOffset = null
                     pendingJumpItemOffset = null
-                    mutableState.value = latest.copy(loading = false, error = result.error)
+                    mutableState.value = latest.copy(
+                        entries = if (reset) emptyList() else latest.entries,
+                        pageOffset = if (reset) 0 else latest.pageOffset,
+                        totalCount = if (reset) null else latest.totalCount,
+                        loading = false,
+                        error = result.error,
+                    )
                 }
             }
         }
@@ -330,7 +346,9 @@ class GalleryStateHolder(
             categoriesError = null,
         )
         categoriesJob = scope.launch {
-            val result = repository.categories(query)
+            val result = withContext(repositoryDispatcher) {
+                repository.categories(query)
+            }
             if (requestRevision != revision) return@launch
             val latest = mutableState.value
             when (result) {

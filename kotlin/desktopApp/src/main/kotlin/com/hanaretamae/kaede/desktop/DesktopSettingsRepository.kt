@@ -6,6 +6,7 @@ import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.GallerySettings
 import com.hanaretamae.kaede.core.settings.GalleryTagDisplayPrefixesCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
+import com.hanaretamae.kaede.core.settings.FontPreference
 import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.core.settings.SettingsTransferCodec
@@ -76,6 +77,11 @@ class DesktopSettingsRepository(
                         ?: return@withContext RepositoryResult.Failure(
                             RepositoryError.OPERATION_FAILED,
                         )
+                val font = properties.getProperty(KEY_FONT, defaults.appearance.font.name)
+                    .let { value -> FontPreference.entries.firstOrNull { it.name == value } }
+                    ?: return@withContext RepositoryResult.Failure(
+                        RepositoryError.OPERATION_FAILED,
+                    )
                 val pageSizeText = properties.getProperty(KEY_PAGE_SIZE)
                 val pageSize = if (pageSizeText == null) {
                     defaults.pageSize
@@ -180,6 +186,7 @@ class DesktopSettingsRepository(
                             language = language,
                             useSystemColor = useSystemColor,
                             pureBlack = pureBlack,
+                            font = font,
                         ),
                         pageSize = pageSize,
                         fixedColumnCount = fixedColumnCount,
@@ -225,6 +232,7 @@ class DesktopSettingsRepository(
                                 settings.appearance.useSystemColor.toString(),
                             )
                             setProperty(KEY_PURE_BLACK, settings.appearance.pureBlack.toString())
+                            setProperty(KEY_FONT, settings.appearance.font.name)
                             setProperty(KEY_PAGE_SIZE, settings.pageSize.toString())
                             setProperty(
                                 KEY_FIXED_COLUMN_COUNT,
@@ -318,6 +326,7 @@ class DesktopSettingsRepository(
         const val KEY_LANGUAGE = "language"
         const val KEY_SYSTEM_COLOR = "use_system_color"
         const val KEY_PURE_BLACK = "pure_black"
+        const val KEY_FONT = "font"
         const val KEY_PAGE_SIZE = "page_size"
         const val KEY_FIXED_COLUMN_COUNT = "fixed_column_count"
         const val KEY_GALLERY_TAG_PREFIXES = "gallery_tag_prefixes"

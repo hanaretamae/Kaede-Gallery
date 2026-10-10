@@ -1,5 +1,11 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.hanaretamae.kaede.ui.gallery
 
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -10,33 +16,42 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.rememberBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.SegmentedListItem
+import androidx.compose.ui.unit.Dp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.FilterChip
@@ -50,15 +65,21 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.StickyNote2
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationSearching
@@ -66,10 +87,11 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -79,6 +101,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.input.ImeAction
@@ -128,7 +151,6 @@ data class GalleryStrings(
     val media: String,
     val loading: String,
     val noItems: String,
-    val loadMore: String,
     val retry: String,
     val reload: String,
     val filters: String,
@@ -150,6 +172,7 @@ data class GalleryStrings(
     val close: String,
     val clearFilters: String,
     val searchNotes: String,
+    val clearSearchText: String,
     val applySearch: String,
     val clearAllSearchAndFilters: String,
     val filterSearch: String,
@@ -181,7 +204,6 @@ val EnglishGalleryStrings = GalleryStrings(
     media = "Media",
     loading = "Loading…",
     noItems = "No items found",
-    loadMore = "Load more",
     retry = "Retry",
     reload = "Reload",
     filters = "Filters",
@@ -203,6 +225,7 @@ val EnglishGalleryStrings = GalleryStrings(
     close = "Close",
     clearFilters = "Clear filters",
     searchNotes = "Search notes",
+    clearSearchText = "Clear search text",
     applySearch = "Search",
     clearAllSearchAndFilters = "Clear all",
     filterSearch = "Filter tags",
@@ -236,7 +259,6 @@ val JapaneseGalleryStrings = GalleryStrings(
     media = "メディア",
     loading = "読み込み中…",
     noItems = "項目がありません",
-    loadMore = "さらに読み込む",
     retry = "再試行",
     reload = "再読み込み",
     filters = "フィルター",
@@ -258,6 +280,7 @@ val JapaneseGalleryStrings = GalleryStrings(
     close = "閉じる",
     clearFilters = "フィルターを解除",
     searchNotes = "ノートを検索",
+    clearSearchText = "検索文字列を消去",
     applySearch = "検索",
     clearAllSearchAndFilters = "検索とフィルターを解除",
     filterSearch = "タグを検索",
@@ -280,7 +303,7 @@ val JapaneseGalleryStrings = GalleryStrings(
         if (last == 0L) "0 / $total 件" else "$first〜$last / $total 件"
     },
     totalCount = { "$it 件" },
-    optionCount = { "$it 件" },
+    optionCount = { "$it" },
     virtualLabel = ::japaneseVirtualLabel,
 )
 
@@ -297,15 +320,31 @@ fun GalleryScreen(
     showCounts: Boolean = true,
     showMissingMediaIcon: Boolean = false,
     fixedColumnCount: Int = 0,
+    gridState: LazyGridState = rememberLazyGridState(),
     vaultName: String? = null,
     includedTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
     hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
     tagColorRules: List<GalleryTagColorRule> = GalleryTagColorCodec.DEFAULT_RULES,
-    galleryThumbnail: @Composable (MediaId, Boolean) -> Unit = { _, _ -> },
+    galleryThumbnail: @Composable (MediaId, Boolean, Boolean) -> Unit = { _, _, _ -> },
     onRescan: (suspend () -> RepositoryResult<*>)? = null,
+    rescanOnStart: Boolean = false,
 ) {
     val state by stateHolder.state.collectAsState()
+    val visibleGridIndices by remember(gridState) {
+        derivedStateOf {
+            gridState.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.index }
+        }
+    }
+    val coroutineScope = rememberCoroutineScope()
     var showFilters by remember(stateHolder) { mutableStateOf(false) }
+    val filterSheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(
+            SheetValue.Hidden,
+            SheetValue.PartiallyExpanded,
+            SheetValue.Expanded,
+        ),
+    )
     var contentMenuExpanded by remember(stateHolder) { mutableStateOf(false) }
     var tagFilterSearch by remember(stateHolder) { mutableStateOf("") }
     var expandedCategories by remember(stateHolder) { mutableStateOf(emptySet<String>()) }
@@ -321,8 +360,15 @@ fun GalleryScreen(
     var jumpProgressVisible by remember(stateHolder) { mutableStateOf(false) }
     var highlightedJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
     var visibleItemIndex by remember(stateHolder) { mutableStateOf(0) }
-    val gridState = rememberLazyGridState()
+    var previousQuery by remember(stateHolder) { mutableStateOf(state.query) }
     val jumpFocusRequester = remember { FocusRequester() }
+    fun applyNoteSearch() {
+        stateHolder.setQuery(state.query.copy(searchText = noteSearchDraft))
+        coroutineScope.launch {
+            filterSheetState.hide()
+            showFilters = false
+        }
+    }
     LaunchedEffect(tagFilterSearch) {
         val searching = tagFilterSearch.isNotBlank()
         if (searching && !wasSearchingTags) {
@@ -334,14 +380,17 @@ fun GalleryScreen(
         wasSearchingTags = searching
     }
     LaunchedEffect(stateHolder) {
-        stateHolder.start()
+        stateHolder.start(if (rescanOnStart) onRescan else null)
     }
     LaunchedEffect(state.query) {
-        pendingJumpOffset = null
-        jumpProgressVisible = false
-        highlightedJumpOffset = null
-        visibleItemIndex = 0
-        gridState.scrollToItem(0)
+        if (previousQuery != state.query) {
+            previousQuery = state.query
+            pendingJumpOffset = null
+            jumpProgressVisible = false
+            highlightedJumpOffset = null
+            visibleItemIndex = 0
+            gridState.scrollToItem(0)
+        }
     }
     LaunchedEffect(showJumpDialog) {
         if (showJumpDialog) jumpFocusRequester.requestFocus()
@@ -396,10 +445,6 @@ fun GalleryScreen(
             }
         }
     }
-    DisposableEffect(stateHolder) {
-        onDispose(stateHolder::dispose)
-    }
-
     val visibleRange = galleryVisibleRange(
         pageOffset = state.pageOffset,
         entryCount = state.entries.size,
@@ -408,31 +453,45 @@ fun GalleryScreen(
         pageSize = state.query.pageSize,
     )
 
+    val galleryScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val galleryTopBarColor = if (
+        gridState.firstVisibleItemIndex > 0 || gridState.firstVisibleItemScrollOffset > 0
+    ) {
+        MaterialTheme.colorScheme.surfaceContainerHigh
+    } else {
+        Color.Transparent
+    }
     Scaffold(
-        modifier = modifier.fillMaxSize(),
+        modifier = modifier.fillMaxSize().nestedScroll(galleryScrollBehavior.nestedScrollConnection),
         topBar = {
             Column {
                 TopAppBar(
+                    scrollBehavior = galleryScrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = galleryTopBarColor,
+                        scrolledContainerColor = galleryTopBarColor,
+                    ),
                     title = {
-                        Column(horizontalAlignment = Alignment.Start) {
-                            Text(
-                                text = vaultName ?: strings.title,
-                                style = MaterialTheme.typography.titleLarge,
-                                maxLines = 1,
-                            )
-                            Text(
-                                text = state.totalCount?.let { total ->
-                                    if (showLoadedRange) {
-                                        visibleRange?.let { range ->
-                                            strings.count(range.first, range.last, total)
-                                        } ?: strings.totalCount(total)
-                                    } else {
-                                        strings.totalCount(total)
-                                    }
-                                } ?: strings.loading,
-                                style = MaterialTheme.typography.labelMedium,
-                            )
-                        }
+                        Text(
+                            text = vaultName ?: strings.title,
+                            fontWeight = if (vaultName != null) FontWeight.Bold else FontWeight.Normal,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    },
+                    subtitle = {
+                        Text(
+                            text = state.totalCount?.let { total ->
+                                if (showLoadedRange) {
+                                    visibleRange?.let { range ->
+                                        strings.count(range.first, range.last, total)
+                                    } ?: strings.totalCount(total)
+                                } else {
+                                    strings.totalCount(total)
+                                }
+                            } ?: strings.loading,
+                            maxLines = 1,
+                        )
                     },
                     actions = {
                         val activeCount = state.query.includeTags.size +
@@ -447,11 +506,12 @@ fun GalleryScreen(
                                 }
                             },
                         ) {
-                            IconButton(onClick = { showFilters = true }) {
+                            KaedeIconButton(label = strings.filters, onClick = { showFilters = true }) {
                                 Icon(Icons.Filled.FilterList, strings.filters)
                             }
                         }
-                        IconButton(
+                        KaedeIconButton(
+                            label = strings.jump,
                             onClick = {
                                 positionDraft = ""
                                 positionError = false
@@ -462,7 +522,12 @@ fun GalleryScreen(
                             Icon(Icons.Filled.LocationSearching, strings.jump)
                         }
                         Box {
-                            IconButton(
+                            KaedeIconButton(
+                                label = if (state.query.content == GalleryContent.NOTES) {
+                                    strings.notes
+                                } else {
+                                    strings.media
+                                },
                                 onClick = { contentMenuExpanded = true },
                             ) {
                                 Icon(
@@ -480,15 +545,16 @@ fun GalleryScreen(
                                     },
                                 )
                             }
-                            DropdownMenu(
+                            KaedeMenu(
                                 expanded = contentMenuExpanded,
                                 onDismissRequest = { contentMenuExpanded = false },
                             ) {
-                                DropdownMenuItem(
-                                    text = { Text(strings.notes) },
-                                    leadingIcon = {
-                                        Icon(Icons.AutoMirrored.Filled.StickyNote2, null)
-                                    },
+                                KaedeSelectableMenuItem(
+                                    text = strings.notes,
+                                    selected = state.query.content == GalleryContent.NOTES,
+                                    index = 0,
+                                    count = 2,
+                                    leadingIcon = Icons.AutoMirrored.Filled.StickyNote2,
                                     onClick = {
                                         contentMenuExpanded = false
                                         stateHolder.setQuery(
@@ -496,9 +562,12 @@ fun GalleryScreen(
                                         )
                                     },
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(strings.media) },
-                                    leadingIcon = { Icon(Icons.Filled.Image, null) },
+                                KaedeSelectableMenuItem(
+                                    text = strings.media,
+                                    selected = state.query.content == GalleryContent.MEDIA,
+                                    index = 1,
+                                    count = 2,
+                                    leadingIcon = Icons.Filled.Image,
                                     onClick = {
                                         contentMenuExpanded = false
                                         stateHolder.setQuery(
@@ -508,7 +577,8 @@ fun GalleryScreen(
                                 )
                             }
                         }
-                        IconButton(
+                        KaedeIconButton(
+                            label = strings.reload,
                             onClick = {
                                 val rescan = onRescan
                                 if (rescan == null) {
@@ -521,7 +591,7 @@ fun GalleryScreen(
                         ) {
                             Icon(Icons.Filled.Refresh, strings.reload)
                         }
-                        IconButton(onClick = onSettings) {
+                        KaedeIconButton(label = strings.settings, onClick = onSettings) {
                             Icon(Icons.Filled.Settings, strings.settings)
                         }
                     },
@@ -542,9 +612,8 @@ fun GalleryScreen(
                     text = {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             if (state.loading) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(24.dp),
-                                    strokeWidth = 2.dp,
+                                LoadingIndicator(
+                                    modifier = Modifier.size(32.dp),
                                 )
                                 Spacer(Modifier.width(16.dp))
                             }
@@ -559,6 +628,7 @@ fun GalleryScreen(
                     },
                     confirmButton = {
                         TextButton(
+                            shapes = ButtonDefaults.shapes(),
                             onClick = {
                                 if (state.loading) {
                                     stateHolder.cancelJump()
@@ -596,7 +666,7 @@ fun GalleryScreen(
                 ) {
                     Text(text = error?.let(strings.error) ?: strings.noItems)
                     if (error != null) {
-                        TextButton(onClick = stateHolder::refresh) {
+                        TextButton(shapes = ButtonDefaults.shapes(), onClick = stateHolder::refresh) {
                             Text(strings.retry)
                         }
                     }
@@ -630,18 +700,19 @@ fun GalleryScreen(
                             showCounts = showCounts,
                             showMissingMediaIcon = showMissingMediaIcon,
                             galleryThumbnail = galleryThumbnail,
+                            isVisible = index in visibleGridIndices,
                             highlighted = highlightedJumpOffset == state.pageOffset + index,
                             onClick = { onEntrySelected(entry) },
                         )
                     }
-                    if (state.canLoadMore || state.error != null) {
+                    if (state.error != null && state.entries.isNotEmpty()) {
                         item(key = "load-more") {
                             TextButton(
+                                shapes = ButtonDefaults.shapes(),
                                 onClick = stateHolder::loadMore,
-                                enabled = !state.loading && state.canLoadMore,
+                                enabled = !state.loading,
                             ) {
-                                Text(strings.loadMore)
-                            }
+                                Text(strings.retry)
                             }
                         }
                     }
@@ -650,109 +721,178 @@ fun GalleryScreen(
         }
     }
     if (showFilters) {
-        ModalBottomSheet(onDismissRequest = { showFilters = false }) {
+        val expanded = filterSheetState.currentValue == SheetValue.Expanded ||
+            filterSheetState.targetValue == SheetValue.Expanded
+        ModalBottomSheet(
+            modifier = Modifier.padding(horizontal = if (expanded) 0.dp else 12.dp)
+                .testTag("GalleryFilterSheet"),
+            onDismissRequest = { showFilters = false },
+            sheetState = filterSheetState,
+            dragHandle = if (
+                filterSheetState.currentValue == SheetValue.Expanded ||
+                filterSheetState.targetValue == SheetValue.Expanded
+            ) {
+                null
+            } else {
+                {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 22.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Box(
+                            Modifier.size(width = 32.dp, height = 4.dp)
+                                .background(
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                                    CircleShape,
+                                ),
+                        )
+                    }
+                }
+            },
+            sheetMaxWidth = Dp.Unspecified,
+        ) {
             Column(
-                modifier = Modifier.fillMaxWidth().heightIn(max = 720.dp),
+                modifier = Modifier.fillMaxWidth().fillMaxHeight(),
             ) {
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(min = 72.dp)
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    AnimatedVisibility(
+                        visible = expanded,
+                        enter = fadeIn(
+                            MaterialTheme.motionScheme.defaultEffectsSpec(),
+                        ) + scaleIn(
+                            MaterialTheme.motionScheme.defaultSpatialSpec(),
+                            initialScale = 0.85f,
+                        ),
+                        exit = fadeOut(
+                            MaterialTheme.motionScheme.defaultEffectsSpec(),
+                        ) + scaleOut(
+                            MaterialTheme.motionScheme.defaultSpatialSpec(),
+                            targetScale = 0.85f,
+                        ),
+                    ) {
+                        KaedeTooltip(strings.close) {
+                            FilledTonalIconButton(
+                                shapes = IconButtonDefaults.shapes(),
+                                onClick = {
+                                    coroutineScope.launch {
+                                        filterSheetState.hide()
+                                        showFilters = false
+                                    }
+                                },
+                            ) {
+                                Icon(Icons.Filled.Close, strings.close)
+                            }
+                        }
+                    }
+                    if (expanded) Spacer(Modifier.width(8.dp))
                     Text(strings.filters, style = MaterialTheme.typography.titleLarge)
-                    Spacer(Modifier.weight(1f))
-                    TextButton(onClick = stateHolder::clearFilters) {
-                        Text(strings.clearFilters)
-                    }
                 }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(
-                        selected = state.query.sortField == GallerySortField.CREATED,
-                        onClick = {
-                            stateHolder.setQuery(state.query.copy(sortField = GallerySortField.CREATED))
-                        },
-                        label = { Text(strings.created) },
-                    )
-                    FilterChip(
-                        selected = state.query.sortField == GallerySortField.PUBLISHED,
-                        onClick = {
-                            stateHolder.setQuery(state.query.copy(sortField = GallerySortField.PUBLISHED))
-                        },
-                        label = { Text(strings.published) },
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    FilterChip(
-                        selected = state.query.sortDirection == SortDirection.DESCENDING,
-                        onClick = {
-                            stateHolder.setQuery(
-                                state.query.copy(sortDirection = SortDirection.DESCENDING),
-                            )
-                        },
-                        label = { Text(strings.descending) },
-                    )
-                    FilterChip(
-                        selected = state.query.sortDirection == SortDirection.ASCENDING,
-                        onClick = {
-                            stateHolder.setQuery(
-                                state.query.copy(sortDirection = SortDirection.ASCENDING),
-                            )
-                        },
-                        label = { Text(strings.ascending) },
-                    )
-                }
-                OutlinedTextField(
-                    value = noteSearchDraft,
-                    onValueChange = { noteSearchDraft = it },
-                    label = { Text(strings.searchNotes) },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(
-                        onSearch = {
-                            stateHolder.setQuery(state.query.copy(searchText = noteSearchDraft))
-                        },
-                    ),
+                Surface(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.End,
+                    shape = MaterialTheme.shapes.large,
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
-                    TextButton(
-                        onClick = {
-                            stateHolder.setQuery(state.query.copy(searchText = noteSearchDraft))
-                        },
+                    Column(
+                        Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(strings.applySearch)
-                    }
-                    TextButton(
-                        onClick = {
-                            noteSearchDraft = ""
-                            tagFilterSearch = ""
-                            stateHolder.setQuery(
-                                state.query.copy(
-                                    searchText = "",
-                                    includeTags = emptySet(),
-                                    andTags = emptySet(),
-                                    excludedTags = emptySet(),
-                                    virtualFilters = emptySet(),
-                                ),
-                            )
-                        },
-                    ) {
-                        Text(strings.clearAllSearchAndFilters)
+                    ConnectedChoiceGroup(
+                        options = listOf(GallerySortField.CREATED, GallerySortField.PUBLISHED),
+                        selected = state.query.sortField,
+                        label = { if (it == GallerySortField.CREATED) strings.created else strings.published },
+                        onSelect = { stateHolder.setQuery(state.query.copy(sortField = it)) },
+                    )
+                    ConnectedChoiceGroup(
+                        options = listOf(SortDirection.DESCENDING, SortDirection.ASCENDING),
+                        selected = state.query.sortDirection,
+                        label = { if (it == SortDirection.DESCENDING) strings.descending else strings.ascending },
+                        onSelect = { stateHolder.setQuery(state.query.copy(sortDirection = it)) },
+                    )
                     }
                 }
-                OutlinedTextField(
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    androidx.compose.material3.TextField(
+                        value = noteSearchDraft,
+                        onValueChange = { noteSearchDraft = it },
+                        placeholder = { Text(strings.searchNotes) },
+                        singleLine = true,
+                        leadingIcon = {
+                            Icon(Icons.AutoMirrored.Filled.StickyNote2, contentDescription = null)
+                        },
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(
+                            onSearch = { applyNoteSearch() },
+                        ),
+                        shape = CircleShape,
+                        colors = androidx.compose.material3.TextFieldDefaults.colors(
+                            focusedIndicatorColor = Color.Transparent,
+                            unfocusedIndicatorColor = Color.Transparent,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    )
+                    KaedeTooltip(strings.applySearch) {
+                        FilledTonalIconButton(
+                            modifier = Modifier.size(56.dp),
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                            ),
+                            onClick = { applyNoteSearch() },
+                        ) { Icon(Icons.Filled.Search, strings.applySearch, Modifier.size(28.dp)) }
+                    }
+                    KaedeTooltip(strings.clearAllSearchAndFilters) {
+                        FilledTonalIconButton(
+                            modifier = Modifier.size(56.dp),
+                            shapes = IconButtonDefaults.shapes(),
+                            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                            ),
+                            onClick = {
+                                noteSearchDraft = ""
+                                tagFilterSearch = ""
+                                stateHolder.setQuery(
+                                    state.query.copy(
+                                        searchText = "",
+                                        includeTags = emptySet(),
+                                        andTags = emptySet(),
+                                        excludedTags = emptySet(),
+                                        virtualFilters = emptySet(),
+                                    ),
+                                )
+                            },
+                        ) {
+                            Icon(
+                                Icons.Filled.Clear,
+                                strings.clearAllSearchAndFilters,
+                                Modifier.size(28.dp),
+                            )
+                        }
+                    }
+                }
+                androidx.compose.material3.TextField(
                     value = tagFilterSearch,
                     onValueChange = { tagFilterSearch = it },
-                    label = { Text(strings.filterSearch) },
+                    placeholder = { Text(strings.filterSearch) },
                     singleLine = true,
+                    leadingIcon = {
+                        Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null)
+                    },
+                    shape = CircleShape,
+                    colors = androidx.compose.material3.TextFieldDefaults.colors(
+                        focusedIndicatorColor = Color.Transparent,
+                        unfocusedIndicatorColor = Color.Transparent,
+                    ),
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
                 )
                 state.categoriesError?.let {
@@ -763,7 +903,9 @@ fun GalleryScreen(
                     )
                 }
                 if (state.categoriesLoading && state.categories.isEmpty()) {
-                    Text(strings.loadingTags, modifier = Modifier.padding(16.dp))
+                    LoadingIndicator(
+                        modifier = Modifier.align(Alignment.CenterHorizontally).padding(16.dp),
+                    )
                 } else if (state.categories.isEmpty()) {
                     Text(strings.noTags, modifier = Modifier.padding(16.dp))
                 } else {
@@ -795,86 +937,102 @@ fun GalleryScreen(
                                 val expanded = tagFilterSearch.isNotBlank() ||
                                     category.path in expandedCategories
                                 item(key = "category:${category.path}") {
-                                    ListItem(
-                                        headlineContent = { Text(category.displayName) },
-                                        supportingContent = {
-                                            Text(strings.optionCount(category.count))
-                                        },
-                                        trailingContent = {
-                                            Icon(
-                                                imageVector = if (expanded) {
-                                                    Icons.Filled.ExpandLess
-                                                } else {
-                                                    Icons.Filled.ExpandMore
+                                    Surface(
+                                        modifier = Modifier.fillMaxWidth()
+                                            .padding(horizontal = 12.dp, vertical = 4.dp),
+                                        shape = MaterialTheme.shapes.large,
+                                        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                    ) {
+                                        Column {
+                                            SegmentedListItem(
+                                                onClick = {
+                                                    if (tagFilterSearch.isBlank()) {
+                                                        expandedCategories = if (expanded) {
+                                                            expandedCategories - category.path
+                                                        } else {
+                                                            expandedCategories + category.path
+                                                        }
+                                                    }
                                                 },
-                                                contentDescription = null,
-                                            )
-                                        },
-                                        modifier = Modifier.fillMaxWidth().clickable {
-                                                if (tagFilterSearch.isBlank()) {
-                                                    expandedCategories = if (expanded) {
-                                                        expandedCategories - category.path
-                                                    } else {
-                                                        expandedCategories + category.path
+                                                modifier = Modifier.fillMaxWidth(),
+                                                shapes = ListItemDefaults.segmentedShapes(0, 1),
+                                                colors = ListItemDefaults.segmentedColors(
+                                                    containerColor = Color.Transparent,
+                                                ),
+                                                trailingContent = {
+                                                    Row(
+                                                        verticalAlignment = Alignment.CenterVertically,
+                                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    ) {
+                                                        FilterCountBadge(strings.optionCount(category.count))
+                                                        Icon(
+                                                            imageVector = if (expanded) {
+                                                                Icons.Filled.ExpandLess
+                                                            } else {
+                                                                Icons.Filled.ExpandMore
+                                                            },
+                                                            contentDescription = null,
+                                                        )
+                                                    }
+                                                },
+                                            ) {
+                                                Text(category.displayName)
+                                            }
+                                            if (expanded) {
+                                                FlowRow(
+                                                    modifier = Modifier.fillMaxWidth()
+                                                        .padding(
+                                                            start = 16.dp,
+                                                            end = 16.dp,
+                                                            top = 8.dp,
+                                                            bottom = 12.dp,
+                                                        ),
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                                ) {
+                                                    options.forEach { option ->
+                                                        val virtual = option.virtualFilter
+                                                        val selectedMode = when {
+                                                            virtual != null &&
+                                                                virtual in state.query.virtualFilters ->
+                                                                strings.includeAny
+                                                            virtual != null -> strings.inactive
+                                                            option.fullTag in state.query.includeTags ->
+                                                                strings.includeAny
+                                                            option.fullTag in state.query.andTags ->
+                                                                strings.includeAll
+                                                            option.fullTag in state.query.excludedTags ->
+                                                                strings.exclude
+                                                            else -> strings.inactive
+                                                        }
+                                                        FilterOption(
+                                                            option = option,
+                                                            label = virtual?.let {
+                                                                strings.virtualLabel(it)
+                                                            } ?: option.name,
+                                                            selectedMode = selectedMode,
+                                                            color = Color(
+                                                                GalleryTagColorCodec.colorFor(
+                                                                    option.fullTag,
+                                                                    tagColorRules,
+                                                                ),
+                                                            ),
+                                                            strings = strings,
+                                                            onClick = {
+                                                                if (virtual == null) {
+                                                                    stateHolder.cycleTagSelection(
+                                                                        option.fullTag,
+                                                                    )
+                                                                } else {
+                                                                    stateHolder.setVirtualFilter(
+                                                                        virtual,
+                                                                        virtual !in state.query.virtualFilters,
+                                                                    )
+                                                                }
+                                                            },
+                                                        )
                                                     }
                                                 }
-                                            },
-                                        colors = ListItemDefaults.colors(
-                                            containerColor =
-                                                MaterialTheme.colorScheme.surfaceContainerLow,
-                                        ),
-                                    )
-                                }
-                                if (expanded) {
-                                    item(key = "category-options:${category.path}") {
-                                        FlowRow(
-                                            modifier = Modifier.fillMaxWidth()
-                                                .padding(horizontal = 12.dp),
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(4.dp),
-                                        ) {
-                                            options.forEach { option ->
-                                                val virtual = option.virtualFilter
-                                                val selectedMode = when {
-                                                    virtual != null &&
-                                                        virtual in state.query.virtualFilters ->
-                                                        strings.includeAny
-                                                    virtual != null -> strings.inactive
-                                                    option.fullTag in state.query.includeTags ->
-                                                        strings.includeAny
-                                                    option.fullTag in state.query.andTags ->
-                                                        strings.includeAll
-                                                    option.fullTag in state.query.excludedTags ->
-                                                        strings.exclude
-                                                    else -> strings.inactive
-                                                }
-                                                FilterOption(
-                                                    option = option,
-                                                    label = virtual?.let {
-                                                        strings.virtualLabel(it)
-                                                    } ?: option.name,
-                                                    selectedMode = selectedMode,
-                                                    optionCount = strings.optionCount(option.count),
-                                                    color = Color(
-                                                        GalleryTagColorCodec.colorFor(
-                                                            option.fullTag,
-                                                            tagColorRules,
-                                                        ),
-                                                    ),
-                                                    strings = strings,
-                                                    onClick = {
-                                                        if (virtual == null) {
-                                                            stateHolder.cycleTagSelection(
-                                                                option.fullTag,
-                                                            )
-                                                        } else {
-                                                            stateHolder.setVirtualFilter(
-                                                                virtual,
-                                                                virtual !in state.query.virtualFilters,
-                                                            )
-                                                        }
-                                                    },
-                                                )
                                             }
                                         }
                                     }
@@ -914,6 +1072,7 @@ fun GalleryScreen(
             },
             confirmButton = {
                 TextButton(
+                    shapes = ButtonDefaults.shapes(),
                     onClick = {
                         val position = positionDraft.toLongOrNull()
                         val total = state.totalCount
@@ -934,11 +1093,30 @@ fun GalleryScreen(
                 ) { Text(strings.jump) }
             },
             dismissButton = {
-                TextButton(onClick = { showJumpDialog = false }) {
+                TextButton(shapes = ButtonDefaults.shapes(), onClick = { showJumpDialog = false }) {
                     Text(strings.cancel)
                 }
             },
         )
+    }
+}
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+fun GalleryLoadingScreen(
+    vaultName: String? = null,
+    strings: GalleryStrings = EnglishGalleryStrings,
+) {
+    Scaffold(
+        topBar = { TopAppBar(title = { Text(vaultName ?: strings.title) }) },
+    ) { insets ->
+        Box(
+            Modifier.fillMaxSize().padding(insets),
+            contentAlignment = Alignment.Center,
+        ) {
+            LoadingIndicator()
+        }
     }
 }
 
@@ -951,7 +1129,6 @@ private fun FilterOption(
     option: GalleryCategoryOption,
     label: String,
     selectedMode: String,
-    optionCount: String,
     color: Color,
     strings: GalleryStrings,
     onClick: () -> Unit,
@@ -967,7 +1144,7 @@ private fun FilterOption(
                     imageVector = when (selectedMode) {
                         strings.includeAny -> Icons.Filled.Check
                         strings.includeAll -> Icons.Filled.DoneAll
-                        strings.exclude -> Icons.Filled.Block
+                        strings.exclude -> Icons.Filled.Close
                         else -> Icons.Filled.Check
                     },
                     contentDescription = selectedMode,
@@ -976,8 +1153,19 @@ private fun FilterOption(
                 Box(Modifier.size(10.dp).background(color, CircleShape))
             }
         },
-        label = { Text("$label · $optionCount") },
+        label = { Text(label) },
+        trailingIcon = { FilterCountBadge(strings.optionCount(option.count)) },
     )
+}
+
+@Composable
+private fun FilterCountBadge(count: String) {
+    Badge(
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+    ) {
+        Text(count)
+    }
 }
 
 @Composable
@@ -988,7 +1176,8 @@ private fun GalleryTile(
     showPosition: Boolean,
     showCounts: Boolean,
     showMissingMediaIcon: Boolean,
-    galleryThumbnail: @Composable (MediaId, Boolean) -> Unit,
+    galleryThumbnail: @Composable (MediaId, Boolean, Boolean) -> Unit,
+    isVisible: Boolean,
     highlighted: Boolean,
     onClick: () -> Unit,
 ) {
@@ -1006,13 +1195,12 @@ private fun GalleryTile(
     val shape = MaterialTheme.shapes.large
     Card(
         onClick = onClick,
-        modifier = Modifier.border(
-            width = 3.dp,
-            color = MaterialTheme.colorScheme.primary.copy(alpha = blinkAlpha.value),
-            shape = shape,
-        ),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface,
+            containerColor = androidx.compose.ui.graphics.lerp(
+                MaterialTheme.colorScheme.surface,
+                MaterialTheme.colorScheme.primaryContainer,
+                blinkAlpha.value,
+            ),
         ),
         shape = shape,
     ) {
@@ -1040,7 +1228,7 @@ private fun GalleryTile(
             contentAlignment = Alignment.Center,
         ) {
             if (mediaId != null && exists) {
-                galleryThumbnail(mediaId, isVideo)
+                galleryThumbnail(mediaId, isVideo, isVisible)
             } else if (showMissingMediaIcon || mediaId == null) {
                 Icon(
                     imageVector = if (isVideo) Icons.Filled.VideoLibrary else Icons.Filled.Image,

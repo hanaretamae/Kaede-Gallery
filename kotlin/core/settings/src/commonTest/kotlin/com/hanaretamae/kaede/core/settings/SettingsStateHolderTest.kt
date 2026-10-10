@@ -30,6 +30,26 @@ class SettingsStateHolderTest {
     }
 
     @Test
+    fun savesSelectedExpressiveFont() = runTest {
+        val repository = FakeSettingsRepository()
+        val holder = SettingsStateHolder(repository, this)
+        holder.load()
+        advanceUntilIdle()
+
+        holder.setFont(FontPreference.GOOGLE_SANS_FLEX)
+        advanceUntilIdle()
+
+        assertEquals(
+            FontPreference.GOOGLE_SANS_FLEX,
+            holder.state.value.settings?.appearance?.font,
+        )
+        assertEquals(
+            FontPreference.GOOGLE_SANS_FLEX,
+            repository.saved.single().appearance.font,
+        )
+    }
+
+    @Test
     fun savesConcurrentUpdatesInOrder() = runTest {
         val repository = FakeSettingsRepository()
         val holder = SettingsStateHolder(repository, this)

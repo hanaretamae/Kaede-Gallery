@@ -1,5 +1,28 @@
+@file:OptIn(androidx.compose.material3.ExperimentalMaterial3ExpressiveApi::class)
+
 package com.hanaretamae.kaede.android
 
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilledTonalIconToggleButton
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.material.icons.automirrored.filled.VolumeOff
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.Repeat
+import androidx.compose.material.icons.filled.Settings
+import androidx.media3.common.VideoSize
+import android.view.TextureView
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.ButtonDefaults
 import android.app.WallpaperManager
 import android.content.ClipData
 import android.content.Intent
@@ -22,33 +45,48 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Button
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -56,7 +94,6 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.ui.PlayerView
 import com.hanaretamae.kaede.core.model.GalleryCategory
 import com.hanaretamae.kaede.core.model.GalleryNoteDetail
 import com.hanaretamae.kaede.core.model.GalleryPage
@@ -75,19 +112,35 @@ import com.hanaretamae.kaede.core.rust.AndroidSafVaultScanner
 import com.hanaretamae.kaede.core.rust.RustGallerySessionRepository
 import com.hanaretamae.kaede.core.rust.RustVaultSelectionRepository
 import com.hanaretamae.kaede.core.rust.MAX_GALLERY_THUMBNAIL_DIMENSION
+import com.hanaretamae.kaede.core.rust.ThumbnailLoadPriority
 import com.hanaretamae.kaede.core.settings.AndroidSettingsRepository
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
+import com.hanaretamae.kaede.core.settings.SettingsStateHolder
 import com.hanaretamae.kaede.core.settings.ThemePreference
 import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
+import com.hanaretamae.kaede.ui.gallery.KaedeTooltip
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryTheme
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackActions
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackSpeedChoices
+import com.hanaretamae.kaede.ui.gallery.GallerySettingsScreen
+import com.hanaretamae.kaede.ui.gallery.EnglishGallerySettingsStrings
+import com.hanaretamae.kaede.ui.gallery.JapaneseGallerySettingsStrings
 import com.hanaretamae.kaede.ui.gallery.androidDynamicColorScheme
+import com.hanaretamae.kaede.core.settings.platformSystemLanguagePreference
+import com.hanaretamae.kaede.core.settings.resolve
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.Flow
@@ -103,14 +156,45 @@ import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
+    @Volatile
+    private var startupReady = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent { AndroidGalleryRoot() }
+        holdFirstFrameUntilReady()
+        setContent { AndroidGalleryRoot(onStartupReady = { startupReady = true }) }
+    }
+
+    /**
+     * Keeps the launch window (system splash on Android 12+) until the saved Vault session and
+     * settings are ready, so a restored Vault opens straight into the gallery. A short timeout
+     * still reveals the restoring indicator when the first scan is slow.
+     */
+    private fun holdFirstFrameUntilReady() {
+        val content = findViewById<android.view.View>(android.R.id.content)
+        val startedAt = android.os.SystemClock.uptimeMillis()
+        content.viewTreeObserver.addOnPreDrawListener(
+            object : android.view.ViewTreeObserver.OnPreDrawListener {
+                override fun onPreDraw(): Boolean {
+                    val timedOut = android.os.SystemClock.uptimeMillis() - startedAt > STARTUP_HOLD_MILLIS
+                    if (!startupReady && !timedOut) {
+                        content.postDelayed({ content.invalidate() }, 16)
+                        return false
+                    }
+                    content.viewTreeObserver.removeOnPreDrawListener(this)
+                    return true
+                }
+            },
+        )
+    }
+
+    private companion object {
+        const val STARTUP_HOLD_MILLIS = 2_500L
     }
 }
 
 @Composable
-private fun AndroidGalleryRoot() {
+private fun AndroidGalleryRoot(onStartupReady: () -> Unit = {}) {
     val context = LocalContext.current
     val activity = context.findActivity()
         ?: error("The Compose host must be an Activity.")
@@ -121,17 +205,28 @@ private fun AndroidGalleryRoot() {
     val settingsRepository: SettingsRepository = remember(context) {
         AndroidSettingsRepository(context)
     }
+    val rootSettingsStateHolder = remember(settingsRepository, scope) {
+        SettingsStateHolder(settingsRepository, scope)
+    }
+    val rootSettingsState by rootSettingsStateHolder.state.collectAsState()
+    LaunchedEffect(rootSettingsStateHolder) { rootSettingsStateHolder.load() }
+    DisposableEffect(rootSettingsStateHolder) {
+        onDispose(rootSettingsStateHolder::dispose)
+    }
     val privateDataDirectory = remember(context) {
         context.filesDir.resolve("kaede-gallery").absolutePath
     }
     var selectedVault by remember { mutableStateOf<String?>(null) }
     var session by remember { mutableStateOf<GallerySessionHandle?>(null) }
     var loading by remember { mutableStateOf(true) }
+    var startupAppearance by remember { mutableStateOf(AppearanceSettings()) }
     var error by remember { mutableStateOf<String?>(null) }
     var pendingVaultUri by remember { mutableStateOf<Uri?>(null) }
     var pendingSettingsImport by remember { mutableStateOf<((String) -> Unit)?>(null) }
     var pendingSettingsExport by remember { mutableStateOf<String?>(null) }
     var pendingSettingsExportVault by remember { mutableStateOf<Uri?>(null) }
+    var showWelcomeSettings by remember { mutableStateOf(false) }
+    var showWelcomeExample by remember { mutableStateOf(false) }
     var systemBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var backGestureProgress by remember { mutableStateOf(0f) }
 
@@ -378,6 +473,7 @@ private fun AndroidGalleryRoot() {
             }
             is RepositoryResult.Success -> loaded.value
         }
+        startupAppearance = gallerySettings.appearance
         val galleryTagSettingsFile = File(privateDataDirectory, "gallery-tag-settings.json")
         if (
             gallerySettings.galleryTagPrefixes != GalleryTagPrefixesCodec.DEFAULT_PREFIXES ||
@@ -479,6 +575,14 @@ private fun AndroidGalleryRoot() {
     }
 
     LaunchedEffect(vaultRepository, privateDataDirectory) {
+        when (val loaded = settingsRepository.load()) {
+            is RepositoryResult.Failure -> {
+                error = errorText(loaded.error)
+                loading = false
+                return@LaunchedEffect
+            }
+            is RepositoryResult.Success -> startupAppearance = loaded.value.appearance
+        }
         when (val selected = vaultRepository.loadSelected(privateDataDirectory)) {
             is RepositoryResult.Failure -> {
                 error = errorText(selected.error)
@@ -512,6 +616,7 @@ private fun AndroidGalleryRoot() {
             },
             confirmButton = {
                 TextButton(
+                    shapes = ButtonDefaults.shapes(),
                     onClick = {
                         pendingVaultUri = null
                         scope.launch {
@@ -523,7 +628,7 @@ private fun AndroidGalleryRoot() {
                 }
             },
             dismissButton = {
-                TextButton(onClick = { scope.launch { cancelVaultSwitch(uri) } }) {
+                TextButton(shapes = ButtonDefaults.shapes(), onClick = { scope.launch { cancelVaultSwitch(uri) } }) {
                     Text("Cancel")
                 }
             },
@@ -537,12 +642,63 @@ private fun AndroidGalleryRoot() {
 
     val activeSession = session
     val activeVault = selectedVault
-    if (activeSession == null || activeVault == null) {
-        WelcomeScreen(
-            loading = loading,
-            error = error,
-            onChooseVault = { vaultPicker.launch(null) },
-        )
+    if ((loading && error == null) ||
+        (rootSettingsState.loading && rootSettingsState.settings == null)
+    ) {
+        VaultRestoringScreen(startupAppearance)
+    } else if (activeSession == null || activeVault == null) {
+        SideEffect(onStartupReady)
+        SideEffect {
+            systemBackHandler = if (showWelcomeSettings || showWelcomeExample) {
+                {
+                    showWelcomeSettings = false
+                    showWelcomeExample = false
+                }
+            } else {
+                null
+            }
+        }
+        if (showWelcomeSettings || showWelcomeExample) {
+            val appearance = rootSettingsState.settings?.appearance ?: startupAppearance
+            val activeSettingsLanguage = (
+                rootSettingsState.settings?.appearance?.language ?: LanguagePreference.SYSTEM
+                )
+                .resolve(platformSystemLanguagePreference())
+            KaedeGalleryTheme(
+                appearance = appearance,
+                dynamicColorScheme = androidDynamicColorScheme(context, appearance.theme),
+            ) {
+                GallerySettingsScreen(
+                    stateHolder = rootSettingsStateHolder,
+                    onClose = { showWelcomeExample = false },
+                    strings = if (activeSettingsLanguage == LanguagePreference.JAPANESE) {
+                        JapaneseGallerySettingsStrings
+                    } else {
+                        EnglishGallerySettingsStrings
+                    },
+                    loadOnEnter = false,
+                    disposeStateHolderOnExit = false,
+                    openExampleOnStart = showWelcomeExample,
+                    exampleOnly = showWelcomeExample,
+                    loadLicenseText = { assetPath ->
+                        try {
+                            context.assets.open(assetPath).bufferedReader().use { it.readText() }
+                        } catch (_: IOException) {
+                            null
+                        }
+                    },
+                )
+            }
+        } else {
+            WelcomeScreen(
+                loading = loading,
+                error = error,
+                appearance = rootSettingsState.settings?.appearance ?: startupAppearance,
+                onChooseVault = { vaultPicker.launch(null) },
+                onOpenSettings = { showWelcomeSettings = true },
+                onOpenExample = { showWelcomeExample = true },
+            )
+        }
     } else {
         val vaultUri = Uri.parse(activeVault)
         suspend fun launchMediaAction(
@@ -598,20 +754,23 @@ private fun AndroidGalleryRoot() {
         }
         KaedeGalleryApp(
             repository = activeSession.gallery,
+            onReady = onStartupReady,
             settingsRepository = settingsRepository,
+            settingsStateHolder = rootSettingsStateHolder,
             backGestureProgress = backGestureProgress,
             vaultName = DocumentsContract.getTreeDocumentId(vaultUri)
                 .substringAfter(':', vaultUri.toString())
                 .substringAfterLast('/'),
             scanWarningCount = activeSession.initialScan.warnings.coerceAtMost(Int.MAX_VALUE.toLong())
                 .toInt(),
-            galleryThumbnail = { mediaId, isVideo ->
+            galleryThumbnail = { mediaId, isVideo, isVisible ->
                 AndroidGalleryThumbnail(
                     scanner = scanner,
                     treeUri = vaultUri,
                     repository = activeSession.gallery,
                     mediaId = mediaId,
                     isVideo = isVideo,
+                    isVisible = isVisible,
                 )
             },
             mediaContent = { state ->
@@ -619,7 +778,11 @@ private fun AndroidGalleryRoot() {
                     scanner = scanner,
                     treeUri = vaultUri,
                     path = state.location,
+                    locationLoading = state.locationLoading,
                     isVideo = state.media.isVideo,
+                    fullscreen = state.fullscreen,
+                    onToggleFullscreen = state.onToggleFullscreen,
+                    prefetchLocations = state.prefetchLocations,
                 )
             },
             onViewerFullscreenChanged = { fullscreen ->
@@ -879,33 +1042,74 @@ internal fun createAndroidMediaIntent(
 private fun WelcomeScreen(
     loading: Boolean,
     error: String?,
+    appearance: AppearanceSettings,
     onChooseVault: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onOpenExample: () -> Unit,
 ) {
     val context = LocalContext.current
+    val japanese = appearance.language.resolve(platformSystemLanguagePreference()) ==
+        LanguagePreference.JAPANESE
     KaedeGalleryTheme(
-        appearance = AppearanceSettings(),
-        dynamicColorScheme = androidDynamicColorScheme(context, ThemePreference.SYSTEM),
+        appearance = appearance,
+        dynamicColorScheme = androidDynamicColorScheme(context, appearance.theme),
     ) {
-        Surface(Modifier.fillMaxSize()) {
-            Column(
-                modifier = Modifier.fillMaxSize().padding(32.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
-                Spacer(Modifier.height(16.dp))
-                Text("Select an existing Vault folder. Access is read-only.")
-                Spacer(Modifier.height(24.dp))
-                Button(onClick = onChooseVault, enabled = !loading) {
-                    Text("Choose Vault")
-                }
-                if (loading) {
+        Box(Modifier.fillMaxSize()) {
+            Surface(Modifier.fillMaxSize()) {
+                Column(
+                    modifier = Modifier.fillMaxSize().padding(32.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                ) {
+                    Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
                     Spacer(Modifier.height(16.dp))
-                    CircularProgressIndicator()
+                    Text(
+                        if (japanese) {
+                            "既存のVaultフォルダーを選択してください。アクセスは読み取り専用です。"
+                        } else {
+                            "Select an existing Vault folder. Access is read-only."
+                        },
+                    )
+                    Spacer(Modifier.height(24.dp))
+                    Button(shapes = ButtonDefaults.shapes(), onClick = onChooseVault, enabled = !loading) {
+                        Text(if (japanese) "Vaultを選択" else "Choose Vault")
+                    }
+                    Button(
+                        shapes = ButtonDefaults.shapes(),
+                        onClick = onOpenExample,
+                        enabled = !loading,
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(Icons.Filled.Description, contentDescription = null)
+                            Text(if (japanese) "ノートの例を見る" else "View example note")
+                        }
+                    }
+                    error?.let {
+                        Spacer(Modifier.height(16.dp))
+                        Text(
+                            if (japanese) {
+                                "Vaultを読み込めませんでした。アクセス権限を確認して、フォルダーを選択し直してください。"
+                            } else {
+                                it
+                            },
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                 }
-                error?.let {
-                    Spacer(Modifier.height(16.dp))
-                    Text(it, color = MaterialTheme.colorScheme.error)
+            }
+            KaedeTooltip(if (japanese) "設定" else "Settings") {
+                IconButton(
+                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                    shapes = IconButtonDefaults.shapes(),
+                    onClick = onOpenSettings,
+                ) {
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = if (japanese) "設定" else "Settings",
+                    )
                 }
             }
         }
@@ -913,50 +1117,131 @@ private fun WelcomeScreen(
 }
 
 @Composable
+private fun VaultRestoringScreen(appearance: AppearanceSettings) {
+    KaedeGalleryTheme(
+        appearance = appearance,
+        dynamicColorScheme = androidDynamicColorScheme(
+            LocalContext.current,
+            appearance.theme,
+        ),
+    ) {
+        com.hanaretamae.kaede.ui.gallery.GalleryLoadingScreen()
+    }
+}
+
+private sealed interface AndroidImageLoadState {
+    data object Loading : AndroidImageLoadState
+    data class Ready(
+        val bitmap: android.graphics.Bitmap,
+        val preview: Boolean = false,
+    ) : AndroidImageLoadState
+    data object Unavailable : AndroidImageLoadState
+}
+
+private sealed interface AndroidResolvedMediaState {
+    data object Loading : AndroidResolvedMediaState
+    data class Ready(val uri: Uri) : AndroidResolvedMediaState
+    data object Unavailable : AndroidResolvedMediaState
+}
+
+@Composable
 private fun AndroidMediaContent(
     scanner: AndroidSafVaultScanner,
     treeUri: Uri,
     path: String?,
+    locationLoading: Boolean,
     isVideo: Boolean,
+    fullscreen: Boolean = false,
+    onToggleFullscreen: (() -> Unit)? = null,
+    prefetchLocations: List<String> = emptyList(),
 ) {
-    val resolvedUri by produceState<Uri?>(null, scanner, treeUri, path) {
-        value = if (path == null) null else try {
-            scanner.resolveMedia(treeUri, path)
-        } catch (_: IOException) {
-            null
-        } catch (_: SecurityException) {
-            null
+    if (isVideo) {
+        val mediaState by produceState<AndroidResolvedMediaState>(
+            initialValue = AndroidResolvedMediaState.Loading,
+            scanner,
+            treeUri,
+            path,
+            locationLoading,
+        ) {
+            value = when {
+                locationLoading -> AndroidResolvedMediaState.Loading
+                path == null -> AndroidResolvedMediaState.Unavailable
+                else -> try {
+                    AndroidResolvedMediaState.Ready(scanner.resolveMedia(treeUri, path))
+                } catch (_: IOException) {
+                    AndroidResolvedMediaState.Unavailable
+                } catch (_: SecurityException) {
+                    AndroidResolvedMediaState.Unavailable
+                }
+            }
         }
-    }
-    when {
-        path == null || resolvedUri == null -> Text(
-            "Media is unavailable.",
-            color = androidx.compose.ui.graphics.Color.White,
-        )
-        isVideo -> AndroidVideoPlayer(resolvedUri!!)
-        else -> {
-            val bitmap by produceState<android.graphics.Bitmap?>(null, scanner, treeUri, path) {
-                value = try {
-                    scanner.decodeImage(treeUri, path, MAX_VIEWER_IMAGE_SIZE)
+        when (val loaded = mediaState) {
+            AndroidResolvedMediaState.Loading -> LoadingIndicator()
+            is AndroidResolvedMediaState.Ready -> AndroidVideoPlayer(loaded.uri, fullscreen, onToggleFullscreen)
+            AndroidResolvedMediaState.Unavailable -> Unit
+        }
+    } else if (locationLoading) {
+        LoadingIndicator()
+    } else if (path != null) {
+        val imageState = remember(scanner, treeUri, path) {
+            mutableStateOf(
+                scanner.peekDecodedImage(treeUri, path, MAX_VIEWER_IMAGE_SIZE)
+                    ?.let { AndroidImageLoadState.Ready(it) }
+                    ?: scanner.peekDecodedImage(treeUri, path, MAX_GALLERY_THUMBNAIL_SIZE)
+                        ?.let { AndroidImageLoadState.Ready(it, preview = true) }
+                    ?: AndroidImageLoadState.Loading,
+            )
+        }
+        LaunchedEffect(scanner, treeUri, path, prefetchLocations) {
+            suspend fun decode(maxDimension: Int): android.graphics.Bitmap? = try {
+                scanner.decodeImage(treeUri, path, maxDimension)
+            } catch (_: IOException) {
+                null
+            } catch (_: SecurityException) {
+                null
+            }
+
+            val current = imageState.value
+            if (current !is AndroidImageLoadState.Ready || current.preview) {
+                val decoded = try {
+                    scanner.withThumbnailPermit(ThumbnailLoadPriority.INTERACTIVE) {
+                        decode(MAX_VIEWER_IMAGE_SIZE)
+                    }
                 } catch (_: IOException) {
                     null
                 } catch (_: SecurityException) {
                     null
                 }
+                imageState.value = when {
+                    decoded != null -> AndroidImageLoadState.Ready(decoded)
+                    imageState.value is AndroidImageLoadState.Ready -> imageState.value
+                    else -> AndroidImageLoadState.Unavailable
+                }
             }
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap!!.asImageBitmap(),
-                    contentDescription = null,
-                    contentScale = ContentScale.Inside,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            } else {
-                Text(
-                    "Image is unavailable or unsupported.",
-                    color = androidx.compose.ui.graphics.Color.White,
-                )
+
+            coroutineScope {
+                prefetchLocations.asSequence().filter { it != path }.map { location ->
+                    async {
+                        try {
+                            scanner.withThumbnailPermit(ThumbnailLoadPriority.PREFETCH) {
+                                scanner.decodeImage(treeUri, location, MAX_VIEWER_IMAGE_SIZE)
+                            }
+                        } catch (_: IOException) {
+                        } catch (_: SecurityException) {
+                        }
+                    }
+                }.toList().awaitAll()
             }
+        }
+        when (val loaded = imageState.value) {
+            AndroidImageLoadState.Loading -> LoadingIndicator()
+            is AndroidImageLoadState.Ready -> Image(
+                bitmap = loaded.bitmap.asImageBitmap(),
+                contentDescription = null,
+                contentScale = ContentScale.Inside,
+                modifier = Modifier.fillMaxSize(),
+            )
+            AndroidImageLoadState.Unavailable -> Unit
         }
     }
 }
@@ -968,15 +1253,14 @@ private fun AndroidGalleryThumbnail(
     repository: GalleryRepository,
     mediaId: MediaId,
     isVideo: Boolean,
+    isVisible: Boolean,
 ) {
-    val bitmap by produceState<android.graphics.Bitmap?>(
-        initialValue = null,
-        scanner,
-        treeUri,
-        repository,
-        mediaId,
-    ) {
-        value = scanner.withThumbnailPermit {
+    val bitmapState = remember(scanner, treeUri, repository, mediaId) {
+        mutableStateOf<android.graphics.Bitmap?>(null)
+    }
+    LaunchedEffect(scanner, treeUri, repository, mediaId, isVisible) {
+        if (!isVisible || bitmapState.value != null) return@LaunchedEffect
+        bitmapState.value = scanner.withThumbnailPermit(ThumbnailLoadPriority.VISIBLE) {
             try {
                 when (val location = repository.mediaLocation(mediaId)) {
                     is RepositoryResult.Failure -> null
@@ -995,6 +1279,7 @@ private fun AndroidGalleryThumbnail(
             }
         }
     }
+    val bitmap = bitmapState.value
     if (bitmap != null) {
         Image(
             bitmap = bitmap!!.asImageBitmap(),
@@ -1005,25 +1290,305 @@ private fun AndroidGalleryThumbnail(
     }
 }
 
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
-private fun AndroidVideoPlayer(uri: Uri) {
+private fun AndroidVideoPlayer(
+    uri: Uri,
+    fullscreen: Boolean,
+    onToggleFullscreen: (() -> Unit)?,
+) {
     val context = LocalContext.current
+    var looping by remember(uri) { mutableStateOf(false) }
+    var muted by remember { mutableStateOf(false) }
+    var speed by remember { mutableFloatStateOf(1f) }
     val player = remember(uri) {
         ExoPlayer.Builder(context).build().apply {
             setMediaItem(MediaItem.fromUri(uri))
-            repeatMode = Player.REPEAT_MODE_ONE
             prepare()
             playWhenReady = true
         }
     }
+    var videoAspectRatio by remember(player) { mutableFloatStateOf(0f) }
     DisposableEffect(player) {
-        onDispose { player.release() }
+        val listener = object : Player.Listener {
+            override fun onVideoSizeChanged(videoSize: VideoSize) {
+                if (videoSize.width > 0 && videoSize.height > 0) {
+                    videoAspectRatio =
+                        videoSize.width * videoSize.pixelWidthHeightRatio / videoSize.height
+                }
+            }
+        }
+        player.addListener(listener)
+        onDispose {
+            player.removeListener(listener)
+            player.release()
+        }
     }
-    AndroidView(
-        factory = { viewContext -> PlayerView(viewContext).apply { this.player = player } },
-        update = { it.player = player },
-        modifier = Modifier.fillMaxSize(),
-    )
+    LaunchedEffect(player, looping) {
+        player.repeatMode = if (looping) Player.REPEAT_MODE_ONE else Player.REPEAT_MODE_OFF
+    }
+    LaunchedEffect(player, muted) { player.volume = if (muted) 0f else 1f }
+    LaunchedEffect(player, speed) { player.setPlaybackSpeed(speed) }
+
+    var playbackPositionMs by remember(player) { mutableLongStateOf(0L) }
+    var playbackDurationMs by remember(player) { mutableLongStateOf(0L) }
+    var isPlaying by remember(player) { mutableStateOf(false) }
+    var controlsVisible by remember(player) { mutableStateOf(true) }
+    var scrubFraction by remember(player) { mutableStateOf<Float?>(null) }
+    var showSpeedMenu by remember(player) { mutableStateOf(false) }
+    var lastInteractionAtMs by remember(player) { mutableLongStateOf(0L) }
+
+    fun revealControls() {
+        controlsVisible = true
+        lastInteractionAtMs = SystemClock.elapsedRealtime()
+    }
+
+    fun seekTo(positionMs: Long) {
+        val durationMs = playbackDurationMs
+        val target = positionMs.coerceAtLeast(0L).let {
+            if (durationMs > 0L) it.coerceAtMost(durationMs) else it
+        }
+        // ExoPlayer stays in STATE_ENDED after a seek unless playback is requested again.
+        val ended = player.playbackState == Player.STATE_ENDED
+        player.seekTo(target)
+        if (ended && target < durationMs) player.play()
+        playbackPositionMs = target
+    }
+
+    LaunchedEffect(fullscreen) { revealControls() }
+    LaunchedEffect(player) {
+        while (true) {
+            val durationMs = player.duration.takeIf { it > 0L } ?: 0L
+            playbackDurationMs = durationMs
+            playbackPositionMs = if (
+                player.playbackState == Player.STATE_ENDED && durationMs > 0L
+            ) {
+                durationMs
+            } else {
+                player.currentPosition.coerceAtLeast(0L)
+            }
+            isPlaying = player.isPlaying
+            delay(200)
+        }
+    }
+    LaunchedEffect(controlsVisible, isPlaying, lastInteractionAtMs, scrubFraction, showSpeedMenu) {
+        if (controlsVisible && isPlaying && scrubFraction == null && !showSpeedMenu) {
+            delay(PLAYER_CONTROLS_TIMEOUT_MILLIS)
+            if (SystemClock.elapsedRealtime() - lastInteractionAtMs >= PLAYER_CONTROLS_TIMEOUT_MILLIS) {
+                controlsVisible = false
+            }
+        }
+    }
+
+    val durationMs = playbackDurationMs
+    val sliderValue = scrubFraction ?: if (durationMs > 0L) {
+        (playbackPositionMs.toFloat() / durationMs).coerceIn(0f, 1f)
+    } else {
+        0f
+    }
+    val positionMs = scrubFraction?.let { (it * durationMs).toLong() } ?: playbackPositionMs
+    val sliderState = androidx.compose.material3.rememberSliderState(value = 0f)
+    if (scrubFraction == null) sliderState.value = sliderValue
+    Box(
+        modifier = Modifier.fillMaxSize().pointerInput(player) {
+            detectTapGestures {
+                controlsVisible = !controlsVisible
+                lastInteractionAtMs = SystemClock.elapsedRealtime()
+            }
+        },
+        contentAlignment = Alignment.Center,
+    ) {
+        // TextureView composes like a normal view, so it does not leave a black SurfaceView
+        // hole behind while the viewer exits.
+        AndroidView(
+            factory = { viewContext ->
+                TextureView(viewContext).also(player::setVideoTextureView)
+            },
+            update = player::setVideoTextureView,
+            onRelease = player::clearVideoTextureView,
+            modifier = if (videoAspectRatio > 0f) {
+                Modifier.fillMaxSize().wrapContentSize().aspectRatio(videoAspectRatio)
+            } else {
+                Modifier.fillMaxSize()
+            },
+        )
+        AnimatedVisibility(
+            visible = controlsVisible,
+            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+            modifier = Modifier.align(Alignment.BottomCenter),
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Slider(
+                    state = sliderState,
+                    onValueChange = {
+                        if (durationMs > 0L) {
+                            sliderState.value = it
+                            scrubFraction = it
+                            seekTo((it * durationMs).toLong())
+                            revealControls()
+                        }
+                    },
+                    onValueChangeFinished = {
+                        scrubFraction?.let { seekTo((it * durationMs).toLong()) }
+                        scrubFraction = null
+                        revealControls()
+                    },
+                    enabled = durationMs > 0L,
+                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                )
+                GalleryPlaybackActions(leading = {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                    KaedeTooltip(if (isPlaying) "Pause" else "Play") {
+                        FilledIconButton(
+                            shapes = IconButtonDefaults.shapes(),
+                            onClick = {
+                                when {
+                                    isPlaying -> player.pause()
+                                    player.playbackState == Player.STATE_ENDED -> {
+                                        player.seekTo(0L)
+                                        player.play()
+                                    }
+                                    else -> player.play()
+                                }
+                                isPlaying = !isPlaying
+                                revealControls()
+                            },
+                        ) {
+                            Icon(
+                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                                if (isPlaying) "Pause" else "Play",
+                            )
+                        }
+                    }
+                    PlaybackPill(
+                        "${playbackTimeLabel(positionMs)} / ${playbackTimeLabel(durationMs)}",
+                    )
+                    }
+                }, trailing = {
+                    Box {
+                        PlaybackPill(
+                            label = "${speed.toPlaybackSpeedLabel()}x",
+                            onClick = {
+                                showSpeedMenu = !showSpeedMenu
+                                revealControls()
+                            },
+                        )
+                    }
+                    KaedeTooltip(if (looping) "Turn looping off" else "Loop video") {
+                        FilledTonalIconToggleButton(
+                            checked = looping,
+                            onCheckedChange = {
+                                looping = it
+                                revealControls()
+                            },
+                            shapes = IconButtonDefaults.toggleableShapes(),
+                        ) {
+                            Icon(Icons.Filled.Repeat, if (looping) "Loop on" else "Loop off")
+                        }
+                    }
+                    KaedeTooltip(if (muted) "Unmute" else "Mute") {
+                        FilledTonalIconToggleButton(
+                            checked = !muted,
+                            onCheckedChange = {
+                                muted = !it
+                                revealControls()
+                            },
+                            shapes = IconButtonDefaults.toggleableShapes(),
+                        ) {
+                            Icon(
+                                if (muted) {
+                                    Icons.AutoMirrored.Filled.VolumeOff
+                                } else {
+                                    Icons.AutoMirrored.Filled.VolumeUp
+                                },
+                                if (muted) "Unmute" else "Mute",
+                            )
+                        }
+                    }
+                    onToggleFullscreen?.let { toggle ->
+                        KaedeTooltip(if (fullscreen) "Exit full screen" else "Full screen") {
+                            FilledTonalIconButton(
+                                shapes = IconButtonDefaults.shapes(),
+                                onClick = {
+                                    toggle()
+                                    revealControls()
+                                },
+                            ) {
+                                Icon(
+                                    if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                                    if (fullscreen) "Exit full screen" else "Full screen",
+                                )
+                            }
+                        }
+                    }
+                })
+                if (showSpeedMenu) {
+                    GalleryPlaybackSpeedChoices(
+                        selected = speed,
+                        onSelect = {
+                            speed = it
+                            showSpeedMenu = false
+                            revealControls()
+                        },
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaybackPill(label: String, onClick: (() -> Unit)? = null) {
+    val colors = MaterialTheme.colorScheme
+    val content: @Composable () -> Unit = {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+        )
+    }
+    if (onClick == null) {
+        Surface(
+            shape = CircleShape,
+            color = colors.secondaryContainer,
+            contentColor = colors.onSecondaryContainer,
+            content = content,
+        )
+    } else {
+        Surface(
+            onClick = onClick,
+            shape = CircleShape,
+            color = colors.secondaryContainer,
+            contentColor = colors.onSecondaryContainer,
+            content = content,
+        )
+    }
+}
+
+private val PLAYBACK_SPEEDS = listOf(0.5f, 0.75f, 1f, 1.25f, 1.5f, 2f)
+private const val PLAYER_CONTROLS_TIMEOUT_MILLIS = 3_500L
+
+private fun Float.toPlaybackSpeedLabel(): String =
+    if (this * 10f % 1f == 0f) "%.1f".format(this) else "%.2f".format(this)
+
+private fun playbackTimeLabel(positionMs: Long): String {
+    val totalSeconds = (positionMs.coerceAtLeast(0L) / 1_000L).toInt()
+    val seconds = totalSeconds % 60
+    val minutes = totalSeconds / 60 % 60
+    val hours = totalSeconds / 3_600
+    return if (hours > 0) {
+        "%d:%02d:%02d".format(hours, minutes, seconds)
+    } else {
+        "%d:%02d".format(minutes, seconds)
+    }
 }
 
 private fun errorText(error: RepositoryError): String = when (error) {
@@ -1046,6 +1611,9 @@ private class AndroidSessionHandle(
 ) : GallerySessionHandle {
     private val closed = AtomicBoolean(false)
     private val notePathsById = ConcurrentHashMap<NoteId, String>()
+    private val mediaLocationsById = ConcurrentHashMap<MediaId, CachedMediaLocation>()
+    private val mediaLocationCacheLock = Any()
+    private var mediaLocationCacheRevision = 0L
 
     override val gallery: GalleryRepository = object : GalleryRepository {
         override suspend fun queryPage(query: GalleryQuery): RepositoryResult<GalleryPage> {
@@ -1086,8 +1654,25 @@ private class AndroidSessionHandle(
         override suspend fun notePath(noteId: NoteId): RepositoryResult<String?> =
             delegate.gallery.notePath(noteId)
 
-        override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> =
-            delegate.gallery.mediaLocation(mediaId)
+        override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> {
+            val revision = synchronized(mediaLocationCacheLock) {
+                mediaLocationsById[mediaId]?.let {
+                    return RepositoryResult.Success(it.path)
+                }
+                mediaLocationCacheRevision
+            }
+            return when (val result = delegate.gallery.mediaLocation(mediaId)) {
+                is RepositoryResult.Failure -> result
+                is RepositoryResult.Success -> {
+                    synchronized(mediaLocationCacheLock) {
+                        if (revision == mediaLocationCacheRevision) {
+                            mediaLocationsById[mediaId] = CachedMediaLocation(result.value)
+                        }
+                    }
+                    result
+                }
+            }
+        }
 
         override suspend fun thumbnail(
             mediaId: MediaId,
@@ -1100,7 +1685,12 @@ private class AndroidSessionHandle(
 
     override suspend fun rescan(): RepositoryResult<GalleryScanSummary> {
         notePathsById.clear()
-        return delegate.rescan()
+        clearMediaLocationCache()
+        return try {
+            delegate.rescan()
+        } finally {
+            clearMediaLocationCache()
+        }
     }
 
     override suspend fun rescanSaf(
@@ -1108,13 +1698,27 @@ private class AndroidSessionHandle(
         batches: Flow<List<SafScanNote>>,
     ): RepositoryResult<GalleryScanSummary> {
         notePathsById.clear()
-        return delegate.rescanSaf(filePaths, batches)
+        clearMediaLocationCache()
+        return try {
+            delegate.rescanSaf(filePaths, batches)
+        } finally {
+            clearMediaLocationCache()
+        }
     }
 
     override fun close() {
         if (closed.compareAndSet(false, true)) delegate.close()
     }
+
+    private fun clearMediaLocationCache() {
+        synchronized(mediaLocationCacheLock) {
+            mediaLocationCacheRevision++
+            mediaLocationsById.clear()
+        }
+    }
 }
+
+private data class CachedMediaLocation(val path: String?)
 
 private tailrec fun Context.findActivity(): ComponentActivity? = when (this) {
     is ComponentActivity -> this

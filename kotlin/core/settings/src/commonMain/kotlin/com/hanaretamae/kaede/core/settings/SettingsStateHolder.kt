@@ -80,6 +80,10 @@ class SettingsStateHolder(
         update { it.copy(appearance = it.appearance.copy(pureBlack = enabled)) }
     }
 
+    fun setFont(font: FontPreference) {
+        update { it.copy(appearance = it.appearance.copy(font = font)) }
+    }
+
     fun setPageSize(pageSize: Int) {
         if (pageSize !in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE) {
             mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)

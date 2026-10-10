@@ -24,6 +24,14 @@ internal fun linuxPortalOpenOptions(title: String): String =
     "('', ${quoteGVariantString(title)}, " +
         "{'directory': <true>, 'multiple': <false>, 'modal': <true>})"
 
+internal fun linuxPortalOpenFileOptions(title: String): String =
+    "('', ${quoteGVariantString(title)}, " +
+        "{'directory': <false>, 'multiple': <false>, 'modal': <true>})"
+
+internal fun linuxPortalSaveFileOptions(title: String, fileName: String): String =
+    "('', ${quoteGVariantString(title)}, " +
+        "{'current_name': <${quoteGVariantString(fileName)}>, 'modal': <true>})"
+
 internal fun portalFileChooserResponse(
     responseCode: Int,
     selectedUri: String?,
@@ -58,21 +66,71 @@ internal fun resolvePortalDirectory(uri: URI): Path? {
     }
 }
 
-internal object LinuxPortalDirectoryPicker {
-    fun chooseDirectory(title: String): Path? = try {
-        chooseDirectoryOnSessionBus(title)
-    } catch (_: LinkageError) {
-        throw IOException("The system directory picker is unavailable.")
+internal fun resolvePortalRegularFile(uri: URI): Path? {
+    if (!uri.scheme.equals("file", ignoreCase = true)) return null
+    return try {
+        Path.of(uri).toRealPath().takeIf {
+            Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS)
+        }
+    } catch (_: IOException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
     } catch (_: SecurityException) {
-        throw IOException("The system directory picker is unavailable.")
+        null
+    }
+}
+
+internal fun resolvePortalSaveFile(uri: URI): Path? {
+    if (!uri.scheme.equals("file", ignoreCase = true)) return null
+    return try {
+        val selected = Path.of(uri).toAbsolutePath().normalize()
+        val parent = selected.parent?.toRealPath() ?: return null
+        if (!Files.isDirectory(parent, LinkOption.NOFOLLOW_LINKS)) return null
+        if (Files.exists(selected, LinkOption.NOFOLLOW_LINKS)) {
+            selected.toRealPath().takeIf {
+                it.parent == parent && Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS)
+            }
+        } else {
+            selected.fileName?.let(parent::resolve)
+        }
+    } catch (_: IOException) {
+        null
+    } catch (_: IllegalArgumentException) {
+        null
+    } catch (_: SecurityException) {
+        null
+    }
+}
+
+internal object LinuxPortalDirectoryPicker {
+    fun chooseDirectory(title: String): Path? = choosePath(title, PortalSelection.DIRECTORY)
+    fun chooseFile(title: String): Path? = choosePath(title, PortalSelection.OPEN_FILE)
+    fun saveFile(title: String, fileName: String): Path? =
+        choosePath(title, PortalSelection.SAVE_FILE, fileName)
+
+    private fun choosePath(
+        title: String,
+        selection: PortalSelection,
+        fileName: String? = null,
+    ): Path? = try {
+        choosePathOnSessionBus(title, selection, fileName)
+    } catch (_: LinkageError) {
+        throw IOException("The system file picker is unavailable.")
+    } catch (_: SecurityException) {
+        throw IOException("The system file picker is unavailable.")
     }
 
-    private fun chooseDirectoryOnSessionBus(title: String): Path? {
+    private fun choosePathOnSessionBus(
+        title: String,
+        selection: PortalSelection,
+        fileName: String?,
+    ): Path? {
         val gio = NativeApis.gio
         val glib = NativeApis.glib
         val gobject = NativeApis.gobject
         val context = glib.g_main_context_new()
-            ?: throw IOException("The system directory picker is unavailable.")
+            ?: throw IOException("The system file picker is unavailable.")
         glib.g_main_context_push_thread_default(context)
 
         var connection: Pointer? = null
@@ -99,7 +157,17 @@ internal object LinuxPortalDirectoryPicker {
                 null,
             )
 
-            val parameters = openFileParameters(glib, title)
+            val parameters = fileChooserParameters(
+                glib,
+                when (selection) {
+                    PortalSelection.DIRECTORY -> linuxPortalOpenOptions(title)
+                    PortalSelection.OPEN_FILE -> linuxPortalOpenFileOptions(title)
+                    PortalSelection.SAVE_FILE -> linuxPortalSaveFileOptions(
+                        title,
+                        fileName ?: throw IOException("A settings file name is required."),
+                    )
+                },
+            )
             val reply = try {
                 try {
                     callSync(
@@ -109,7 +177,11 @@ internal object LinuxPortalDirectoryPicker {
                         destination = PORTAL_BUS_NAME,
                         objectPath = PORTAL_OBJECT_PATH,
                         interfaceName = PORTAL_FILE_CHOOSER_INTERFACE,
-                        methodName = PORTAL_OPEN_FILE_METHOD,
+                        methodName = if (selection == PortalSelection.SAVE_FILE) {
+                            PORTAL_SAVE_FILE_METHOD
+                        } else {
+                            PORTAL_OPEN_FILE_METHOD
+                        },
                         parameters = parameters,
                         timeoutMillis = DBUS_CALL_TIMEOUT_MILLIS,
                     )
@@ -135,9 +207,13 @@ internal object LinuxPortalDirectoryPicker {
                     throw PortalSelectionException("The system folder picker did not respond.")
                 }
             return when (response.responseCode) {
-                PORTAL_RESPONSE_SUCCESS -> response.selectedUri
-                    ?.let(::resolvePortalDirectory)
-                    ?: throw PortalSelectionException("The selected folder is unavailable.")
+                PORTAL_RESPONSE_SUCCESS -> response.selectedUri?.let { uri ->
+                    when (selection) {
+                        PortalSelection.DIRECTORY -> resolvePortalDirectory(uri)
+                        PortalSelection.OPEN_FILE -> resolvePortalRegularFile(uri)
+                        PortalSelection.SAVE_FILE -> resolvePortalSaveFile(uri)
+                    }
+                } ?: throw PortalSelectionException("The selected file or folder is unavailable.")
                 PORTAL_RESPONSE_CANCELLED -> null
                 else -> throw PortalSelectionException("The system folder picker failed.")
             }
@@ -161,14 +237,14 @@ internal object LinuxPortalDirectoryPicker {
         )
     }
 
-    internal fun openFileParameters(glib: GlibApi, title: String): Pointer {
+    internal fun fileChooserParameters(glib: GlibApi, options: String): Pointer {
         val parameterType = glib.g_variant_type_new(OPEN_FILE_PARAMETER_TYPE)
             ?: throw IOException("The system directory picker is unavailable.")
         try {
             val error = PointerByReference()
             return glib.g_variant_parse(
                 parameterType,
-                linuxPortalOpenOptions(title),
+                options,
                 null,
                 null,
                 error,
@@ -343,6 +419,11 @@ private data class PortalSignal(
     val response: PortalFileChooserResponse,
 )
 
+private enum class PortalSelection {
+    DIRECTORY,
+    OPEN_FILE,
+    SAVE_FILE,
+}
 
 internal class PortalSelectionException(message: String) : IOException(message)
 
@@ -449,6 +530,7 @@ private const val PORTAL_REQUEST_INTERFACE = "org.freedesktop.portal.Request"
 private const val PORTAL_RESPONSE_SIGNAL = "Response"
 private const val PORTAL_CLOSE_METHOD = "Close"
 private const val PORTAL_OPEN_FILE_METHOD = "OpenFile"
+private const val PORTAL_SAVE_FILE_METHOD = "SaveFile"
 private const val PORTAL_URIS_KEY = "uris"
 private const val OPEN_FILE_PARAMETER_TYPE = "(ssa{sv})"
 private const val DBUS_SIGNAL_FLAGS_NONE = 0

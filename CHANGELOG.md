@@ -3,6 +3,34 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.0] - Draft (changes since 1.6.2; not released)
+
+This is a consolidated draft of the 2.0.0 changes from 1.6.2 onward. Review and
+update it against the final release commit and verified target results before
+publishing.
+
+### Added
+
+- Replaced the retired Flutter app and bridge with Kotlin Multiplatform / Compose and the Rust parser, core, and FFI as the active application and release path.
+- Added the shared gallery, search, tag/date filters, paging, note viewer, Obsidian link handling, and configurable note structure across Android and Desktop.
+- Added Compose video controls for play/pause, seeking, playback speed (0.25×–2×), looping, and mute; Linux uses mpv for embedded video rendering.
+- Added Android universal, arm64-v8a, and x86_64 APK packaging, Linux x86_64 and AArch64 Desktop bundles, and a Windows x64 packaging workflow.
+- Added Linux XDG Desktop Portal system color-scheme and accent-color support, responsive/fixed gallery columns, English/Japanese UI, and import/export for settings.
+- Added offline third-party license notices to application distributions.
+
+### Fixed
+
+- Improved Android SAF media handling with provider previews, bounded thumbnail decoding, private caching, and additional video-frame fallbacks.
+- Fixed Windows media opening, file-manager selection, Obsidian links, video thumbnails, system accent refresh, and Desktop archive launcher discovery.
+- Fixed Android and Desktop video looping/restart behavior, viewer navigation and Back handling, gallery/detail toolbar layout, and bounded cache/path handling.
+- Preserved Material You tinting in pure-black mode and improved video seek/control presentation.
+
+### Changed
+
+- Reworked the gallery and settings navigation, filters, note details, themes, and controls around Material 3 Expressive components and responsive layouts.
+- Moved Vault selection, settings, indexes, and caches to read-only Vault access with app-private persistence; the application does not write into the Vault.
+- Raised Android's minimum supported version to API 24 for the current Material 3 Expressive dependencies and standardized release versioning through `VERSION`.
+
 ## [2.0.0b4] - 2026-10-10 (Beta)
 
 ### Added
