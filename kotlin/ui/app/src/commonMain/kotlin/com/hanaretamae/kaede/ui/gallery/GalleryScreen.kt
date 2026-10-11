@@ -47,13 +47,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.SheetValue
@@ -66,10 +63,10 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextField
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -447,6 +444,7 @@ fun GalleryScreen(
             visibleItemIndex = firstVisibleIndex
             val prefetchFrom = (current.entries.size - PREFETCH_THRESHOLD).coerceAtLeast(0)
             if (
+                !current.searching &&
                 current.canLoadMore &&
                 !current.loading &&
                 lastVisibleIndex >= prefetchFrom
@@ -456,6 +454,7 @@ fun GalleryScreen(
             if (
                 pendingJumpOffset == null &&
                 !jumpProgressVisible &&
+                !current.searching &&
                 current.pageOffset > 0 &&
                 !current.loading &&
                 firstVisibleIndex <= PREFETCH_THRESHOLD
@@ -486,7 +485,7 @@ fun GalleryScreen(
                 state.entries.isNotEmpty() &&
                     targetOffset >= state.pageOffset &&
                     targetOffset < state.pageOffset + state.entries.size -> {
-                    gridState.scrollToItem((targetOffset - state.pageOffset).toInt())
+                    gridState.animateScrollToItem((targetOffset - state.pageOffset).toInt())
                     pendingJumpOffset = null
                     jumpProgressVisible = false
                     highlightedJumpOffset = targetOffset
@@ -763,7 +762,6 @@ fun GalleryScreen(
                                 key = { _, entry -> entry.stableKey() },
                             ) { index, entry ->
                                 GalleryTile(
-                                    modifier = Modifier.animateItem(),
                                     entry = entry,
                                     strings = strings,
                                     position = state.pageOffset + index + 1L,
@@ -789,8 +787,7 @@ fun GalleryScreen(
                             }
                         }
                         val visibleItems = gridState.layoutInfo.visibleItemsInfo.size
-                        val totalItems = state.totalCount?.coerceAtMost(Int.MAX_VALUE.toLong())
-                            ?.toInt() ?: 0
+                        val totalItems = state.totalCount ?: 0L
                         if (totalItems > visibleItems && visibleItems > 0) {
                             BoxWithConstraints(
                                 modifier = Modifier.align(Alignment.CenterEnd)
@@ -799,15 +796,14 @@ fun GalleryScreen(
                                     .zIndex(1f),
                             ) {
                                 val trackHeight = (maxHeight - 24.dp).coerceAtLeast(32.dp)
-                                val thumbHeight = (trackHeight * visibleItems / totalItems)
+                                val thumbHeight = (trackHeight *
+                                    (visibleItems.toDouble() / totalItems.toDouble()).toFloat())
                                     .coerceIn(32.dp, trackHeight)
-                                val lastPosition = (state.totalCount?.minus(visibleItems)
-                                    ?: 0L).coerceAtLeast(1L)
+                                val lastPosition = (totalItems - visibleItems).coerceAtLeast(1L)
                                 val currentPosition = (state.pageOffset +
                                     gridState.firstVisibleItemIndex).coerceAtLeast(0L)
-                                val fraction = scrollbarDragFraction ?: (
-                                    currentPosition.toFloat() / lastPosition.toFloat()
-                                    ).coerceIn(0f, 1f)
+                                val fraction = scrollbarDragFraction
+                                    ?: galleryScrollbarFraction(currentPosition, lastPosition)
                                 val thumbOffset = 12.dp + (trackHeight - thumbHeight) * fraction
                                 Box(
                                     modifier = Modifier.align(Alignment.CenterEnd)
@@ -842,9 +838,11 @@ fun GalleryScreen(
                                                     pressed = change.pressed
                                                 }
                                                 scrollbarDragFraction?.let { dragFraction ->
-                                                    val last =
-                                                        (totalItems - visibleItems).coerceAtLeast(0)
-                                                    val target = (dragFraction * last).toLong()
+                                                    val target = galleryScrollbarPosition(
+                                                        dragFraction,
+                                                        totalItems,
+                                                        visibleItems,
+                                                    )
                                                     stateHolder.jumpTo(target + 1)
                                                 }
                                                 draggingScrollbar = false
@@ -868,9 +866,11 @@ fun GalleryScreen(
                                     val shownFraction =
                                         scrollbarDragFraction ?: fraction
                                     val targetPosition =
-                                        (shownFraction *
-                                            (totalItems - visibleItems).coerceAtLeast(0))
-                                            .toLong() + 1L
+                                        galleryScrollbarPosition(
+                                            shownFraction,
+                                            totalItems,
+                                            visibleItems,
+                                        ) + 1L
                                     Surface(
                                         modifier = Modifier
                                             .zIndex(2f)
@@ -890,7 +890,7 @@ fun GalleryScreen(
                                                 targetPosition.coerceAtMost(
                                                     state.totalCount ?: targetPosition,
                                                 ),
-                                                state.totalCount ?: totalItems.toLong(),
+                                                totalItems,
                                             ),
                                             style = MaterialTheme.typography.labelLarge,
                                             maxLines = 1,
@@ -909,34 +909,11 @@ fun GalleryScreen(
         }
     }
     if (showFilters) {
-        val expanded = filterSheetState.currentValue == SheetValue.Expanded ||
-            filterSheetState.targetValue == SheetValue.Expanded
         ModalBottomSheet(
             modifier = Modifier.testTag("GalleryFilterSheet"),
             onDismissRequest = { showFilters = false },
             sheetState = filterSheetState,
-            dragHandle = if (
-                filterSheetState.currentValue == SheetValue.Expanded ||
-                filterSheetState.targetValue == SheetValue.Expanded
-            ) {
-                null
-            } else {
-                {
-                    Box(
-                        modifier = Modifier.fillMaxWidth().padding(vertical = 22.dp),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Box(
-                            Modifier.size(width = 32.dp, height = 4.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
-                                    CircleShape,
-                                ),
-                        )
-                    }
-                }
-            },
-            sheetMaxWidth = Dp.Unspecified,
+            sheetMaxWidth = BottomSheetDefaults.SheetMaxWidth,
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth().fillMaxHeight(),
@@ -947,36 +924,6 @@ fun GalleryScreen(
                         .padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    AnimatedVisibility(
-                        visible = expanded,
-                        enter = fadeIn(
-                            MaterialTheme.motionScheme.defaultEffectsSpec(),
-                        ) + scaleIn(
-                            MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            initialScale = 0.85f,
-                        ),
-                        exit = fadeOut(
-                            MaterialTheme.motionScheme.defaultEffectsSpec(),
-                        ) + scaleOut(
-                            MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            targetScale = 0.85f,
-                        ),
-                    ) {
-                        KaedeTooltip(strings.close) {
-                            FilledTonalIconButton(
-                                shapes = IconButtonDefaults.shapes(),
-                                onClick = {
-                                    galleryCoroutineScope.launch {
-                                        filterSheetState.hide()
-                                        showFilters = false
-                                    }
-                                },
-                            ) {
-                                Icon(Icons.Filled.Close, strings.close)
-                            }
-                        }
-                    }
-                    if (expanded) Spacer(Modifier.width(8.dp))
                     Text(strings.filters, style = MaterialTheme.typography.titleLarge)
                 }
                 Surface(
@@ -1061,7 +1008,7 @@ fun GalleryScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    androidx.compose.material3.TextField(
+                    TextField(
                         value = noteSearchDraft,
                         onValueChange = { noteSearchDraft = it },
                         placeholder = { Text(strings.searchNotes) },
@@ -1121,7 +1068,7 @@ fun GalleryScreen(
                         }
                     }
                 }
-                androidx.compose.material3.TextField(
+                TextField(
                     value = tagFilterSearch,
                     onValueChange = { tagFilterSearch = it },
                     placeholder = { Text(strings.filterSearch) },
@@ -1325,7 +1272,7 @@ fun GalleryScreen(
             title = { Text(strings.jumpTitle) },
             text = {
                 Column {
-                    OutlinedTextField(
+                    TextField(
                         value = positionDraft,
                         onValueChange = {
                             positionDraft = it.filter { char -> char in '0'..'9' }
@@ -1333,6 +1280,7 @@ fun GalleryScreen(
                         },
                         label = { Text(strings.positionInput) },
                         singleLine = true,
+                        shape = MaterialTheme.shapes.large,
                         isError = positionError,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         modifier = Modifier.focusRequester(jumpFocusRequester),
@@ -1354,7 +1302,6 @@ fun GalleryScreen(
                         if (
                             position == null ||
                             position < 1 ||
-                            position > MAX_GALLERY_POSITION ||
                             (total != null && position > total)
                         ) {
                             positionError = true
@@ -1395,8 +1342,21 @@ fun GalleryLoadingScreen(
 }
 
 private const val PREFETCH_THRESHOLD = 4
-private const val MAX_GALLERY_POSITION = 2_147_483_647L
 private const val JUMP_HIGHLIGHT_MILLIS = 900L
+
+internal fun galleryScrollbarFraction(currentPosition: Long, lastPosition: Long): Float =
+    (currentPosition.toDouble() / lastPosition.coerceAtLeast(1L).toDouble())
+        .toFloat()
+        .coerceIn(0f, 1f)
+
+internal fun galleryScrollbarPosition(
+    fraction: Float,
+    totalItems: Long,
+    visibleItems: Int,
+): Long {
+    val lastPosition = (totalItems - visibleItems).coerceAtLeast(0L)
+    return (fraction.coerceIn(0f, 1f).toDouble() * lastPosition.toDouble()).toLong()
+}
 
 @Composable
 private fun FilterOption(
@@ -1440,8 +1400,8 @@ private fun FilterCountBadge(count: String) {
 @Composable
 private fun GalleryNumberBadge(content: @Composable RowScope.() -> Unit) {
     Badge(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+        containerColor = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
         content = content,
     )
 }
@@ -1533,15 +1493,15 @@ private fun GalleryTile(
             }
             if (isVideo) {
                 Surface(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(10.dp),
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(10.dp),
                     shape = CircleShape,
-                    color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),
+                    color = MaterialTheme.colorScheme.tertiary,
                 ) {
                     Icon(
                         imageVector = Icons.Filled.VideoLibrary,
                         contentDescription = strings.video,
-                        tint = MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.padding(7.dp).size(18.dp),
+                        tint = MaterialTheme.colorScheme.onTertiary,
+                        modifier = Modifier.padding(10.dp).size(24.dp),
                     )
                 }
             }

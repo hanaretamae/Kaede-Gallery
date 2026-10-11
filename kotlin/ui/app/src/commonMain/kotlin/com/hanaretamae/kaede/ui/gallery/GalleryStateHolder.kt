@@ -10,6 +10,7 @@ import com.hanaretamae.kaede.core.repository.RepositoryResult
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -138,13 +139,16 @@ class GalleryStateHolder(
     }
 
     fun loadMore() {
-        if (mutableState.value.loading || !mutableState.value.canLoadMore) return
+        if (mutableState.value.searching ||
+            mutableState.value.loading ||
+            !mutableState.value.canLoadMore
+        ) return
         requestPage(reset = false)
     }
 
     fun loadPrevious() {
         val current = mutableState.value
-        if (current.loading || current.pageOffset == 0L) return
+        if (current.searching || current.loading || current.pageOffset == 0L) return
         requestPage(
             reset = false,
             requestedOffset = (current.pageOffset - current.query.pageSize).coerceAtLeast(0),
@@ -153,7 +157,7 @@ class GalleryStateHolder(
     }
 
     fun jumpTo(position: Long) {
-        if (position !in 1..MAX_GALLERY_POSITION || mutableState.value.loading) return
+        if (position < 1 || mutableState.value.loading) return
         val offset = position - 1
         val totalCount = mutableState.value.totalCount
         if (totalCount != null && offset >= totalCount) {
@@ -268,8 +272,14 @@ class GalleryStateHolder(
         val query = current.query.copy(offset = offset)
         mutableState.value = current.copy(loading = true, error = null)
         requestJob = scope.launch {
-            val result = withContext(repositoryDispatcher) {
-                repository.queryPage(query)
+            val result = try {
+                withContext(repositoryDispatcher) {
+                    repository.queryPage(query)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
             }
             if (requestRevision != revision) return@launch
             val latest = mutableState.value
@@ -353,8 +363,14 @@ class GalleryStateHolder(
             categoriesError = null,
         )
         categoriesJob = scope.launch {
-            val result = withContext(repositoryDispatcher) {
-                repository.categories(query)
+            val result = try {
+                withContext(repositoryDispatcher) {
+                    repository.categories(query)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
             }
             if (requestRevision != revision) return@launch
             val latest = mutableState.value
@@ -378,6 +394,5 @@ class GalleryStateHolder(
 
     private companion object {
         const val SEARCH_DEBOUNCE_MILLIS = 250L
-        const val MAX_GALLERY_POSITION = 2_147_483_647L
     }
 }

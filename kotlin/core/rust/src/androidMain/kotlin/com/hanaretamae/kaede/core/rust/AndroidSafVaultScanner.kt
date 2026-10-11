@@ -16,6 +16,10 @@ import android.provider.DocumentsContract
 import android.util.Log
 import android.util.LruCache
 import android.util.Size
+import androidx.media3.common.MediaItem
+import androidx.media3.effect.Presentation
+import androidx.media3.exoplayer.SeekParameters
+import androidx.media3.inspector.frame.FrameExtractor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -29,6 +33,9 @@ import java.io.ByteArrayOutputStream
 import java.io.IOException
 import java.io.InputStream
 import java.util.ArrayDeque
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 const val MAX_GALLERY_THUMBNAIL_DIMENSION = 512
 
@@ -333,7 +340,7 @@ class AndroidSafVaultScanner(context: Context) {
             }
         }
         val uri = resolveMedia(treeUri, relativePath)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+        if (cacheThumbnails && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             val providerThumbnail = try {
                 resolver.loadThumbnail(
                     uri,
@@ -343,6 +350,10 @@ class AndroidSafVaultScanner(context: Context) {
             } catch (_: IOException) {
                 null
             } catch (_: UnsupportedOperationException) {
+                null
+            } catch (_: IllegalArgumentException) {
+                null
+            } catch (_: IllegalStateException) {
                 null
             }
             val boundedProviderThumbnail = providerThumbnail?.takeIf {
@@ -481,7 +492,7 @@ class AndroidSafVaultScanner(context: Context) {
             }
         } ?: decodeVideoFrame(maxDimension) { retriever ->
             retriever.setDataSource(appContext, uri)
-        }
+        } ?: decodeMedia3VideoFrame(uri, maxDimension)
         if (cacheThumbnail && bitmap != null) cacheThumbnail(treeUri, relativePath, bitmap)
         bitmap?.let { decodedThumbnails.put(memoryCacheKey, it) }
         bitmap
@@ -583,8 +594,49 @@ class AndroidSafVaultScanner(context: Context) {
             null
         } catch (_: UnsupportedOperationException) {
             null
+        } catch (_: RuntimeException) {
+            null
         } finally {
             retriever.release()
+        }
+    }
+
+    private fun decodeMedia3VideoFrame(uri: Uri, maxDimension: Int): Bitmap? {
+        val extractor = try {
+            FrameExtractor.Builder(appContext, MediaItem.fromUri(uri))
+                .setEffects(
+                    listOf(
+                        Presentation.createForWidthAndHeight(
+                            maxDimension,
+                            maxDimension,
+                            Presentation.LAYOUT_SCALE_TO_FIT,
+                        ),
+                    ),
+                )
+                .setSeekParameters(SeekParameters.CLOSEST_SYNC)
+                .build()
+        } catch (_: RuntimeException) {
+            return null
+        }
+
+        try {
+            val future = extractor.getThumbnail()
+            return try {
+                future.get(MAX_VIDEO_FRAME_EXTRACTION_MILLIS, TimeUnit.MILLISECONDS).bitmap
+            } catch (_: InterruptedException) {
+                Thread.currentThread().interrupt()
+                future.cancel(true)
+                null
+            } catch (_: ExecutionException) {
+                null
+            } catch (_: TimeoutException) {
+                future.cancel(true)
+                null
+            } catch (_: RuntimeException) {
+                null
+            }
+        } finally {
+            extractor.close()
         }
     }
 
@@ -792,6 +844,7 @@ class AndroidSafVaultScanner(context: Context) {
         const val MAX_SCAN_BATCH_NOTES = 8
         const val MAX_MEDIA_BYTES = 64 * 1024 * 1024
         const val MAX_VIDEO_DURATION_MILLIS = 24L * 60 * 60 * 1_000
+        private const val MAX_VIDEO_FRAME_EXTRACTION_MILLIS = 10_000L
         const val MAX_CONCURRENT_THUMBNAIL_DECODES = 4
         private const val MAX_THUMBNAIL_MEMORY_BYTES = 32 * 1024 * 1024
         private const val MAX_VIEWER_IMAGE_MEMORY_BYTES = 96 * 1024 * 1024

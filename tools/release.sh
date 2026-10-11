@@ -13,11 +13,18 @@ fail() {
   exit 1
 }
 
-if [[ $# -ne 1 || ! $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+(b[0-9]+)?$ ]]; then
-  fail "usage: tools/release.sh MAJOR.MINOR.PATCH[bN] (without a v prefix)"
+if [[ $# -ne 1 || ! $1 =~ ^[0-9]+\.[0-9]+\.[0-9]+(b[1-9][0-9]{0,2}|rc[1-9][0-9]{0,2})?$ ]]; then
+  fail "usage: tools/release.sh MAJOR.MINOR.PATCH[bN|rcN] (without a v prefix)"
 fi
 
 tag=$1
+if [[ $tag =~ b([1-9][0-9]{0,2})$ ]]; then
+  prerelease_number=${BASH_REMATCH[1]}
+  (( prerelease_number <= 898 )) || fail "beta suffix must be b1 through b898"
+elif [[ $tag =~ rc([1-9][0-9]{0,2})$ ]]; then
+  prerelease_number=${BASH_REMATCH[1]}
+  (( prerelease_number <= 100 )) || fail "RC suffix must be rc1 through rc100"
+fi
 repo_root=$(git rev-parse --show-toplevel) || fail "run this inside the Git repository"
 cd "$repo_root"
 
@@ -242,7 +249,7 @@ tar -C kotlin/shared-assets -czf "$dist_dir/kaede-gallery-third-party-licenses.t
 (cd "$dist_dir" && sha256sum -- kaede-gallery-* > SHA256SUMS)
 
 release_flags=()
-if [[ $tag =~ b[0-9]+$ ]]; then
+if [[ $tag =~ (b|rc)[0-9]+$ ]]; then
   release_flags+=(--prerelease)
 fi
 gh release create "$tag" "$dist_dir"/kaede-gallery-* "$dist_dir/SHA256SUMS" \

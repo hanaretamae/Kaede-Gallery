@@ -5,19 +5,32 @@ plugins {
 
 private val releaseVersion = rootProject.version.toString()
 private val releaseVersionMatch =
-    Regex("(\\d+)\\.(\\d+)\\.(\\d+)(?:b(\\d+))?").matchEntire(releaseVersion)
-        ?: error("VERSION must use MAJOR.MINOR.PATCH with an optional bN beta suffix.")
+    Regex("(\\d+)\\.(\\d+)\\.(\\d+)(?:(b|rc)([1-9][0-9]{0,2}))?").matchEntire(releaseVersion)
+        ?: error("VERSION must use MAJOR.MINOR.PATCH with an optional bN or rcN suffix.")
 private val releaseVersionParts = (1..3).map { releaseVersionMatch.groupValues[it].toLong() }
-private val betaNumber = releaseVersionMatch.groupValues[4].takeIf(String::isNotEmpty)?.toLong()
+private val prereleaseKind = releaseVersionMatch.groupValues[4]
+private val prereleaseNumber = releaseVersionMatch.groupValues[5]
+    .takeIf(String::isNotEmpty)
+    ?.toLong()
 private val releaseVersionCodeBase =
     releaseVersionParts[0] * 1_000_000L + releaseVersionParts[1] * 1_000L + releaseVersionParts[2]
-private val releaseVersionCodeSuffix = betaNumber ?: 999L
+private val releaseVersionCodeSuffix = when (prereleaseKind) {
+    "b" -> prereleaseNumber ?: error("Beta VERSION is missing its suffix.")
+    "rc" -> 898L + requireNotNull(prereleaseNumber) { "RC VERSION is missing its suffix." }
+    else -> 999L
+}
 
 require(releaseVersionParts[1] < 1_000L && releaseVersionParts[2] < 1_000L) {
     "VERSION minor and patch components must be below 1000."
 }
-require(betaNumber == null || betaNumber in 1L..998L) {
-    "VERSION beta suffix must be b1 through b998 to reserve a higher code for the final release."
+require(
+    when (prereleaseKind) {
+        "b" -> prereleaseNumber != null && prereleaseNumber in 1L..898L
+        "rc" -> prereleaseNumber != null && prereleaseNumber in 1L..100L
+        else -> true
+    },
+) {
+    "VERSION must use b1 through b898 or rc1 through rc100 before the final release."
 }
 private val releaseVersionCodeLong = releaseVersionCodeBase * 1_000L + releaseVersionCodeSuffix
 require(releaseVersionCodeLong in 1L..2_100_000_000L) {

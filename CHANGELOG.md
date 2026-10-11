@@ -3,7 +3,17 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
-## [2.0.0b5] - Draft
+## [2.0.0rc1] - Draft
+
+### Fixed
+
+- Fixed viewer image loading and video-player fullscreen controls returning to the in-app details view in one action.
+
+### Changed
+
+- Refined gallery loading, viewer transitions, responsive controls, and appearance settings.
+
+## [2.0.0b5] - 2026-10-11 (Beta)
 
 ### Added
 

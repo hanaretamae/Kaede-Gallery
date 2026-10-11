@@ -281,6 +281,16 @@ class GalleryViewerScreenTest {
     }
 
     @Test
+    fun scrollbarPositionRemainsPreciseForVeryLargeResultCounts() {
+        val totalItems = 1_000_000_000_000L
+        val lastPosition = totalItems - 20
+
+        assertEquals(0.5f, galleryScrollbarFraction(lastPosition / 2, lastPosition))
+        assertEquals(lastPosition / 2, galleryScrollbarPosition(0.5f, totalItems, 20))
+        assertEquals(lastPosition, galleryScrollbarPosition(1f, totalItems, 20))
+    }
+
+    @Test
     fun fullscreenEntryHidesDetailsAndExitRestoresThem() {
         val details = GalleryViewerPresentationState().toggleMedia()
         val fullscreen = details.enterFullscreen()
@@ -293,6 +303,23 @@ class GalleryViewerScreenTest {
         assertEquals(
             details,
             fullscreen.exitFullscreen(),
+        )
+    }
+
+    @Test
+    fun videoFullscreenActionReturnsToHiddenDetailsRegardlessOfPlayerFullscreenFlag() {
+        val mediaOnlyViewer = GalleryViewerPresentationState()
+
+        assertEquals(false, mediaOnlyViewer.fullscreen)
+        assertTrue(
+            galleryViewerShouldReturnToDetails(
+                detailsVisible = mediaOnlyViewer.detailsVisible,
+            ),
+        )
+        assertFalse(
+            galleryViewerShouldReturnToDetails(
+                detailsVisible = true,
+            ),
         )
     }
 }

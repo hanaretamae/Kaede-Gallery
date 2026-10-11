@@ -12,11 +12,9 @@ import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onAllNodesWithContentDescription
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.performClick
-import androidx.compose.ui.test.performKeyInput
-import androidx.compose.ui.test.onRoot
-import androidx.compose.ui.input.key.Key
 import com.hanaretamae.kaede.core.model.GalleryCategory
 import com.hanaretamae.kaede.core.model.GalleryNoteDetail
 import com.hanaretamae.kaede.core.model.GalleryPage
@@ -95,6 +93,11 @@ class DesktopVideoSeekingTest {
     fun mediaActionsExpandInLayoutAboveTheVideoAndRemainSelectable() {
         val openedMedia = mutableListOf<MediaId>()
         showViewer(openedMedia = openedMedia)
+        compose.onNodeWithContentDescription("Exit full screen").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Open media")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         compose.onNodeWithContentDescription("Open media").performClick()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("Open media").fetchSemanticsNodes().isNotEmpty()
@@ -125,13 +128,11 @@ class DesktopVideoSeekingTest {
     }
 
     @Test
-    fun maximizedVideoControlsRemainAccessibleAndEscapeRestoresViewer() {
-        var maximized = false
-        showViewer(onFullscreenChanged = { maximized = it })
-        compose.onNodeWithContentDescription("Maximize application window").performClick()
-        compose.runOnIdle { assertEquals(true, maximized) }
+    fun videoFullscreenActionReturnsToDetailsInOneClick() {
+        var fullscreen = false
+        showViewer(onFullscreenChanged = { fullscreen = it })
         compose.onNodeWithContentDescription("Pause video").assertIsDisplayed()
-        compose.onNodeWithContentDescription("Restore application window").assertIsDisplayed()
+        compose.onNodeWithContentDescription("Exit full screen").assertIsDisplayed()
         compose.onNodeWithText("1.0x").performClick()
         compose.onNodeWithText("0.25x").assertIsDisplayed()
         compose.onNodeWithText("2.0x").assertIsDisplayed().performClick()
@@ -147,13 +148,14 @@ class DesktopVideoSeekingTest {
         compose.onNodeWithText("0.75x").assertIsDisplayed()
         compose.onNodeWithContentDescription("Playback speed").performClick()
         compose.onNodeWithText("0.75x").assertDoesNotExist()
-        compose.onRoot().performKeyInput {
-            keyDown(Key.Escape)
-            keyUp(Key.Escape)
+        compose.onNodeWithContentDescription("Exit full screen").performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithContentDescription("Open media")
+                .fetchSemanticsNodes().isNotEmpty()
         }
-        compose.runOnIdle { assertEquals(false, maximized) }
-        compose.onNodeWithContentDescription("Restore application window").assertDoesNotExist()
-        compose.onNodeWithContentDescription("Maximize application window").assertIsDisplayed()
+        compose.runOnIdle { assertEquals(false, fullscreen) }
+        compose.onNodeWithContentDescription("Exit full screen").assertDoesNotExist()
+        compose.onNodeWithContentDescription("Open media").assertIsDisplayed()
     }
 
 }

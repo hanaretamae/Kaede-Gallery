@@ -10,6 +10,7 @@ import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.isRoot
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -17,6 +18,8 @@ import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.performTouchInput
 import androidx.compose.ui.test.swipe
+import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import com.hanaretamae.kaede.core.model.GalleryCategory
 import com.hanaretamae.kaede.core.model.GalleryCategoryOption
 import com.hanaretamae.kaede.core.model.GalleryNoteDetail
@@ -32,6 +35,7 @@ import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import org.junit.Rule
 import org.junit.Test
 
+@OptIn(ExperimentalMaterial3Api::class)
 class GalleryFilterSheetTest {
     @get:Rule
     val compose = createComposeRule()
@@ -86,7 +90,7 @@ class GalleryFilterSheetTest {
     }
 
     @Test
-    fun headingDragsSheetAndExpandedCloseDismissesIt() {
+    fun headingDragsSheetAndMaterialDragHandleDismissesIt() {
         val repository = object : GalleryRepository {
             override suspend fun queryPage(query: GalleryQuery) =
                 RepositoryResult.Success(GalleryPage(emptyList(), 0, 0))
@@ -128,22 +132,22 @@ class GalleryFilterSheetTest {
         val windowWidth = compose.onAllNodes(isRoot()).fetchSemanticsNodes().maxOf {
             it.boundsInRoot.width
         }
+        val maximumSheetWidth = with(compose.density) {
+            BottomSheetDefaults.SheetMaxWidth.toPx()
+        }
+        assertTrue(windowWidth > maximumSheetWidth)
+        val expectedSheetWidth = minOf(windowWidth, maximumSheetWidth)
         val collapsedBounds = compose.onNodeWithTag("GalleryFilterSheet")
             .fetchSemanticsNode().boundsInRoot
-        assertEquals(windowWidth, collapsedBounds.width, 1f)
-        assertEquals(0f, collapsedBounds.left, 1f)
+        assertEquals(expectedSheetWidth, collapsedBounds.width, 1f)
+        assertEquals((windowWidth - expectedSheetWidth) / 2f, collapsedBounds.left, 1f)
         compose.onNodeWithText(strings.filters).performTouchInput {
             swipe(center, center - Offset(0f, 450f), durationMillis = 500)
         }
-        compose.onNodeWithContentDescription(strings.close).assertIsDisplayed()
-        val closeBounds = compose.onNodeWithContentDescription(strings.close)
-            .fetchSemanticsNode().boundsInRoot
-        val headingBounds = compose.onNodeWithText(strings.filters)
-            .fetchSemanticsNode().boundsInRoot
-        assertEquals(closeBounds.center.y, headingBounds.center.y, 2f)
+        compose.onNodeWithContentDescription(strings.close).assertDoesNotExist()
         val expandedBounds = compose.onNodeWithTag("GalleryFilterSheet").fetchSemanticsNode().boundsInRoot
-        assertEquals(windowWidth, expandedBounds.width, 1f)
-        assertEquals(0f, expandedBounds.left, 1f)
+        assertEquals(expectedSheetWidth, expandedBounds.width, 1f)
+        assertEquals((windowWidth - expectedSheetWidth) / 2f, expandedBounds.left, 1f)
         val sortSurface = compose.onNodeWithTag("GalleryFilterSortSurface").fetchSemanticsNode().boundsInRoot
         assertTrue(sortSurface.left > 0f)
         assertTrue(sortSurface.right < windowWidth)
@@ -175,10 +179,13 @@ class GalleryFilterSheetTest {
             swipe(center, center + Offset(0f, 180f), durationMillis = 1_000)
         }
         compose.onNodeWithContentDescription(strings.close).assertDoesNotExist()
+        compose.onNodeWithTag("GalleryFilterSheet").assertExists()
         compose.onNodeWithText(strings.filters).performTouchInput {
-            swipe(center, center - Offset(0f, 450f), durationMillis = 500)
+            swipe(center, center + Offset(0f, 450f), durationMillis = 500)
         }
-        compose.onNodeWithContentDescription(strings.close).performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("GalleryFilterSheet").fetchSemanticsNodes().isEmpty()
+        }
         compose.onNodeWithText(strings.filters).assertDoesNotExist()
         compose.onNodeWithContentDescription(strings.filters).performClick()
         compose.onNodeWithText(strings.searchNotes).performTextInput("fictional")

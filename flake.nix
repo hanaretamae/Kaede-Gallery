@@ -66,7 +66,7 @@
               "Graphics"
               "Viewer"
             ];
-            startupWMClass = "com-hanaretamae-kaede-desktop-MainKt";
+            startupWMClass = "com.hanaretamae.kaede";
           };
           kmpDesktopBase = pkgs.stdenv.mkDerivation (finalAttrs: {
             pname = "kaede-gallery-kmp";
@@ -175,6 +175,7 @@
                 ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
               exec ${pkgs.jdk17}/bin/java \
                 -Djpackage.app-version=${version} \
+                -Djava.awt.im.style=on-the-spot \
                 -Dcompose.application.resources.dir="$app_dir/resources" \
                 -Dcompose.application.configure.swing.globals=true \
                 -Dskiko.library.path="$app_dir" \
@@ -325,6 +326,7 @@
                     ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
                     exec "$app_dir/../runtime/bin/java" \
                       -Djpackage.app-version=${version} \
+                      -Djava.awt.im.style=on-the-spot \
                       -Dcompose.application.resources.dir="$app_dir/resources" \
                       -Dcompose.application.configure.swing.globals=true \
                       -Dskiko.library.path="$app_dir" \

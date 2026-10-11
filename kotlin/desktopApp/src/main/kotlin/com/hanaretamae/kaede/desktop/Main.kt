@@ -111,6 +111,8 @@ import com.hanaretamae.kaede.ui.gallery.GallerySettingsScreen
 import com.hanaretamae.kaede.ui.gallery.EnglishGallerySettingsStrings
 import com.hanaretamae.kaede.ui.gallery.JapaneseGallerySettingsStrings
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackActions
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackStrings
+import com.hanaretamae.kaede.ui.gallery.EnglishGalleryPlaybackStrings
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackSpeedChoices
 import androidx.compose.foundation.focusable
 import androidx.compose.ui.focus.FocusRequester
@@ -151,7 +153,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.util.concurrent.atomic.AtomicReference
 
-private const val DESKTOP_VIEWER_THUMBNAIL_SIZE = 1_024
+private const val DESKTOP_VIEWER_IMAGE_SIZE = 4_096
 private const val DESKTOP_GALLERY_THUMBNAIL_SIZE = 512
 internal val DESKTOP_MINIMUM_WINDOW_SIZE = DpSize(400.dp, 500.dp)
 private const val DESKTOP_LAYOUT_DEBUG_PROPERTY = "kaede.debugLayout"
@@ -159,6 +161,9 @@ private const val PORTAL_REFRESH_INTERVAL_MILLIS = 15_000L
 
 fun main() {
     System.setProperty("awtAppClassName", "com.hanaretamae.kaede")
+    if (System.getProperty("os.name").startsWith("Linux", ignoreCase = true)) {
+        System.setProperty("java.awt.im.style", "on-the-spot")
+    }
     application {
         val windowState = rememberWindowState(
             width = 1_200.dp,
@@ -1078,6 +1083,12 @@ internal fun DesktopMediaContent(
         LoadingIndicator()
         return
     }
+    if (mediaState.media.isVideo && mediaState.location == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(mediaState.unavailableLabel, color = Color.White)
+        }
+        return
+    }
     val videoPanel = remember { AtomicReference<MpvVideoPanel?>() }
     var activeVideoPanel by remember { mutableStateOf<MpvVideoPanel?>(null) }
     DisposableEffect(videoPanel, mediaState.media.id) {
@@ -1141,6 +1152,7 @@ internal fun DesktopMediaContent(
                     ) {
                         DesktopVideoControls(
                             state = playbackState,
+                            playbackStrings = mediaState.playbackStrings,
                             fullscreen = mediaState.fullscreen,
                             onToggleFullscreen = mediaState.onToggleFullscreen,
                             onPlayPause = panel::togglePlayback,
@@ -1158,13 +1170,21 @@ internal fun DesktopMediaContent(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.End,
                         ) {
-                            KaedeTooltip("Show video controls") {
+                            KaedeTooltip(mediaState.playbackStrings.showControls) {
                                 FilledTonalIconButton(onClick = { controlsVisible = true }) {
-                                    Icon(Icons.Filled.PlayArrow, "Show video controls")
+                                    Icon(
+                                        Icons.Filled.PlayArrow,
+                                        mediaState.playbackStrings.showControls,
+                                    )
                                 }
                             }
                             mediaState.onToggleFullscreen?.let { toggle ->
-                                DesktopFullscreenButton(fullscreen = true, onClick = toggle)
+                                DesktopFullscreenButton(
+                                    fullscreen = true,
+                                    onClick = toggle,
+                                    fullScreenLabel = mediaState.playbackStrings.fullScreen,
+                                    exitFullScreenLabel = mediaState.playbackStrings.exitFullScreen,
+                                )
                             }
                         }
                     }
@@ -1174,6 +1194,8 @@ internal fun DesktopMediaContent(
                             fullscreen = mediaState.fullscreen,
                             onClick = toggle,
                             modifier = Modifier.align(Alignment.End).padding(16.dp),
+                            fullScreenLabel = mediaState.playbackStrings.fullScreen,
+                            exitFullScreenLabel = mediaState.playbackStrings.exitFullScreen,
                         )
                     }
                 }
@@ -1181,36 +1203,50 @@ internal fun DesktopMediaContent(
         }
         return
     }
+    if (mediaState.locationLoading) {
+        LoadingIndicator()
+        return
+    }
     val viewerImage = remember(repository, mediaState.media.id) {
         mutableStateOf(
-            DesktopImageState(
-                bitmap = DesktopImageMemoryCache.preview(mediaState.media.id),
-            ),
+            DesktopImageState(bitmap = DesktopImageMemoryCache.preview(mediaState.media.id)),
         )
     }
     val imageState by viewerImage
-    LaunchedEffect(repository, mediaState.media.id) {
-        if (DesktopImageMemoryCache.get(mediaState.media.id, DESKTOP_VIEWER_THUMBNAIL_SIZE) != null) {
+    LaunchedEffect(repository, mediaState.media.id, mediaState.location) {
+        if (mediaState.location == null) {
+            viewerImage.value = viewerImage.value.copy(error = mediaState.unavailableLabel)
             return@LaunchedEffect
         }
-        viewerImage.value = DesktopImageMemoryCache.load(
+        val cachedImage = DesktopImageMemoryCache.get(
             mediaState.media.id,
-            DESKTOP_VIEWER_THUMBNAIL_SIZE,
+            DESKTOP_VIEWER_IMAGE_SIZE,
+        )
+        if (cachedImage != null) {
+            viewerImage.value = DesktopImageState(bitmap = cachedImage)
+            return@LaunchedEffect
+        }
+        val preview = viewerImage.value.bitmap
+        val loaded = DesktopImageMemoryCache.load(
+            mediaState.media.id,
+            DESKTOP_VIEWER_IMAGE_SIZE,
             ThumbnailLoadPriority.INTERACTIVE,
         ) {
             withContext(Dispatchers.IO) {
-                when (
-                    val result = repository.thumbnail(
-                        mediaState.media.id,
-                        DESKTOP_VIEWER_THUMBNAIL_SIZE,
-                    )
-                ) {
-                    is RepositoryResult.Failure ->
-                        DesktopImageState(error = errorText(result.error))
-                    is RepositoryResult.Success ->
-                        DesktopImageState(bitmap = result.value?.let(::decodeDesktopImage))
-                }
+                val bitmap = decodeDesktopViewerImage(
+                    mediaState.location,
+                    DESKTOP_VIEWER_IMAGE_SIZE,
+                )
+                DesktopImageState(
+                    bitmap = bitmap,
+                    error = if (bitmap == null) mediaState.unavailableLabel else null,
+                )
             }
+        }
+        viewerImage.value = if (loaded.bitmap != null) {
+            loaded
+        } else {
+            loaded.copy(bitmap = preview)
         }
     }
     LaunchedEffect(repository, mediaState.media.id, mediaState.prefetchMediaIds) {
@@ -1223,22 +1259,27 @@ internal fun DesktopMediaContent(
                     async {
                         DesktopImageMemoryCache.load(
                             mediaId,
-                            DESKTOP_VIEWER_THUMBNAIL_SIZE,
+                            DESKTOP_VIEWER_IMAGE_SIZE,
                             ThumbnailLoadPriority.PREFETCH,
                         ) {
                             withContext(Dispatchers.IO) {
-                                when (
-                                    val result = repository.thumbnail(
-                                        mediaId,
-                                        DESKTOP_VIEWER_THUMBNAIL_SIZE,
-                                    )
-                                ) {
+                                when (val result = repository.mediaLocation(mediaId)) {
                                     is RepositoryResult.Failure ->
                                         DesktopImageState(error = errorText(result.error))
-                                    is RepositoryResult.Success ->
-                                        DesktopImageState(
-                                            bitmap = result.value?.let(::decodeDesktopImage),
+                                    is RepositoryResult.Success -> {
+                                        val bitmap = decodeDesktopViewerImage(
+                                            result.value,
+                                            DESKTOP_VIEWER_IMAGE_SIZE,
                                         )
+                                        DesktopImageState(
+                                            bitmap = bitmap,
+                                            error = if (bitmap == null) {
+                                                "Image unavailable."
+                                            } else {
+                                                null
+                                            },
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1256,7 +1297,13 @@ internal fun DesktopMediaContent(
             contentScale = ContentScale.Inside,
             modifier = Modifier.fillMaxSize(),
         )
-        else -> Unit
+        imageState.error != null -> Box(
+            Modifier.fillMaxSize(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(mediaState.unavailableLabel, color = Color.White)
+        }
+        else -> LoadingIndicator()
     }
 }
 
@@ -1264,6 +1311,7 @@ internal fun DesktopMediaContent(
 @Composable
 internal fun DesktopVideoControls(
     state: DesktopVideoPlaybackState,
+    playbackStrings: GalleryPlaybackStrings = EnglishGalleryPlaybackStrings,
     onPlayPause: () -> Unit,
     onSeek: (Float) -> Unit,
     onSpeed: (Float) -> Unit,
@@ -1326,7 +1374,9 @@ internal fun DesktopVideoControls(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-            KaedeTooltip(if (state.playing) "Pause video" else "Play video") {
+            KaedeTooltip(
+                if (state.playing) playbackStrings.pauseVideo else playbackStrings.playVideo,
+            ) {
                 FilledIconButton(
                     shapes = IconButtonDefaults.shapes(),
                     onClick = onPlayPause,
@@ -1334,44 +1384,73 @@ internal fun DesktopVideoControls(
                 ) {
                     Icon(
                         imageVector = if (state.playing) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                        contentDescription = if (state.playing) "Pause video" else "Play video",
+                        contentDescription = if (state.playing) {
+                            playbackStrings.pauseVideo
+                        } else {
+                            playbackStrings.playVideo
+                        },
                     )
                 }
             }
             DesktopPlaybackPill(
                 "${formatDesktopVideoDuration(position)} / ${formatDesktopVideoDuration(duration)}",
+                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                contentColor = MaterialTheme.colorScheme.onSurface,
             )
             }
         }, trailing = {
             DesktopPlaybackPill(
                 "${state.playbackSpeed}x",
+                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                 onClick = {
                     val expanded = !speedMenuExpanded
                     speedMenuExpanded = expanded
                     onPlaybackOverlayVisibilityChanged?.invoke(expanded)
                     Unit
                 }.takeIf { state.connected },
-                contentDescription = "Playback speed",
+                contentDescription = playbackStrings.playbackSpeed,
             )
-            KaedeTooltip(if (state.looping) "Turn looping off" else "Loop video") {
+            KaedeTooltip(
+                if (state.looping) playbackStrings.turnLoopingOff
+                else playbackStrings.loopVideo,
+            ) {
                 FilledTonalIconToggleButton(
                     checked = state.looping,
                     onCheckedChange = onLoop,
                     shapes = IconButtonDefaults.toggleableShapes(),
                     enabled = state.connected,
+                    colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        checkedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        checkedContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    ),
                 ) {
                     Icon(
                         Icons.Filled.Repeat,
-                        contentDescription = if (state.looping) "Turn looping off" else "Loop video",
+                        contentDescription = if (state.looping) {
+                            playbackStrings.turnLoopingOff
+                        } else {
+                            playbackStrings.loopVideo
+                        },
                     )
                 }
             }
-            KaedeTooltip(if (state.muted) "Unmute video" else "Mute video") {
+            KaedeTooltip(
+                if (state.muted) playbackStrings.unmuteVideo else playbackStrings.muteVideo,
+            ) {
                 FilledTonalIconToggleButton(
                     checked = !state.muted,
                     onCheckedChange = { onMute(!it) },
                     shapes = IconButtonDefaults.toggleableShapes(),
                     enabled = state.connected,
+                    colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                        checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    ),
                 ) {
                     Icon(
                         imageVector = if (state.muted) {
@@ -1379,12 +1458,21 @@ internal fun DesktopVideoControls(
                         } else {
                             Icons.Filled.VolumeUp
                         },
-                        contentDescription = if (state.muted) "Unmute video" else "Mute video",
+                        contentDescription = if (state.muted) {
+                            playbackStrings.unmuteVideo
+                        } else {
+                            playbackStrings.muteVideo
+                        },
                     )
                 }
             }
             onToggleFullscreen?.let { toggle ->
-                DesktopFullscreenButton(fullscreen = fullscreen, onClick = toggle)
+                DesktopFullscreenButton(
+                    fullscreen = fullscreen,
+                    onClick = toggle,
+                    fullScreenLabel = playbackStrings.fullScreen,
+                    exitFullScreenLabel = playbackStrings.exitFullScreen,
+                )
             }
         })
         AnimatedVisibility(
@@ -1681,11 +1769,17 @@ private fun DesktopFullscreenButton(
     fullscreen: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
+    fullScreenLabel: String = "Maximize application window",
+    exitFullScreenLabel: String = "Restore application window",
 ) {
-    val label = if (fullscreen) "Restore application window" else "Maximize application window"
+    val label = if (fullscreen) exitFullScreenLabel else fullScreenLabel
     KaedeTooltip(label) {
         FilledTonalIconButton(
             shapes = IconButtonDefaults.shapes(),
+            colors = IconButtonDefaults.filledTonalIconButtonColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            ),
             onClick = onClick,
             modifier = modifier,
         ) {
@@ -1700,10 +1794,11 @@ private fun DesktopFullscreenButton(
 @Composable
 private fun DesktopPlaybackPill(
     label: String,
+    containerColor: Color,
+    contentColor: Color,
     onClick: (() -> Unit)? = null,
     contentDescription: String? = null,
 ) {
-    val colors = MaterialTheme.colorScheme
     val semanticsModifier = contentDescription?.let {
         Modifier.semantics { this.contentDescription = it }
     } ?: Modifier
@@ -1717,8 +1812,8 @@ private fun DesktopPlaybackPill(
     if (onClick == null) {
         Surface(
             shape = CircleShape,
-            color = colors.secondaryContainer,
-            contentColor = colors.onSecondaryContainer,
+            color = containerColor,
+            contentColor = contentColor,
             modifier = semanticsModifier,
             content = content,
         )
@@ -1726,8 +1821,8 @@ private fun DesktopPlaybackPill(
         Surface(
             onClick = onClick,
             shape = CircleShape,
-            color = colors.secondaryContainer,
-            contentColor = colors.onSecondaryContainer,
+            color = containerColor,
+            contentColor = contentColor,
             modifier = semanticsModifier,
             content = content,
         )

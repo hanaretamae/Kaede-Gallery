@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -73,6 +74,65 @@ class GalleryStateHolderTest {
         assertEquals(listOf(0L, 1L), repository.queries.map { it.offset })
         assertEquals(listOf(NoteId(1), NoteId(2)), holder.state.value.entries.map { (it as NoteSummary).id })
         assertFalse(holder.state.value.canLoadMore)
+    }
+
+    @Test
+    fun repositoryExceptionsEndFilterLoadingWithAnError() = runTest {
+        var lastRequestedOffset = 0L
+        val repository = object : GalleryRepository {
+            override suspend fun queryPage(query: GalleryQuery): RepositoryResult<GalleryPage> {
+                if (query.includeTags.isNotEmpty()) error("fictional query failure")
+                lastRequestedOffset = query.offset
+                return RepositoryResult.Success(
+                    GalleryPage(
+                        entries = (query.offset + 1..minOf(query.offset + query.pageSize, 6L))
+                            .map(::note),
+                        totalCount = 6,
+                        offset = query.offset,
+                    ),
+                )
+            }
+
+            override suspend fun categories(
+                query: GalleryQuery,
+            ): RepositoryResult<List<GalleryCategory>> {
+                if (query.includeTags.isNotEmpty()) error("fictional category failure")
+                return RepositoryResult.Success(emptyList())
+            }
+
+            override suspend fun noteDetail(
+                noteId: NoteId,
+                safContent: ByteArray?,
+            ): RepositoryResult<GalleryNoteDetail?> = RepositoryResult.Success(null)
+
+            override suspend fun notePath(noteId: NoteId): RepositoryResult<String?> =
+                RepositoryResult.Success(null)
+
+            override suspend fun mediaLocation(mediaId: MediaId): RepositoryResult<String?> =
+                RepositoryResult.Success(null)
+
+            override suspend fun thumbnail(
+                mediaId: MediaId,
+                size: Int,
+            ): RepositoryResult<ByteArray?> = RepositoryResult.Success(null)
+        }
+        val holder = testGalleryStateHolder(repository, GalleryQuery(pageSize = 2))
+        holder.start()
+        advanceUntilIdle()
+        holder.loadMore()
+        advanceUntilIdle()
+        holder.loadMore()
+        advanceUntilIdle()
+        assertEquals(4L, lastRequestedOffset)
+
+        holder.setQuery(holder.state.value.query.copy(includeTags = setOf("source/fictional")))
+        advanceUntilIdle()
+
+        assertFalse(holder.state.value.loading)
+        assertFalse(holder.state.value.searching)
+        assertFalse(holder.state.value.categoriesLoading)
+        assertEquals(RepositoryError.OPERATION_FAILED, holder.state.value.error)
+        assertEquals(RepositoryError.OPERATION_FAILED, holder.state.value.categoriesError)
     }
 
     @Test
@@ -157,6 +217,46 @@ class GalleryStateHolderTest {
             (4L..12L).map(::noteId),
             holder.state.value.entries.map { (it as NoteSummary).id },
         )
+    }
+
+    @Test
+    fun filteringFromALaterPageDoesNotPrefetchOldPagesDuringDebounce() = runTest {
+        val repository = FakeGalleryRepository { query ->
+            RepositoryResult.Success(
+                GalleryPage(
+                    entries = (query.offset + 1..minOf(query.offset + query.pageSize, 30))
+                        .map(::note),
+                    totalCount = 30,
+                    offset = query.offset,
+                ),
+            )
+        }
+        val holder = testGalleryStateHolder(repository, GalleryQuery(pageSize = 3))
+        holder.start()
+        advanceUntilIdle()
+        holder.jumpTo(10)
+        advanceUntilIdle()
+        assertEquals(6L, holder.state.value.pageOffset)
+
+        holder.setQuery(
+            holder.state.value.query.copy(includeTags = setOf("type/image")),
+            debounceSearch = true,
+        )
+        holder.loadPrevious()
+        holder.loadMore()
+        runCurrent()
+
+        assertEquals(listOf(0L, 6L, 9L), repository.queries.map { it.offset })
+        assertEquals(6L, holder.state.value.pageOffset)
+        assertTrue(holder.state.value.searching)
+
+        advanceTimeBy(250)
+        advanceUntilIdle()
+
+        assertEquals(listOf(0L, 6L, 9L, 0L), repository.queries.map { it.offset })
+        assertEquals(0L, holder.state.value.pageOffset)
+        assertFalse(holder.state.value.searching)
+        assertFalse(holder.state.value.loading)
     }
 
     @Test

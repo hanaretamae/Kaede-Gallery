@@ -45,6 +45,51 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
 
+data class GalleryPlaybackStrings(
+    val playVideo: String,
+    val pauseVideo: String,
+    val playbackSpeed: String,
+    val loopVideo: String,
+    val turnLoopingOff: String,
+    val loopOn: String,
+    val loopOff: String,
+    val muteVideo: String,
+    val unmuteVideo: String,
+    val fullScreen: String,
+    val exitFullScreen: String,
+    val showControls: String,
+)
+
+val EnglishGalleryPlaybackStrings = GalleryPlaybackStrings(
+    playVideo = "Play video",
+    pauseVideo = "Pause video",
+    playbackSpeed = "Playback speed",
+    loopVideo = "Loop video",
+    turnLoopingOff = "Turn looping off",
+    loopOn = "Loop on",
+    loopOff = "Loop off",
+    muteVideo = "Mute video",
+    unmuteVideo = "Unmute video",
+    fullScreen = "Full screen",
+    exitFullScreen = "Exit full screen",
+    showControls = "Show video controls",
+)
+
+val JapaneseGalleryPlaybackStrings = GalleryPlaybackStrings(
+    playVideo = "動画を再生",
+    pauseVideo = "動画を一時停止",
+    playbackSpeed = "再生速度",
+    loopVideo = "動画をループ再生",
+    turnLoopingOff = "ループ再生をオフ",
+    loopOn = "ループ再生オン",
+    loopOff = "ループ再生オフ",
+    muteVideo = "動画をミュート",
+    unmuteVideo = "動画のミュートを解除",
+    fullScreen = "全画面表示",
+    exitFullScreen = "全画面表示を終了",
+    showControls = "動画の操作ボタンを表示",
+)
+
 @Composable
 fun GalleryPlaybackActions(
     leading: @Composable () -> Unit,

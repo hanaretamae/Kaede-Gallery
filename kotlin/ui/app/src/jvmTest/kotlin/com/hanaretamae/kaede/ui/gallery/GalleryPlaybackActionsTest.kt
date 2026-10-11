@@ -19,6 +19,16 @@ class GalleryPlaybackActionsTest {
     val compose = createComposeRule()
 
     @Test
+    fun playbackControlsProvideJapaneseLabels() {
+        assertEquals("動画を再生", JapaneseGalleryPlaybackStrings.playVideo)
+        assertEquals("動画を一時停止", JapaneseGalleryPlaybackStrings.pauseVideo)
+        assertEquals("再生速度", JapaneseGalleryPlaybackStrings.playbackSpeed)
+        assertEquals("動画をループ再生", JapaneseGalleryPlaybackStrings.loopVideo)
+        assertEquals("動画をミュート", JapaneseGalleryPlaybackStrings.muteVideo)
+        assertEquals("全画面表示", JapaneseGalleryPlaybackStrings.fullScreen)
+    }
+
+    @Test
     fun controlsStayOnOneLineAndTrailingActionsRemainReachable() {
         compose.setContent {
             Column {

@@ -31,6 +31,11 @@ kotlin {
     jvm()
 
     sourceSets {
+        androidMain.dependencies {
+            implementation(libs.androidx.media3.effect)
+            implementation(libs.androidx.media3.exoplayer)
+            implementation(libs.androidx.media3.inspector.frame)
+        }
         commonMain.dependencies {
             api(project(":core:model"))
             api(project(":core:repository"))

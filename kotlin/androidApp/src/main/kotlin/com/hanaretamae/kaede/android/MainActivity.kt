@@ -3,6 +3,7 @@
 package com.hanaretamae.kaede.android
 
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.FilledIconButton
 import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.animation.AnimatedVisibility
@@ -21,7 +22,6 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.Repeat
-import androidx.compose.material.icons.filled.Settings
 import androidx.media3.common.VideoSize
 import android.view.TextureView
 import androidx.compose.material3.IconButtonDefaults
@@ -65,7 +65,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
@@ -89,6 +88,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
@@ -132,6 +132,8 @@ import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackActions
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackStrings
+import com.hanaretamae.kaede.ui.gallery.EnglishGalleryPlaybackStrings
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackSpeedChoices
 import com.hanaretamae.kaede.ui.gallery.GallerySettingsScreen
 import com.hanaretamae.kaede.ui.gallery.EnglishGallerySettingsStrings
@@ -229,7 +231,6 @@ private fun AndroidGalleryRoot(onStartupReady: () -> Unit = {}) {
     var pendingSettingsImport by remember { mutableStateOf<((String) -> Unit)?>(null) }
     var pendingSettingsExport by remember { mutableStateOf<String?>(null) }
     var pendingSettingsExportVault by remember { mutableStateOf<Uri?>(null) }
-    var showWelcomeSettings by remember { mutableStateOf(false) }
     var showWelcomeExample by remember { mutableStateOf(false) }
     var systemBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var backGestureProgress by remember { mutableStateOf(0f) }
@@ -249,6 +250,19 @@ private fun AndroidGalleryRoot(onStartupReady: () -> Unit = {}) {
         } else {
             insetsController.show(WindowInsetsCompat.Type.systemBars())
         }
+    }
+
+    val appearance = rootSettingsState.settings?.appearance ?: startupAppearance
+    val useDarkSystemBars = when (appearance.theme) {
+        ThemePreference.SYSTEM -> isSystemInDarkTheme()
+        ThemePreference.LIGHT -> false
+        ThemePreference.DARK -> true
+    }
+    SideEffect {
+        WindowInsetsControllerCompat(
+            activity.window,
+            activity.window.decorView,
+        ).isAppearanceLightStatusBars = !useDarkSystemBars
     }
 
     PredictiveBackHandler(enabled = systemBackHandler != null) { progress ->
@@ -670,16 +684,13 @@ private fun AndroidGalleryRoot(onStartupReady: () -> Unit = {}) {
     } else if (activeSession == null || activeVault == null) {
         SideEffect(onStartupReady)
         SideEffect {
-            systemBackHandler = if (showWelcomeSettings || showWelcomeExample) {
-                {
-                    showWelcomeSettings = false
-                    showWelcomeExample = false
-                }
+            systemBackHandler = if (showWelcomeExample) {
+                { showWelcomeExample = false }
             } else {
                 null
             }
         }
-        if (showWelcomeSettings || showWelcomeExample) {
+        if (showWelcomeExample) {
             val appearance = rootSettingsState.settings?.appearance ?: startupAppearance
             val activeSettingsLanguage = (
                 rootSettingsState.settings?.appearance?.language ?: LanguagePreference.SYSTEM
@@ -716,7 +727,6 @@ private fun AndroidGalleryRoot(onStartupReady: () -> Unit = {}) {
                 error = error,
                 appearance = rootSettingsState.settings?.appearance ?: startupAppearance,
                 onChooseVault = { vaultPicker.launch(null) },
-                onOpenSettings = { showWelcomeSettings = true },
                 onOpenExample = { showWelcomeExample = true },
             )
         }
@@ -801,8 +811,10 @@ private fun AndroidGalleryRoot(onStartupReady: () -> Unit = {}) {
                     path = state.location,
                     locationLoading = state.locationLoading,
                     isVideo = state.media.isVideo,
+                    unavailableLabel = state.unavailableLabel,
                     fullscreen = state.fullscreen,
                     onToggleFullscreen = state.onToggleFullscreen,
+                    playbackStrings = state.playbackStrings,
                     onPlaybackOverlayVisibilityChanged =
                         state.onPlaybackOverlayVisibilityChanged,
                     prefetchLocations = state.prefetchLocations,
@@ -1054,7 +1066,6 @@ private fun WelcomeScreen(
     error: String?,
     appearance: AppearanceSettings,
     onChooseVault: () -> Unit,
-    onOpenSettings: () -> Unit,
     onOpenExample: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -1067,81 +1078,62 @@ private fun WelcomeScreen(
         Box(Modifier.fillMaxSize()) {
             Surface(Modifier.fillMaxSize()) {
                 Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
-                    Surface(
-                        modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(),
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color = MaterialTheme.colorScheme.surfaceContainerLow,
-                        tonalElevation = 2.dp,
+                    Column(
+                        modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth().padding(28.dp),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally,
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth().padding(28.dp),
-                            verticalArrangement = Arrangement.Center,
-                            horizontalAlignment = Alignment.CenterHorizontally,
+                        Icon(
+                            Icons.Filled.Description,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(56.dp),
+                        )
+                        Spacer(Modifier.height(16.dp))
+                        Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
+                        Spacer(Modifier.height(12.dp))
+                        Text(
+                            if (japanese) {
+                                "既存のVaultフォルダーを選択してください。アクセスは読み取り専用です。"
+                            } else {
+                                "Select an existing Vault folder. Access is read-only."
+                            },
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                        Spacer(Modifier.height(24.dp))
+                        Button(
+                            shapes = ButtonDefaults.shapes(),
+                            onClick = onChooseVault,
+                            enabled = !loading,
                         ) {
-                            Icon(
-                                Icons.Filled.Description,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(56.dp),
-                            )
-                            Spacer(Modifier.height(16.dp))
-                            Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
-                            Spacer(Modifier.height(12.dp))
-                            Text(
-                                if (japanese) {
-                                    "既存のVaultフォルダーを選択してください。アクセスは読み取り専用です。"
-                                } else {
-                                    "Select an existing Vault folder. Access is read-only."
-                                },
-                                style = MaterialTheme.typography.bodyLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            )
-                            Spacer(Modifier.height(24.dp))
-                            Button(
-                                shapes = ButtonDefaults.shapes(),
-                                onClick = onChooseVault,
-                                enabled = !loading,
+                            Text(if (japanese) "Vaultを選択" else "Choose Vault")
+                        }
+                        Button(
+                            shapes = ButtonDefaults.shapes(),
+                            onClick = onOpenExample,
+                            enabled = !loading,
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                Text(if (japanese) "Vaultを選択" else "Choose Vault")
-                            }
-                            Button(
-                                shapes = ButtonDefaults.shapes(),
-                                onClick = onOpenExample,
-                                enabled = !loading,
-                            ) {
-                                Row(
-                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(Icons.Filled.Description, contentDescription = null)
-                                    Text(if (japanese) "ノートの例を見る" else "View example note")
-                                }
-                            }
-                            error?.let {
-                                Spacer(Modifier.height(16.dp))
-                                Text(
-                                    if (japanese) {
-                                        "Vaultを読み込めませんでした。アクセス権限を確認して、フォルダーを選択し直してください。"
-                                    } else {
-                                        it
-                                    },
-                                    color = MaterialTheme.colorScheme.error,
-                                )
+                                Icon(Icons.Filled.Description, contentDescription = null)
+                                Text(if (japanese) "ノートの例を見る" else "View example note")
                             }
                         }
+                        error?.let {
+                            Spacer(Modifier.height(16.dp))
+                            Text(
+                                if (japanese) {
+                                    "Vaultを読み込めませんでした。アクセス権限を確認して、フォルダーを選択し直してください。"
+                                } else {
+                                    it
+                                },
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
                     }
-                }
-            }
-            KaedeTooltip(if (japanese) "設定" else "Settings") {
-                IconButton(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-                    shapes = IconButtonDefaults.shapes(),
-                    onClick = onOpenSettings,
-                ) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = if (japanese) "設定" else "Settings",
-                    )
                 }
             }
         }
@@ -1183,8 +1175,10 @@ private fun AndroidMediaContent(
     path: String?,
     locationLoading: Boolean,
     isVideo: Boolean,
+    unavailableLabel: String = "Media unavailable.",
     fullscreen: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
+    playbackStrings: GalleryPlaybackStrings = EnglishGalleryPlaybackStrings,
     onPlaybackOverlayVisibilityChanged: ((Boolean) -> Unit)? = null,
     prefetchLocations: List<String> = emptyList(),
 ) {
@@ -1214,9 +1208,15 @@ private fun AndroidMediaContent(
                 loaded.uri,
                 fullscreen,
                 onToggleFullscreen,
+                playbackStrings,
                 onPlaybackOverlayVisibilityChanged,
             )
-            AndroidResolvedMediaState.Unavailable -> Unit
+            AndroidResolvedMediaState.Unavailable -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(unavailableLabel, color = Color.White)
+            }
         }
     } else if (locationLoading) {
         LoadingIndicator()
@@ -1279,7 +1279,16 @@ private fun AndroidMediaContent(
                 contentScale = ContentScale.Inside,
                 modifier = Modifier.fillMaxSize(),
             )
-            AndroidImageLoadState.Unavailable -> Unit
+            AndroidImageLoadState.Unavailable -> Box(
+                Modifier.fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(unavailableLabel, color = Color.White)
+            }
+        }
+    } else {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(unavailableLabel, color = Color.White)
         }
     }
 }
@@ -1320,11 +1329,13 @@ private fun AndroidGalleryThumbnail(
     val bitmap = bitmapState.value
     if (bitmap != null) {
         Image(
-            bitmap = bitmap!!.asImageBitmap(),
+            bitmap = bitmap.asImageBitmap(),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize(),
         )
+    } else {
+        LoadingIndicator()
     }
 }
 
@@ -1334,6 +1345,7 @@ private fun AndroidVideoPlayer(
     uri: Uri,
     fullscreen: Boolean,
     onToggleFullscreen: (() -> Unit)?,
+    playbackStrings: GalleryPlaybackStrings,
     onPlaybackOverlayVisibilityChanged: ((Boolean) -> Unit)?,
 ) {
     val context = LocalContext.current
@@ -1517,7 +1529,10 @@ private fun AndroidVideoPlayer(
                                             horizontalArrangement = Arrangement.spacedBy(4.dp),
                                             verticalAlignment = Alignment.CenterVertically,
                                         ) {
-                                            KaedeTooltip(if (isPlaying) "Pause" else "Play") {
+                                            KaedeTooltip(
+                                                if (isPlaying) playbackStrings.pauseVideo
+                                                else playbackStrings.playVideo,
+                                            ) {
                                                 FilledIconButton(
                                                     shapes = IconButtonDefaults.shapes(),
                                                     onClick = {
@@ -1539,25 +1554,33 @@ private fun AndroidVideoPlayer(
                                                         } else {
                                                             Icons.Filled.PlayArrow
                                                         },
-                                                        if (isPlaying) "Pause" else "Play",
+                                                        if (isPlaying) playbackStrings.pauseVideo
+                                                        else playbackStrings.playVideo,
                                                     )
                                                 }
                                             }
                                             PlaybackPill(
                                                 "${playbackTimeLabel(positionMs)} / ${playbackTimeLabel(durationMs)}",
+                                                containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                contentColor = MaterialTheme.colorScheme.onSurface,
                                             )
                                         }
                                     },
                                     trailing = {
                                         PlaybackPill(
                                             label = "${speed.toPlaybackSpeedLabel()}x",
+                                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
                                             onClick = {
                                                 showSpeedMenu = true
                                                 onPlaybackOverlayVisibilityChanged?.invoke(true)
                                                 revealControls()
                                             },
                                         )
-                                        KaedeTooltip(if (looping) "Turn looping off" else "Loop video") {
+                                        KaedeTooltip(
+                                            if (looping) playbackStrings.turnLoopingOff
+                                            else playbackStrings.loopVideo,
+                                        ) {
                                             FilledTonalIconToggleButton(
                                                 checked = looping,
                                                 onCheckedChange = {
@@ -1565,14 +1588,24 @@ private fun AndroidVideoPlayer(
                                                     revealControls()
                                                 },
                                                 shapes = IconButtonDefaults.toggleableShapes(),
+                                                colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                                                    contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    checkedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                                                    checkedContentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                                                ),
                                             ) {
                                                 Icon(
                                                     Icons.Filled.Repeat,
-                                                    if (looping) "Loop on" else "Loop off",
+                                                    if (looping) playbackStrings.loopOn
+                                                    else playbackStrings.loopOff,
                                                 )
                                             }
                                         }
-                                        KaedeTooltip(if (muted) "Unmute" else "Mute") {
+                                        KaedeTooltip(
+                                            if (muted) playbackStrings.unmuteVideo
+                                            else playbackStrings.muteVideo,
+                                        ) {
                                             FilledTonalIconToggleButton(
                                                 checked = !muted,
                                                 onCheckedChange = {
@@ -1580,6 +1613,12 @@ private fun AndroidVideoPlayer(
                                                     revealControls()
                                                 },
                                                 shapes = IconButtonDefaults.toggleableShapes(),
+                                                colors = IconButtonDefaults.filledTonalIconToggleButtonColors(
+                                                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                                    checkedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                                    checkedContentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                ),
                                             ) {
                                                 Icon(
                                                     if (muted) {
@@ -1587,16 +1626,22 @@ private fun AndroidVideoPlayer(
                                                     } else {
                                                         Icons.AutoMirrored.Filled.VolumeUp
                                                     },
-                                                    if (muted) "Unmute" else "Mute",
+                                                    if (muted) playbackStrings.unmuteVideo
+                                                    else playbackStrings.muteVideo,
                                                 )
                                             }
                                         }
                                         onToggleFullscreen?.let { toggle ->
                                             KaedeTooltip(
-                                                if (fullscreen) "Exit full screen" else "Full screen",
+                                                if (fullscreen) playbackStrings.exitFullScreen
+                                                else playbackStrings.fullScreen,
                                             ) {
                                                 FilledTonalIconButton(
                                                     shapes = IconButtonDefaults.shapes(),
+                                                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                                                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    ),
                                                     onClick = {
                                                         toggle()
                                                         revealControls()
@@ -1608,7 +1653,8 @@ private fun AndroidVideoPlayer(
                                                         } else {
                                                             Icons.Filled.Fullscreen
                                                         },
-                                                        if (fullscreen) "Exit full screen" else "Full screen",
+                                                        if (fullscreen) playbackStrings.exitFullScreen
+                                                        else playbackStrings.fullScreen,
                                                     )
                                                 }
                                             }
@@ -1621,12 +1667,40 @@ private fun AndroidVideoPlayer(
                 }
             }
         }
+        if (!controlsVisible) {
+            onToggleFullscreen?.let { toggle ->
+                KaedeTooltip(
+                    if (fullscreen) playbackStrings.exitFullScreen
+                    else playbackStrings.fullScreen,
+                ) {
+                    FilledTonalIconButton(
+                        shapes = IconButtonDefaults.shapes(),
+                        onClick = {
+                            toggle()
+                            revealControls()
+                        },
+                        modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+                    ) {
+                        Icon(
+                            if (fullscreen) Icons.Filled.FullscreenExit
+                            else Icons.Filled.Fullscreen,
+                            if (fullscreen) playbackStrings.exitFullScreen
+                            else playbackStrings.fullScreen,
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
-private fun PlaybackPill(label: String, onClick: (() -> Unit)? = null) {
-    val colors = MaterialTheme.colorScheme
+private fun PlaybackPill(
+    label: String,
+    containerColor: Color,
+    contentColor: Color,
+    onClick: (() -> Unit)? = null,
+) {
     val content: @Composable () -> Unit = {
         Text(
             label,
@@ -1638,16 +1712,16 @@ private fun PlaybackPill(label: String, onClick: (() -> Unit)? = null) {
     if (onClick == null) {
         Surface(
             shape = CircleShape,
-            color = colors.secondaryContainer,
-            contentColor = colors.onSecondaryContainer,
+            color = containerColor,
+            contentColor = contentColor,
             content = content,
         )
     } else {
         Surface(
             onClick = onClick,
             shape = CircleShape,
-            color = colors.secondaryContainer,
-            contentColor = colors.onSecondaryContainer,
+            color = containerColor,
+            contentColor = contentColor,
             content = content,
         )
     }
@@ -1680,7 +1754,7 @@ private fun errorText(error: RepositoryError): String = when (error) {
     RepositoryError.OPERATION_FAILED -> "The gallery operation failed."
 }
 
-private const val MAX_VIEWER_IMAGE_SIZE = 2_048
+private const val MAX_VIEWER_IMAGE_SIZE = 8_192
 private const val MAX_GALLERY_THUMBNAIL_SIZE =
     MAX_GALLERY_THUMBNAIL_DIMENSION
 

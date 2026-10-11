@@ -26,10 +26,12 @@ data class GalleryViewerMediaState(
     val media: MediaSummary,
     val location: String?,
     val locationLoading: Boolean,
+    val unavailableLabel: String = "Media unavailable.",
     /** Whether the viewer is in full screen; video players show it on their own control. */
     val fullscreen: Boolean = false,
     val onToggleFullscreen: (() -> Unit)? = null,
     val onPlaybackOverlayVisibilityChanged: ((Boolean) -> Unit)? = null,
+    val playbackStrings: GalleryPlaybackStrings = EnglishGalleryPlaybackStrings,
     /** Locations of adjacent media that platforms may decode ahead of time. */
     val prefetchLocations: List<String> = emptyList(),
     /** IDs of adjacent media that platforms may load ahead of time. */

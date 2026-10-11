@@ -178,7 +178,7 @@ class GallerySettingsNavigationTest {
                     .fetchSemanticsNode().boundsInRoot
                 val logo = compose.onNodeWithTag("AboutLogo")
                     .fetchSemanticsNode().boundsInRoot
-                val iconInset = with(compose.density) { 16.dp.toPx() }
+                val iconInset = with(compose.density) { 8.dp.toPx() }
                 assertTrue(logo.left - logoFrame.left >= iconInset - 1f)
                 assertTrue(logo.top - logoFrame.top >= iconInset - 1f)
                 assertTrue(logoFrame.right - logo.right >= iconInset - 1f)
@@ -265,7 +265,19 @@ class GallerySettingsNavigationTest {
         compose.onNodeWithText(strings.frontmatterAliases).assertIsDisplayed()
         compose.onNodeWithText(strings.titleKeys).assertIsDisplayed()
         compose.onNodeWithText("title").assertIsDisplayed()
+        val lastDetailBlock = compose.onNodeWithText(strings.memoBlock)
+            .performScrollTo().fetchSemanticsNode().boundsInRoot
+        val markdownLinkHeading = compose.onNodeWithText(
+            "${strings.markdownLink} / ${strings.wikiLink}",
+        )
+            .performScrollTo().fetchSemanticsNode().boundsInRoot
+        assertTrue(markdownLinkHeading.top > lastDetailBlock.top)
         compose.onNodeWithText(strings.linkResolution).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(strings.markdownLink).assertDoesNotExist()
+        compose.onNodeWithText(strings.wikiLink).assertDoesNotExist()
+        compose.onNodeWithText(strings.shortestPath).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(strings.relativePath).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText(strings.absolutePath).performScrollTo().assertIsDisplayed()
         compose.onNodeWithContentDescription(strings.memoBlock).performScrollTo().performClick()
         compose.onNode(
             hasText("Memo") and hasClickAction() and hasAnyAncestor(isDialog()),
@@ -283,6 +295,17 @@ class GallerySettingsNavigationTest {
                 settings.galleryTagPrefixes,
             ).memoHeadings.contains("Fictional annotations")
         }
+    }
+
+    @Test
+    fun tappingTagColorRuleOpensItsEditor() {
+        showSettings()
+        val strings = EnglishGallerySettingsStrings
+        compose.onNode(hasText(strings.tagSettings) and hasClickAction())
+            .performScrollTo().performClick()
+        compose.onNodeWithTag("TagColorRule_15").performScrollTo().performClick()
+        compose.onNodeWithText(strings.tagName).assertIsDisplayed()
+        compose.onNodeWithText(strings.tagColor).assertIsDisplayed()
     }
 
     @Test

@@ -6,7 +6,14 @@ import com.hanaretamae.kaede.core.model.MediaId
 import com.hanaretamae.kaede.core.rust.SingleFlight
 import com.hanaretamae.kaede.core.rust.ThumbnailLoadPriority
 import com.hanaretamae.kaede.core.rust.ThumbnailLoadScheduler
+import org.jetbrains.skia.Bitmap
 import org.jetbrains.skia.Image
+import org.jetbrains.skia.SamplingMode
+import java.io.IOException
+import java.nio.file.Files
+import java.nio.file.LinkOption
+import java.nio.file.Path
+import kotlin.math.roundToInt
 
 /** Bounded in-memory cache of decoded media bitmaps; cleared whenever the index can change. */
 internal object DesktopImageMemoryCache {
@@ -89,3 +96,68 @@ internal fun decodeDesktopImage(bytes: ByteArray): ImageBitmap? = try {
 } catch (_: IllegalArgumentException) {
     null
 }
+
+internal fun decodeDesktopViewerImage(path: String?, maxDimension: Int): ImageBitmap? {
+    if (path.isNullOrBlank() || maxDimension !in 1..MAX_VIEWER_IMAGE_DIMENSION) return null
+    val file = try {
+        Path.of(path).toRealPath()
+    } catch (_: IOException) {
+        return null
+    } catch (_: RuntimeException) {
+        return null
+    }
+    val attributes = try {
+        Files.readAttributes(file, java.nio.file.attribute.BasicFileAttributes::class.java)
+    } catch (_: IOException) {
+        return null
+    } catch (_: SecurityException) {
+        return null
+    }
+    val readable = try {
+        Files.isReadable(file)
+    } catch (_: SecurityException) {
+        false
+    }
+    if (!attributes.isRegularFile || !readable || attributes.size() !in 1..MAX_VIEWER_IMAGE_BYTES) {
+        return null
+    }
+    val bytes = try {
+        Files.newInputStream(file).use { it.readNBytes(MAX_VIEWER_IMAGE_BYTES.toInt() + 1) }
+    } catch (_: IOException) {
+        return null
+    } catch (_: SecurityException) {
+        return null
+    }
+    if (bytes.size > MAX_VIEWER_IMAGE_BYTES) return null
+    val image = try {
+        Image.makeFromEncoded(bytes)
+    } catch (_: IllegalArgumentException) {
+        return null
+    } catch (_: IllegalStateException) {
+        return null
+    }
+    image.use {
+        val width = it.width
+        val height = it.height
+        if (
+            width !in 1..MAX_VIEWER_IMAGE_DIMENSION ||
+            height !in 1..MAX_VIEWER_IMAGE_DIMENSION ||
+            width.toLong() * height > MAX_VIEWER_IMAGE_PIXELS
+        ) {
+            return null
+        }
+        val scale = minOf(1f, maxDimension.toFloat() / maxOf(width, height))
+        val outputWidth = (width * scale).roundToInt().coerceAtLeast(1)
+        val outputHeight = (height * scale).roundToInt().coerceAtLeast(1)
+        return Bitmap().use { bitmap ->
+            if (!bitmap.allocN32Pixels(outputWidth, outputHeight)) return null
+            val pixels = bitmap.peekPixels() ?: return null
+            if (!it.scalePixels(pixels, SamplingMode.LINEAR, false)) return null
+            Image.makeFromBitmap(bitmap).toComposeImageBitmap()
+        }
+    }
+}
+
+private const val MAX_VIEWER_IMAGE_BYTES = 64L * 1024 * 1024
+private const val MAX_VIEWER_IMAGE_DIMENSION = 16_384
+private const val MAX_VIEWER_IMAGE_PIXELS = 32L * 1024 * 1024

@@ -6,21 +6,25 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.ScrollWheel
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.performMouseInput
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.unit.dp
 import com.hanaretamae.kaede.core.model.GalleryCategory
@@ -35,6 +39,8 @@ import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import org.junit.Rule
 import org.junit.Test
+import kotlin.test.assertNotEquals
+import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 import kotlin.math.abs
 
@@ -44,11 +50,17 @@ class GalleryViewerGestureTest {
 
     private fun showViewer(
         withLongBody: Boolean = false,
+        isVideo: Boolean = false,
         onHolderCreated: (GalleryViewerStateHolder) -> Unit = {},
+        onMediaStateChanged: (GalleryViewerMediaState) -> Unit = {},
+        onMediaOnlyChanged: ((Boolean) -> Unit)? = null,
         onPlaybackOverlayVisibilityChanged: (((Boolean) -> Unit) -> Unit) = {},
+        onFullscreenChanged: ((Boolean) -> Unit)? = null,
+        onWindowFullscreenChanged: ((Boolean) -> Unit)? = null,
+        initialWindowFullscreen: Boolean = false,
     ) {
         val media = (1L..2L).map {
-            MediaSummary(MediaId(it), NoteId(1), "fictional.md", false, true, 2, 0, 0)
+            MediaSummary(MediaId(it), NoteId(1), "fictional.md", isVideo, true, 2, 0, 0)
         }
         val note = GalleryNoteDetail(
             NoteId(1), "fictional.md", "Fictional note", null, null, null,
@@ -72,10 +84,19 @@ class GalleryViewerGestureTest {
             val holder = remember {
                 GalleryViewerStateHolder(repository, scope, media.first()).also(onHolderCreated)
             }
+            val windowFullscreen = remember { mutableStateOf(initialWindowFullscreen) }
             KaedeGalleryTheme(AppearanceSettings()) {
                 GalleryViewerScreen(
                     stateHolder = holder, onClose = {}, onExternalLink = {},
+                    onFullscreenChanged = onFullscreenChanged,
+                    windowFullscreen = windowFullscreen.value,
+                    onWindowFullscreenChanged = { fullscreen ->
+                        windowFullscreen.value = fullscreen
+                        onWindowFullscreenChanged?.invoke(fullscreen)
+                    },
+                    onMediaOnlyChanged = onMediaOnlyChanged,
                     mediaContent = { mediaState ->
+                        onMediaStateChanged(mediaState)
                         mediaState.onPlaybackOverlayVisibilityChanged
                             ?.let(onPlaybackOverlayVisibilityChanged)
                         Box(
@@ -92,6 +113,14 @@ class GalleryViewerGestureTest {
         }
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("media-area", useUnmergedTree = true)
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    private fun showDetails() {
+        compose.onNodeWithTag("media-area", useUnmergedTree = true).performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-details-toolbar")
                 .fetchSemanticsNodes().isNotEmpty()
         }
     }
@@ -119,6 +148,94 @@ class GalleryViewerGestureTest {
     }
 
     @Test
+    fun windowFullscreenToolbarRemainsSeparateWhenViewerReturnsToDetails() {
+        val fullscreenChanges = mutableListOf<Boolean>()
+        showViewer(onWindowFullscreenChanged = fullscreenChanges::add)
+        showDetails()
+
+        compose.onNodeWithContentDescription(EnglishGalleryViewerStrings.fullscreen).performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-details-toolbar")
+                .fetchSemanticsNodes().isEmpty()
+        }
+
+        compose.runOnIdle {
+            assertEquals(listOf(true), fullscreenChanges)
+        }
+
+        compose.onNodeWithTag("media-area", useUnmergedTree = true).performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-details-toolbar")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.runOnIdle {
+            assertEquals(listOf(true), fullscreenChanges)
+        }
+    }
+
+    @Test
+    fun videoMediaOnlyStartsWithExitFullscreenAction() {
+        var latestMediaState: GalleryViewerMediaState? = null
+        val mediaOnlyChanges = mutableListOf<Boolean>()
+        val fullscreenChanges = mutableListOf<Boolean>()
+        showViewer(
+            isVideo = true,
+            onMediaStateChanged = { latestMediaState = it },
+            onMediaOnlyChanged = mediaOnlyChanges::add,
+            onFullscreenChanged = fullscreenChanges::add,
+        )
+        compose.waitUntil(5_000) { latestMediaState != null }
+
+        compose.runOnIdle {
+            val initial = requireNotNull(latestMediaState)
+            assertTrue(initial.fullscreen)
+            requireNotNull(initial.onToggleFullscreen).invoke()
+        }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-details-toolbar")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.runOnIdle {
+            assertEquals(false, requireNotNull(latestMediaState).fullscreen)
+            assertEquals(listOf(true, false), mediaOnlyChanges)
+            assertEquals(emptyList(), fullscreenChanges)
+        }
+    }
+
+    @Test
+    fun desktopVideoFullscreenControlTogglesViewerFullscreenWithoutChangingHostWindow() {
+        val viewerFullscreenChanges = mutableListOf<Boolean>()
+        val windowFullscreenChanges = mutableListOf<Boolean>()
+        var latestMediaState: GalleryViewerMediaState? = null
+        showViewer(
+            isVideo = true,
+            onMediaStateChanged = { latestMediaState = it },
+            onFullscreenChanged = viewerFullscreenChanges::add,
+            onWindowFullscreenChanged = windowFullscreenChanges::add,
+        )
+        compose.waitUntil(5_000) { latestMediaState != null }
+
+        compose.runOnIdle {
+            assertTrue(requireNotNull(latestMediaState).fullscreen)
+            requireNotNull(latestMediaState).onToggleFullscreen?.invoke()
+        }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-details-toolbar")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.runOnIdle {
+            assertEquals(emptyList(), viewerFullscreenChanges)
+            assertEquals(emptyList(), windowFullscreenChanges)
+            requireNotNull(latestMediaState).onToggleFullscreen?.invoke()
+        }
+        compose.waitUntil(5_000) { requireNotNull(latestMediaState).fullscreen }
+        compose.runOnIdle {
+            assertEquals(listOf(true), viewerFullscreenChanges)
+            assertEquals(emptyList(), windowFullscreenChanges)
+        }
+    }
+
+    @Test
     fun playbackSpeedChoicesDoNotResizeTheMediaArea() {
         lateinit var setPlaybackOverlayVisible: (Boolean) -> Unit
         showViewer(
@@ -126,6 +243,7 @@ class GalleryViewerGestureTest {
                 setPlaybackOverlayVisible = callback
             },
         )
+        showDetails()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("viewer-note-details")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -159,6 +277,7 @@ class GalleryViewerGestureTest {
     @Test
     fun scrollingNoteDetailsAlsoResizesTheMediaArea() {
         showViewer(withLongBody = true)
+        showDetails()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("viewer-note-details")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -175,8 +294,36 @@ class GalleryViewerGestureTest {
     }
 
     @Test
+    fun touchScrollingNoteDetailsUsesTheMediaExpansionGesture() {
+        showViewer(withLongBody = true)
+        showDetails()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-note-details")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val details = compose.onNodeWithTag("viewer-note-details")
+        val initialTop = details.fetchSemanticsNode().boundsInRoot.top
+        val toolbarColorBefore = compose.onNodeWithTag("viewer-details-toolbar")
+            .captureToImage().toPixelMap()[1, 1]
+
+        details.performTouchInput {
+            down(center)
+            moveTo(center - Offset(0f, 90f), 100)
+            moveTo(center - Offset(0f, 180f), 100)
+            up()
+        }
+        compose.waitForIdle()
+        val expandedTop = details.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(expandedTop < initialTop, "Details panel did not expand: $initialTop -> $expandedTop")
+        val toolbarColorAfter = compose.onNodeWithTag("viewer-details-toolbar")
+            .captureToImage().toPixelMap()[1, 1]
+        assertNotEquals(toolbarColorBefore, toolbarColorAfter)
+    }
+
+    @Test
     fun scrollingDetailsWithoutOverflowDoesNotShrinkTheImageArea() {
         showViewer()
+        showDetails()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("viewer-note-details")
                 .fetchSemanticsNodes().isNotEmpty()
@@ -207,6 +354,13 @@ class GalleryViewerGestureTest {
         showViewer()
         val toolbar = compose.onNodeWithTag("viewer-details-toolbar")
         val mediaArea = compose.onNodeWithTag("media-area", useUnmergedTree = true)
+        compose.onAllNodesWithTag("viewer-details-toolbar")
+            .fetchSemanticsNodes().isEmpty()
+        mediaArea.performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-details-toolbar")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
         mediaArea.performClick()
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("viewer-details-toolbar")

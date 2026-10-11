@@ -28,6 +28,7 @@ import androidx.compose.foundation.gestures.transformable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Arrangement
@@ -56,6 +57,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -74,7 +76,9 @@ import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableFloatState
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -158,6 +162,8 @@ data class GalleryViewerStrings(
     val openOriginalPage: String,
     val copyPageUrl: String,
     val copiedPageUrl: String,
+    val mediaUnavailable: String,
+    val playback: GalleryPlaybackStrings,
     val error: (RepositoryError) -> String,
 )
 
@@ -188,6 +194,8 @@ val EnglishGalleryViewerStrings = GalleryViewerStrings(
     openOriginalPage = "Open original page",
     copyPageUrl = "Copy page URL",
     copiedPageUrl = "URL copied",
+    mediaUnavailable = "Media unavailable.",
+    playback = EnglishGalleryPlaybackStrings,
     error = ::englishError,
 )
 
@@ -218,6 +226,8 @@ val JapaneseGalleryViewerStrings = GalleryViewerStrings(
     openOriginalPage = "元のページを開く",
     copyPageUrl = "ページURLをコピー",
     copiedPageUrl = "URLをコピーしました",
+    mediaUnavailable = "メディアを表示できません。",
+    playback = JapaneseGalleryPlaybackStrings,
     error = ::japaneseError,
 )
 
@@ -253,22 +263,32 @@ fun GalleryViewerScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
     val detailsScrollState = rememberScrollState()
+    val density = LocalDensity.current
+    val detailsExpansionDistancePx = with(density) { 220.dp.toPx() }
+    val detailsPanelExpansionPx = remember(stateHolder) { mutableFloatStateOf(0f) }
+    val viewerDetailsScrolled =
+        detailsScrollState.canScrollBackward || detailsPanelExpansionPx.floatValue > 0f
     val viewerTopBarColor by animateColorAsState(
-        targetValue = if (detailsScrollState.canScrollBackward) {
+        targetValue = if (viewerDetailsScrolled) {
             MaterialTheme.colorScheme.surfaceContainerHigh
         } else {
             Color.Transparent
         },
         label = "viewerTopBarColor",
     )
+    val viewerTopBarContentColor by animateColorAsState(
+        targetValue = if (viewerDetailsScrolled) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            Color.White
+        },
+        label = "viewerTopBarContentColor",
+    )
     val motionScheme = remember { MotionScheme.expressive() }
 
-    val density = LocalDensity.current
-    val detailsExpansionDistancePx = with(density) { 220.dp.toPx() }
-    val detailsPanelExpansionPx = remember(stateHolder) { mutableFloatStateOf(0f) }
     val focusRequester = remember(stateHolder) { FocusRequester() }
     val presentation = remember(stateHolder) {
-        mutableStateOf(GalleryViewerPresentationState(detailsVisible = true))
+        mutableStateOf(GalleryViewerPresentationState())
     }
     var playbackOverlayVisible by remember(stateHolder) { mutableStateOf(false) }
     val playbackOverlayShiftPx by animateFloatAsState(
@@ -346,8 +366,27 @@ fun GalleryViewerScreen(
         mediaOffset.value = Offset.Zero
         onFullscreenChanged?.invoke(true)
     }
+    fun showDetails() {
+        showMediaActions = false
+        val previous = presentation.value
+        presentation.value = previous.copy(detailsVisible = true, fullscreen = false)
+        if (previous.fullscreen) {
+            onFullscreenChanged?.invoke(false)
+        }
+        mediaScale.floatValue = 1f
+        mediaOffset.value = Offset.Zero
+    }
     fun toggleFullscreen() {
-        if (presentation.value.fullscreen) exitFullscreen() else enterFullscreen()
+        when {
+            presentation.value.fullscreen -> exitFullscreen()
+            onMediaOnlyChanged != null && !presentation.value.detailsVisible -> {
+                showMediaActions = false
+                presentation.value = presentation.value.toggleMedia()
+                mediaScale.floatValue = 1f
+                mediaOffset.value = Offset.Zero
+            }
+            else -> enterFullscreen()
+        }
     }
     SideEffect {
         onBackHandlerChanged?.invoke(
@@ -396,6 +435,7 @@ fun GalleryViewerScreen(
             presentation.value = previous.toggleMedia()
             if (previous.fullscreen) {
                 onFullscreenChanged?.invoke(false)
+                onWindowFullscreenChanged?.invoke(false)
             }
             mediaScale.floatValue = 1f
             mediaOffset.value = Offset.Zero
@@ -407,6 +447,8 @@ fun GalleryViewerScreen(
                 media = it,
                 location = state.mediaLocation,
                 locationLoading = state.mediaLocationLoading,
+                unavailableLabel = strings.mediaUnavailable,
+                playbackStrings = strings.playback,
             )
         }
         val mediaActions = mediaState?.takeIf { it.location != null }?.let { currentMedia ->
@@ -450,56 +492,79 @@ fun GalleryViewerScreen(
                         .testTag("viewer-details-toolbar"),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    KaedeIconButton(
-                        label = strings.close,
-                        onClick = {
-                            viewerClosing = true
-                            onClose()
-                        },
+                    CompositionLocalProvider(
+                        LocalContentColor provides viewerTopBarContentColor,
                     ) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, strings.close)
-                    }
-                    Spacer(Modifier.width(4.dp))
-                    val note = state.note
-                    val noteTitle = note?.let { galleryViewerTitle(it.path, it.title) }
-                    if (noteTitle != null) {
-                        Text(
-                            text = noteTitle,
-                            style = MaterialTheme.typography.titleLarge,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
-                        )
-                    } else {
-                        Spacer(Modifier.weight(1f))
-                    }
-                    if (onWindowFullscreenChanged != null && state.selectedMedia != null) {
                         KaedeIconButton(
-                            label = if (windowFullscreen) strings.exitFullscreen else strings.fullscreen,
-                            onClick = { onWindowFullscreenChanged(!windowFullscreen) },
+                            label = strings.close,
+                            onClick = {
+                                viewerClosing = true
+                                onClose()
+                            },
                         ) {
-                            Icon(
-                                if (windowFullscreen) Icons.Filled.FullscreenExit
-                                else Icons.Filled.Fullscreen,
-                                if (windowFullscreen) strings.exitFullscreen else strings.fullscreen,
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, strings.close)
+                        }
+                        Spacer(Modifier.width(4.dp))
+                        val note = state.note
+                        val noteTitle = note?.let { galleryViewerTitle(it.path, it.title) }
+                        if (noteTitle != null) {
+                            Text(
+                                text = noteTitle,
+                                style = MaterialTheme.typography.titleLarge,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f),
                             )
+                        } else {
+                            Spacer(Modifier.weight(1f))
                         }
-                    }
-                    if (mediaActions.isNotEmpty()) {
-                        KaedeIconButton(
-                            label = strings.openMedia,
-                            onClick = { showMediaActions = !showMediaActions },
-                        ) {
-                            Icon(Icons.Filled.MoreVert, strings.openMedia)
+                        if (onWindowFullscreenChanged != null && state.selectedMedia != null) {
+                            KaedeIconButton(
+                                label = if (windowFullscreen) {
+                                    strings.exitFullscreen
+                                } else {
+                                    strings.fullscreen
+                                },
+                                onClick = {
+                                    if (windowFullscreen || presentation.value.fullscreen) {
+                                        if (presentation.value.fullscreen) {
+                                            exitFullscreen()
+                                        } else {
+                                            onWindowFullscreenChanged(false)
+                                        }
+                                    } else {
+                                        enterFullscreen()
+                                        onWindowFullscreenChanged(true)
+                                    }
+                                },
+                            ) {
+                                Icon(
+                                    if (windowFullscreen) Icons.Filled.FullscreenExit
+                                    else Icons.Filled.Fullscreen,
+                                    if (windowFullscreen) strings.exitFullscreen
+                                    else strings.fullscreen,
+                                )
+                            }
                         }
-                    }
-                    val currentNote = state.note
-                    if (currentNote != null && onOpenVaultNote != null) {
-                        KaedeIconButton(
-                            label = strings.openNoteInObsidian,
-                            onClick = { onOpenVaultNote(currentNote.path) },
-                        ) {
-                            Icon(Icons.AutoMirrored.Filled.OpenInNew, strings.openNoteInObsidian)
+                        if (mediaActions.isNotEmpty()) {
+                            KaedeIconButton(
+                                label = strings.openMedia,
+                                onClick = { showMediaActions = !showMediaActions },
+                            ) {
+                                Icon(Icons.Filled.MoreVert, strings.openMedia)
+                            }
+                        }
+                        val currentNote = state.note
+                        if (currentNote != null && onOpenVaultNote != null) {
+                            KaedeIconButton(
+                                label = strings.openNoteInObsidian,
+                                onClick = { onOpenVaultNote(currentNote.path) },
+                            ) {
+                                Icon(
+                                    Icons.AutoMirrored.Filled.OpenInNew,
+                                    strings.openNoteInObsidian,
+                                )
+                            }
                         }
                     }
                 }
@@ -662,6 +727,13 @@ fun GalleryViewerScreen(
                                                 }
                                             }
                                         }
+                                        .viewerDetailsVerticalDrag(
+                                            enabled = presentation.value.detailsVisible &&
+                                                !presentation.value.fullscreen,
+                                            scrollState = detailsScrollState,
+                                            panelExpansion = detailsPanelExpansionPx,
+                                            expandDistancePx = detailsExpansionDistancePx,
+                                        )
                                         .verticalScroll(
                                             detailsScrollState,
                                             enabled = detailsScrollState.maxValue > 0,
@@ -669,21 +741,25 @@ fun GalleryViewerScreen(
                                         .background(MaterialTheme.colorScheme.surfaceContainer)
                                         .padding(16.dp),
                                 ) {
-                                    NoteDetails(
-                                        note,
-                                        strings,
-                                        onExternalLink,
-                                        onOpenNote,
-                                        onCopyPageUrl = { url ->
-                                            clipboardManager.setText(AnnotatedString(url))
-                                            coroutineScope.launch {
-                                                snackbarHostState.showSnackbar(strings.copiedPageUrl)
-                                            }
-                                        },
-                                        tagColorRules,
-                                        hiddenTagPrefixes,
-                                        noteStructure,
-                                    )
+                                    CompositionLocalProvider(
+                                        LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+                                    ) {
+                                        NoteDetails(
+                                            note,
+                                            strings,
+                                            onExternalLink,
+                                            onOpenNote,
+                                            onCopyPageUrl = { url ->
+                                                clipboardManager.setText(AnnotatedString(url))
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar(strings.copiedPageUrl)
+                                                }
+                                            },
+                                            tagColorRules,
+                                            hiddenTagPrefixes,
+                                            noteStructure,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -987,13 +1063,23 @@ fun GalleryViewerScreen(
                                             } else {
                                                 stateHolder.cachedMediaLocation(targetMedia.id)
                                             }
+                                            val mediaFullscreen =
+                                                presentation.value.fullscreen ||
+                                                    !presentation.value.detailsVisible
+                                            val shouldReturnToDetails =
+                                                galleryViewerShouldReturnToDetails(
+                                                    detailsVisible =
+                                                        presentation.value.detailsVisible,
+                                                )
                                             mediaContent(
                                                 GalleryViewerMediaState(
                                                     media = targetMedia,
                                                     location = targetLocation,
                                                     locationLoading = isSelected &&
                                                         state.mediaLocationLoading,
-                                                    fullscreen = presentation.value.fullscreen,
+                                                    unavailableLabel = strings.mediaUnavailable,
+                                                    fullscreen = mediaFullscreen,
+                                                    playbackStrings = strings.playback,
                                                     prefetchLocations = if (isSelected) {
                                                         state.neighborMediaLocations
                                                     } else {
@@ -1007,10 +1093,12 @@ fun GalleryViewerScreen(
                                                     onPlaybackOverlayVisibilityChanged = {
                                                         playbackOverlayVisible = it
                                                     },
-                                                    onToggleFullscreen = if (onFullscreenChanged != null) {
-                                                        ::toggleFullscreen
-                                                    } else {
-                                                        null
+                                                    onToggleFullscreen = when {
+                                                        shouldReturnToDetails -> ::showDetails
+                                                        onFullscreenChanged != null ||
+                                                            onMediaOnlyChanged != null ->
+                                                            ::toggleFullscreen
+                                                        else -> null
                                                     },
                                                 ),
                                             )
@@ -1100,6 +1188,13 @@ fun GalleryViewerScreen(
                                                 }
                                             }
                                         }
+                                        .viewerDetailsVerticalDrag(
+                                            enabled = presentation.value.detailsVisible &&
+                                                !presentation.value.fullscreen,
+                                            scrollState = detailsScrollState,
+                                            panelExpansion = detailsPanelExpansionPx,
+                                            expandDistancePx = detailsExpansionDistancePx,
+                                        )
                                         .verticalScroll(
                                             detailsScrollState,
                                             enabled = detailsScrollState.maxValue > 0,
@@ -1108,21 +1203,25 @@ fun GalleryViewerScreen(
                                         .testTag("viewer-note-details")
                                         .padding(16.dp),
                                 ) {
-                                    NoteDetails(
-                                        note,
-                                        strings,
-                                        onExternalLink,
-                                        onOpenNote,
-                                        onCopyPageUrl = { url ->
-                                            clipboardManager.setText(AnnotatedString(url))
-                                            coroutineScope.launch {
-                                                snackbarHostState.showSnackbar(strings.copiedPageUrl)
-                                            }
-                                        },
-                                        tagColorRules,
-                                        hiddenTagPrefixes,
-                                        noteStructure,
-                                    )
+                                    CompositionLocalProvider(
+                                        LocalContentColor provides MaterialTheme.colorScheme.onSurface,
+                                    ) {
+                                        NoteDetails(
+                                            note,
+                                            strings,
+                                            onExternalLink,
+                                            onOpenNote,
+                                            onCopyPageUrl = { url ->
+                                                clipboardManager.setText(AnnotatedString(url))
+                                                coroutineScope.launch {
+                                                    snackbarHostState.showSnackbar(strings.copiedPageUrl)
+                                                }
+                                            },
+                                            tagColorRules,
+                                            hiddenTagPrefixes,
+                                            noteStructure,
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -1320,6 +1419,47 @@ internal fun galleryViewerCanForwardMediaVerticalScroll(
     imageZoomed: Boolean,
 ): Boolean = detailsVisible && !fullscreen && !isVideo && !imageZoomed
 
+private fun Modifier.viewerDetailsVerticalDrag(
+    enabled: Boolean,
+    scrollState: ScrollState,
+    panelExpansion: MutableFloatState,
+    expandDistancePx: Float,
+): Modifier = pointerInput(enabled, scrollState, panelExpansion, expandDistancePx) {
+    if (!enabled) return@pointerInput
+    val touchSlop = viewConfiguration.touchSlop
+    awaitEachGesture {
+        val down = awaitFirstDown(
+            requireUnconsumed = false,
+            pass = PointerEventPass.Initial,
+        )
+        var previous = down.position
+        var total = Offset.Zero
+        var draggingVertically = false
+        var pointerPressed = true
+        while (pointerPressed) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            val change = event.changes.firstOrNull { it.id == down.id } ?: break
+            if (event.changes.count { it.pressed } > 1) break
+            val delta = change.position - previous
+            previous = change.position
+            if (!draggingVertically) {
+                total += delta
+                if (abs(total.y) > touchSlop && abs(total.y) > abs(total.x)) {
+                    draggingVertically = true
+                }
+            }
+            if (draggingVertically) {
+                val scrollDelta = -delta.y
+                scrollState.dispatchRawDelta(scrollDelta)
+                panelExpansion.floatValue =
+                    (panelExpansion.floatValue + scrollDelta).coerceIn(0f, expandDistancePx)
+                change.consume()
+            }
+            pointerPressed = change.pressed
+        }
+    }
+}
+
 internal fun galleryViewerDetailsPanelFraction(
     scrollOffsetPx: Int,
     expandDistancePx: Float = 220f,
@@ -1347,6 +1487,10 @@ internal data class GalleryViewerPresentationState(
     fun exitFullscreen(): GalleryViewerPresentationState =
         copy(detailsVisible = true, fullscreen = false)
 }
+
+internal fun galleryViewerShouldReturnToDetails(
+    detailsVisible: Boolean,
+): Boolean = !detailsVisible
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable

@@ -72,7 +72,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -247,6 +247,8 @@ data class GallerySettingsStrings(
     val updatedKeys: String,
     val coverKeys: String,
     val linkResolution: String,
+    val markdownLink: String,
+    val wikiLink: String,
     val shortestPath: String,
     val relativePath: String,
     val absolutePath: String,
@@ -406,6 +408,8 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     updatedKeys = "Updated keys",
     coverKeys = "Cover keys",
     linkResolution = "Internal link resolution",
+    markdownLink = "Markdown Link",
+    wikiLink = "WikiLink",
     shortestPath = "Shortest path",
     relativePath = "Relative path",
     absolutePath = "Absolute path",
@@ -564,6 +568,8 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     updatedKeys = "更新日キー",
     coverKeys = "カバーキー",
     linkResolution = "内部リンクの解決",
+    markdownLink = "Markdown Link",
+    wikiLink = "WikiLink",
     shortestPath = "最短パス",
     relativePath = "相対パス",
     absolutePath = "絶対パス",
@@ -1143,12 +1149,20 @@ fun GallerySettingsScreen(
                 }
                 SettingsGroup {
                     tagColorRulesDraft.forEachIndexed { index, rule ->
+                        val editRule = {
+                            tagColorName = rule.prefix
+                            tagColorValue =
+                                "#${rule.color.toUInt().toString(16).takeLast(6).uppercase()}"
+                            editingTagColor = index
+                        }
                         SegmentedListItem(
+                            onClick = editRule,
                             shapes = ListItemDefaults.segmentedShapes(
                                 index,
                                 tagColorRulesDraft.size + 1,
                             ),
                             colors = settingsItemColors(),
+                            modifier = Modifier.testTag("TagColorRule_$index"),
                             leadingContent = {
                                 Surface(
                                     modifier = Modifier.size(32.dp),
@@ -1168,15 +1182,10 @@ fun GallerySettingsScreen(
                                                 i != index
                                             }
                                         },
-                                    ) { Icon(Icons.Filled.Delete, "${strings.removeItem}: ${rule.prefix}") }
+                                    ) { Icon(Icons.Filled.Delete, "${strings.removeItem}: ${rule.prefix}")                                     }
                                     KaedeIconButton(
                                         label = "${strings.editItem}: ${rule.prefix}",
-                                        onClick = {
-                                            tagColorName = rule.prefix
-                                            tagColorValue =
-                                                "#${rule.color.toUInt().toString(16).takeLast(6).uppercase()}"
-                                            editingTagColor = index
-                                        },
+                                        onClick = editRule,
                                     ) { Icon(Icons.Filled.Edit, "${strings.editItem}: ${rule.prefix}") }
                                 }
                             },
@@ -1231,7 +1240,7 @@ fun GallerySettingsScreen(
                                 modifier = Modifier.heightIn(max = 440.dp).verticalScroll(rememberScrollState()),
                                 verticalArrangement = Arrangement.spacedBy(12.dp),
                             ) {
-                                OutlinedTextField(
+                                TextField(
                                     value = tagColorName,
                                     onValueChange = {
                                         tagColorName = it
@@ -1239,8 +1248,9 @@ fun GallerySettingsScreen(
                                     },
                                     label = { Text(strings.tagName) },
                                     singleLine = true,
+                                    shape = MaterialTheme.shapes.large,
                                 )
-                                OutlinedTextField(
+                                TextField(
                                     value = tagColorValue,
                                     onValueChange = {
                                         tagColorValue = it
@@ -1248,6 +1258,7 @@ fun GallerySettingsScreen(
                                     },
                                     label = { Text(strings.tagColor) },
                                     singleLine = true,
+                                    shape = MaterialTheme.shapes.large,
                                     leadingIcon = {
                                         candidateRule?.let {
                                             Surface(
@@ -1394,21 +1405,23 @@ fun GallerySettingsScreen(
                         title = { Text(strings.tagCategories) },
                         text = {
                             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                OutlinedTextField(
+                                TextField(
                                     value = categoryRule.name,
                                     onValueChange = {
                                         updateCategoryRule(categoryRule.copy(name = it))
                                     },
                                     label = { Text(strings.categoryName) },
                                     singleLine = true,
+                                    shape = MaterialTheme.shapes.large,
                                 )
-                                OutlinedTextField(
+                                TextField(
                                     value = categoryRule.path,
                                     onValueChange = {
                                         updateCategoryRule(categoryRule.copy(path = it))
                                     },
                                     label = { Text(strings.categoryPath) },
                                     singleLine = true,
+                                    shape = MaterialTheme.shapes.large,
                                 )
                                 SettingsSwitch(
                                     strings.splitDeep, categoryRule.splitDeep,
@@ -1437,7 +1450,7 @@ fun GallerySettingsScreen(
                     shapes = ListItemDefaults.segmentedShapes(0, 3),
                     colors = settingsItemColors(),
                 ) {
-                OutlinedTextField(
+                TextField(
                     value = categoryDraft.other.name,
                     onValueChange = { value ->
                         categoryDraft = categoryDraft.copy(
@@ -1447,6 +1460,7 @@ fun GallerySettingsScreen(
                     },
                     label = { Text(strings.otherCategoryName) },
                     singleLine = true,
+                    shape = MaterialTheme.shapes.large,
                     modifier = Modifier.fillMaxWidth(),
                 )
                 }
@@ -1574,29 +1588,6 @@ fun GallerySettingsScreen(
                             )
                         }
                     }
-                }
-                SettingsPanel(strings.linkResolution) {
-                    ConnectedChoiceGroup(
-                        options = GalleryLinkResolution.entries,
-                        selected = noteStructureDraft.linkResolution,
-                        label = { resolution ->
-                            when (resolution) {
-                                GalleryLinkResolution.SHORTEST_PATH -> strings.shortestPath
-                                GalleryLinkResolution.RELATIVE_PATH -> strings.relativePath
-                                GalleryLinkResolution.ABSOLUTE_PATH -> strings.absolutePath
-                            }
-                        },
-                        iconFor = { resolution ->
-                            when (resolution) {
-                                GalleryLinkResolution.SHORTEST_PATH -> Icons.Filled.LocationSearching
-                                GalleryLinkResolution.RELATIVE_PATH -> Icons.Filled.Link
-                                GalleryLinkResolution.ABSOLUTE_PATH -> Icons.Filled.FolderOpen
-                            }
-                        },
-                        onSelect = { resolution ->
-                            noteStructureDraft = noteStructureDraft.copy(linkResolution = resolution)
-                        },
-                    )
                 }
                 if (noteOptionsVisible) {
                     AlertDialog(
@@ -1743,7 +1734,46 @@ fun GallerySettingsScreen(
                         )
                     }
                     }
+                SettingsPanel(strings.linkResolution) {
+                    SettingsGroup {
+                        Surface(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = MaterialTheme.shapes.large,
+                            color = MaterialTheme.colorScheme.surfaceBright,
+                        ) {
+                            Column(
+                                Modifier.fillMaxWidth().padding(16.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                Text(
+                                    "${strings.markdownLink} / ${strings.wikiLink}",
+                                    style = MaterialTheme.typography.titleSmall,
+                                )
+                                ConnectedChoiceGroup(
+                                    options = GalleryLinkResolution.entries,
+                                    selected = noteStructureDraft.linkResolution,
+                                    label = { resolution ->
+                                        when (resolution) {
+                                            GalleryLinkResolution.SHORTEST_PATH -> strings.shortestPath
+                                            GalleryLinkResolution.RELATIVE_PATH -> strings.relativePath
+                                            GalleryLinkResolution.ABSOLUTE_PATH -> strings.absolutePath
+                                        }
+                                    },
+                                    iconFor = { resolution ->
+                                        when (resolution) {
+                                            GalleryLinkResolution.SHORTEST_PATH -> Icons.Filled.LocationSearching
+                                            GalleryLinkResolution.RELATIVE_PATH -> Icons.Filled.Link
+                                            GalleryLinkResolution.ABSOLUTE_PATH -> Icons.Filled.FolderOpen
+                                        }
+                                    },
+                                    onSelect = { resolution ->
+                                        noteStructureDraft = noteStructureDraft.copy(linkResolution = resolution)
+                                    },
+                                )
+                            }
+                        }
                     }
+                }
                 }
                 }
 
@@ -1821,13 +1851,13 @@ fun GallerySettingsScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
                             Box(
-                                modifier = Modifier.size(144.dp).testTag("AboutLogoFrame"),
+                                modifier = Modifier.size(176.dp).testTag("AboutLogoFrame"),
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Image(
                                     painterResource(Res.drawable.kaede_gallery_icon),
                                     contentDescription = null,
-                                    modifier = Modifier.fillMaxSize().padding(16.dp)
+                                    modifier = Modifier.fillMaxSize().padding(8.dp)
                                         .testTag("AboutLogo"),
                                 )
                             }
@@ -2046,6 +2076,7 @@ fun GallerySettingsScreen(
         }
     }
 }
+}
 
 @Composable
 private fun GalleryExampleNotePage(
@@ -2157,7 +2188,7 @@ private fun SettingsEditableList(
             onDismissRequest = { editingIndex = null },
             title = { Text(title) },
             text = {
-                OutlinedTextField(
+                TextField(
                     value = draft,
                     onValueChange = { value ->
                         draft = value
@@ -2172,6 +2203,7 @@ private fun SettingsEditableList(
                     label = { Text(title) },
                     singleLine = true,
                     isError = !valid && draft.isNotEmpty(),
+                    shape = MaterialTheme.shapes.large,
                     supportingText = { if (!valid) Text(strings.invalidItem) },
                 )
             },
@@ -2551,13 +2583,14 @@ private fun SettingsNumberItem(
         colors = settingsItemColors(),
         modifier = Modifier.fillMaxWidth(),
         trailingContent = {
-            OutlinedTextField(
+            TextField(
                 value = draft,
                 onValueChange = { text ->
                     if (text.length <= 3 && text.all { it in '0'..'9' }) draft = text
                 },
                 singleLine = true,
                 isError = draft.isNotEmpty() && !valid,
+                shape = MaterialTheme.shapes.large,
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Number,
                     imeAction = ImeAction.Done,

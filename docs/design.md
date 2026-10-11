@@ -104,12 +104,11 @@ integrations.
     never signs production Android packages or publishes releases. The prior Android and Windows Actions runs
     passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-    Do not mark this phase complete until the `2.0.0b4` GitHub prerelease has
-    its Windows release archive attached successfully. The prerelease exists;
-    its Windows workflow failed in `LinuxPortalDirectoryPickerTest` before
-    packaging, so the archive is still outstanding. An earlier
-    aarch64 attempt could not fetch pinned OpenJDK/Nix-cache artifacts because
-    cache.nixos.org connections timed out; that failure was later resolved.
+    The `2.0.0b5` GitHub prerelease has its Windows archive attached. The
+    `2.0.0b4` archive is still absent, as verified on 2026-10-12; keep that
+    Phase 14 acceptance gate open until the archive is attached. The earlier
+    Windows workflow failure in `LinuxPortalDirectoryPickerTest` and the
+    aarch64 cache timeout are historical evidence.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
@@ -296,20 +295,29 @@ The `desktopApp` Compose Desktop module provides Linux and Windows/JVM entrypoin
 directory selection, private settings persistence, Rust filesystem indexing,
 index reuse on launch, an explicit rescan action, and bounded-resolution image
 display. Shared gallery tiles now load bounded image previews through the
-platform boundary. Android extracts scaled video frames through the SAF
-read-only file descriptor on API 27 and later, with a bounded
+platform boundary; only gallery tiles use thumbnails. The viewer decodes the
+original image source at a bounded display resolution and shows the expressive
+Material loading indicator while its source is loading. Android extracts
+scaled video frames through the SAF read-only file descriptor on API 27 and
+later, with a bounded
 `getFrameAtTime` and resize fallback on older Android versions and when
-scaled-frame extraction fails. Unsupported codecs still depend on the device's
-Android media decoders. Linux Desktop extracts one bounded PNG frame
+scaled-frame extraction fails. If `MediaMetadataRetriever` cannot decode a
+frame, Media3 `FrameExtractor` is the final fallback, with a 10-second wait
+limit and a `Presentation` effect that bounds output dimensions without
+cropping. Unsupported codecs still depend on the device's Android media
+decoders. Linux Desktop extracts one bounded PNG frame
 through FFmpeg for gallery tiles. The same extractor supports Windows when an
 `ffmpeg` executable is available on `PATH`; Windows runtime behavior has not
 yet been verified. A fictional H.264 video was selected from a dedicated SAF
 fixture on an API 36 device; the viewer played it and the gallery tile displayed
 its magenta video frame. Desktop video playback uses the embedded mpv child
 window on Linux and Windows; Windows runtime playback still requires
-independent runtime acceptance. The 2026-10-07 KMP fixture run completes visual
-acceptance for gallery/search/note-detail surfaces; media playback and
-thumbnail behavior were separately smoke-tested on API 36. Android gallery
+independent runtime acceptance. Video player controls and accessibility labels
+follow the selected English or Japanese language. Linux starts AWT with the
+`on-the-spot` input method style for inline IME composition. The 2026-10-07 KMP
+fixture run completes visual acceptance for gallery/search/note-detail
+surfaces; media playback and thumbnail behavior were separately smoke-tested
+on API 36. Android gallery
 thumbnails first request bounded provider-generated previews on API 29+, with
 bounded SAF decode fallback, four concurrent thumbnail jobs, a 32 MiB in-memory
 decoded-thumbnail LRU, and the existing private disk cache. The memory and disk
@@ -598,7 +606,9 @@ Android and Desktop video controls float directly over/below the video with no
 shared panel background: a seek slider above a row of a filled play/pause
 button, an elapsed/total time pill, a speed pill with selectable choices
 (0.25x, 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x, and 2x), tonal loop and mute
-toggles, and a fullscreen toggle. Seeking or
+toggles, and a fullscreen toggle. The time and speed pills and each toggle use
+distinct Material color roles so playback controls are visually differentiated.
+Seeking or
 pressing play after playback ends permits replay without maximizing the player.
 On Android, the viewer measures the control row inside its central media area
 and fits the video into the remaining space so controls remain visible across
@@ -640,9 +650,12 @@ row. The app-bar title and count are leading-aligned. Gallery tiles
 prioritize media and show no note title or Vault path; media, memo, and related
 counts use `secondaryContainer` / `onSecondaryContainer` icon badges rather
 than the error-colored default badge, and videos use an accessible
-video icon. Tiles use a 3:4 aspect ratio and at least two adaptive columns;
-users may choose an explicit column count in Settings, with zero selecting
-adaptive columns. Search, tag filters, publication/creation date, and sort
+video icon. Numeric count badges use the brighter `primaryContainer` /
+`onPrimaryContainer` roles. The video badge is larger than other tile badges,
+uses `tertiary` / `onTertiary`, and sits at the lower right. Tiles use a 3:4
+aspect ratio and at least two adaptive columns; users may choose an explicit
+column count in Settings, with zero selecting adaptive columns. Search, tag
+filters, publication/creation date, and sort
 order are available in an adjustable Material 3 Expressive modal bottom sheet.
 Its standard drag handle has no popup/highlight treatment, and the sheet supports
 partial positions with horizontal window margins and expanded positions with no
@@ -663,8 +676,9 @@ list row outside and directly below the sort surface. Date-field and sort-direct
 share one tonal group. Search uses a
 rounded filled field without embedded buttons; note-search and clear actions
 are right-aligned outside the field, with 56dp actions and 28dp icons to match
-the field height. Filter actions use icons, and tag-chip rows use tight vertical
-spacing. Vault change and forget
+the field height. Text entry uses filled Material 3 `TextField` components
+with expressive theme shapes. Filter actions use icons, and tag-chip rows use
+tight vertical spacing. Vault change and forget
 actions are available only in Settings. The app bar uses icon buttons for
 filters, item jump, rescan, and settings.
 Gallery, settings, and detail-view toolbars share the 64dp small top app bar
@@ -674,12 +688,11 @@ container until content scrolls underneath; only then does the bar use
 `surfaceContainerHigh`, independently of the page background. Their color is
 derived from the actual list/scroll position so returning to the top restores
 the transparent state. The viewer detail toolbar transitions from transparent
-to `surfaceContainerHigh` as its details content scrolls and returns to
-transparent at the top, keeping its color independent of the black media
-background. The viewer
-detail toolbar transitions from transparent to `surfaceContainerHigh` as its
-details content scrolls, keeping its color independent of the black media
-background.
+to `surfaceContainerHigh` when vertical scrolling expands the details panel or
+scrolls its content, and returns to transparent when both return to the top.
+The same vertical drag over media and details expands/collapses the panel;
+drags over details also scroll its content. Toolbar color stays independent of
+the black media background.
 Adaptive gallery columns use a 200dp minimum tile width, 12dp spacing, and
 24dp horizontal content padding, with at least two columns. This yields four
 columns at an 866dp content width; users can still select a fixed count in
@@ -716,8 +729,9 @@ role to black. All other surfaces, selection colors, and foreground roles retain
 the current Material You scheme, including its accent. This pure-black page
 background is an app-specific dark-mode option, not a generated Material color
 role. Initial Vault selection
-uses saved appearance and system-language preferences, and exposes the settings
-screen before a Vault is selected. On launch, restore the saved Vault and open
+uses saved appearance and system-language preferences; the Vault-selection
+screen does not provide direct access to Settings. Settings become available
+after a Vault is selected. On launch, restore the saved Vault and open
 its session before showing the Vault picker, avoiding a picker flash for an
 already selected Vault. Restoration shows a gallery-shaped loading screen with
 saved appearance rather than loading inside the Vault picker.
@@ -738,23 +752,28 @@ Material 3 Expressive spatial/effects motion specs for its horizontal
 transitions; entering the viewer fades in place so its media is centered from
 the first displayed frame. Viewer controls and the details panel use the same expressive
 motion scheme, including animated layout expansion so the media viewport does
-not jump when the toolbar appears. Android predictive-back gestures also track
-gesture progress and move the current route for left- and right-edge swipes
-before popping the viewer stack. The viewer starts with note details visible,
+not jump when the toolbar appears. Android predictive-back gestures use
+`PredictiveBackHandler` to track left- and right-edge gesture progress and move
+the current route before popping the viewer stack; this is a custom route
+transition, not a Material 3 component-provided predictive-back transition.
+The viewer starts with media only and mobile Android hides the system bars
+until details are shown,
 shows tags as a wrapping row of chips, and groups dates, post text, memos, and
 related content into tonal surfaces. The author is shown directly below the
 note title, outside the date surface; profile, source-page, and copy-URL
 actions stay right-aligned in that same row. The date surface contains dates
 only. The toolbar keeps back and the title on the left and other actions on the
 right. Trackpad horizontal scroll events and touch swipes both navigate among
-media in a note. its toolbar uses icons for host-window fullscreen, a media-action menu,
+media in a note. Its toolbar uses icons for host-window fullscreen, a media-action menu,
 and opening the note in Obsidian; the fullscreen and media-action buttons
-remain available for video. On Android, the toolbar fullscreen action hides
-system bars; on desktop it toggles the actual operating-system window
-fullscreen state. Image taps and the video player's separate fullscreen
-control remain viewer-level fullscreen actions. The video player itself only
-toggles its controls; its fullscreen control is a separate button in the
-control row. Media navigation is by swipe/keyboard rather
+remain available for video. Entering fullscreen switches to media-only viewer
+mode; returning to details exits both viewer and host-window fullscreen. On
+Android, fullscreen hides system bars; on desktop it toggles the actual
+operating-system window fullscreen state through the viewer toolbar. Image taps
+and the video player's separate fullscreen control remain viewer-level actions.
+The video player's fullscreen control exits media-only mode and returns to note
+details in one action; from details it enters viewer-level fullscreen without
+changing the operating-system window state. Media navigation is by swipe/keyboard rather
 than toolbar previous/next buttons. Fullscreen has an explicit exit button and
 also exits with Escape or Android system Back. Desktop also handles Escape while
 the embedded native video canvas owns focus. Repeat is off by default and can
@@ -781,10 +800,11 @@ parallel with the note detail, resolved locations for the note are kept in a
 bounded per-viewer cache, and the next/previous images are resolved and
 decoded ahead of time. Android keeps decoded viewer images in a separate
 memory LRU sized to one sixth of the heap (24–96 MB), shows the cached grid
-thumbnail immediately while the full image decodes, and never shows
-unavailable or loading text over media. Desktop decodes with Skia and keeps a
-128 MB in-memory bitmap LRU that is cleared on rescan and session close; it
-immediately reuses the largest cached grid preview while the viewer image loads.
+thumbnail immediately while the full image decodes, and reports a localized
+unavailable state if the source image cannot be loaded. Desktop decodes with
+Skia and keeps a 128 MB in-memory bitmap LRU that is cleared on rescan and
+session close; it immediately reuses the largest cached grid preview while the
+viewer image loads and reports an unavailable state on failure.
 Note details become visible without waiting for media-location resolution.
 The FFI session mutex is released after preparing a validated thumbnail request,
 before decoding and writing its private cache. The global decoder lock still
@@ -850,6 +870,11 @@ Vault. Filter-prefix settings limit the UI's available tag controls; note tags
 are still indexed so the gallery can query them and display their metadata.
 Target, visible, and hidden prefixes, tag-color rules, and filter categories use
 validated add/edit/remove segmented lists instead of multiline bulk editors.
+Tapping a tag-color rule row opens its editor; the row retains dedicated remove
+and edit actions.
+The internal-link-resolution choices sit below the note-detail order list on a
+separate settings panel. Its list surface has a plain-text `Markdown Link /
+WikiLink` heading above the shared resolution choices.
 Tag settings and appearance settings can be exported together as JSON.
 Flutter's private `tag-settings.json` contains configurable gallery-target tag
 prefixes, Markdown heading aliases for memo, related items, and the end of post
@@ -910,6 +935,10 @@ tiles, appears while scrolling or dragging, and fades away after inactivity.
 Hovering its track also reveals the pill. Dragging it shows the target
 one-based item position and result count without a count suffix in a tonal
 Material 3 Expressive popup to the left of the track, sized to its content.
+Scrollbar position calculations use 64-bit result counts, and reaching a
+loaded jump target animates to the target item. Gallery item placement is not
+animated during page prepends/appends, avoiding isolated thumbnail movement
+while scrolling after a long press.
 Pull-to-refresh is disabled; use the explicit rescan action.
 General usage guidance is grouped under a separate Help screen rather than shown
 as a settings-only explanation.
@@ -997,10 +1026,11 @@ shows the author directly below the note title, with profile, source-page, and
 copy-link actions on that same row; the author and profile action follow the
 configured author visibility. Post text appears in the detail area without a
 post-text label or duplicated author. It fills the app window on entry, with
-black background and centered, fit-contained media; details are visible by
-default and can be hidden to maximize the media area. While an image's note
-details, source path, or display-sized decode is loading, keep the viewer black
-rather than showing the smaller gallery thumbnail or a transient decode error.
+black background and centered, fit-contained media; details are initially hidden and can be shown by tapping the media. While an
+image's note details, source path, or display-sized source decode is loading,
+keep the viewer's black media background and show the Material 3 Expressive
+loading indicator rather than the gallery thumbnail or a transient decode
+error.
 The viewer uses an animated transition between media and details. Opening
 details resets image zoom. Dates, post text, memo, and related content use
 grouped Material 3 surface containers; section headings such as Related sit
@@ -1038,9 +1068,15 @@ platform-specific playback implementations separate.
 
 The tag-filter panel has separate tag-option and note-name/path search fields.
 A tag chip cycles through OR include, AND include, exclude, and inactive.
-The filter sheet opens fully expanded and spans the full window width on every
-platform (no partially expanded state or max-width cap); filter categories are
-segmented list rows. Rapid tag changes
+The filter sheet uses the Material 3 `ModalBottomSheet` maximum width
+(`BottomSheetDefaults.SheetMaxWidth`), so it fills compact windows and remains
+centered and width-constrained on larger windows. It supports partially
+expanded and expanded positions and keeps the standard Material 3 drag handle
+visible in both states instead of adding a separate expanded-state close button;
+filter categories are segmented list rows.
+Follow [official window size class guidance](https://developer.android.com/develop/ui/compose/layouts/adaptive/use-window-size-classes)
+and the [Compose modal bottom sheet API](https://developer.android.com/develop/ui/compose/components/bottom-sheets).
+Rapid tag changes
 are coalesced before querying, and repository calls that may cross the Rust FFI
 run off the UI thread. Leaving the viewer preserves the gallery grid's
 scroll position; a changed query still returns to the top.
@@ -1076,3 +1112,6 @@ filtering, and smooth lazy grid scrolling.
 On Desktop, a remembered Vault opens directly into the gallery using its
 private index; when an initial scan is needed, it starts after the gallery
 appears. The resizable window has a 400×500dp minimum and no fixed aspect ratio.
+On Linux, the AWT app class, desktop-entry ID, and `StartupWMClass` use the same
+identifier so Waybar's Niri window module can resolve the Niri app ID to the
+installed desktop icon.

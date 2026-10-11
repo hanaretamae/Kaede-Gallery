@@ -9,8 +9,19 @@ plugins {
 }
 
 val releaseVersion = file("../VERSION").readText().trim()
-require(Regex("\\d+\\.\\d+\\.\\d+(?:b\\d+)?").matches(releaseVersion)) {
-    "VERSION must use MAJOR.MINOR.PATCH with an optional bN beta suffix."
+val releaseVersionMatch =
+    Regex("(\\d+)\\.(\\d+)\\.(\\d+)(?:(b|rc)([1-9][0-9]{0,2}))?").matchEntire(releaseVersion)
+        ?: error("VERSION must use MAJOR.MINOR.PATCH with an optional bN or rcN suffix.")
+val releasePrereleaseKind = releaseVersionMatch.groupValues[4]
+val releasePrereleaseNumber = releaseVersionMatch.groupValues[5].toLongOrNull()
+require(
+    when (releasePrereleaseKind) {
+        "b" -> releasePrereleaseNumber != null && releasePrereleaseNumber in 1L..898L
+        "rc" -> releasePrereleaseNumber != null && releasePrereleaseNumber in 1L..100L
+        else -> true
+    },
+) {
+    "VERSION must use b1 through b898 or rc1 through rc100 before the final release."
 }
 version = releaseVersion
 

@@ -6,14 +6,57 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.yield
 import org.jetbrains.skia.Bitmap
+import org.jetbrains.skia.EncodedImageFormat
 import org.jetbrains.skia.Image
+import java.awt.image.BufferedImage
+import java.nio.file.Files
+import javax.imageio.ImageIO
 import com.hanaretamae.kaede.core.model.MediaId
 import com.hanaretamae.kaede.core.rust.ThumbnailLoadPriority
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 
 class DesktopImageMemoryCacheTest {
+    @Test
+    fun viewerDecodesTheSourceImageAtAUsefulSize() {
+        val path = Files.createTempFile("kaede-fictional-viewer-", ".png")
+        try {
+            val source = BufferedImage(640, 320, BufferedImage.TYPE_INT_ARGB)
+            assertEquals(true, ImageIO.write(source, "png", path.toFile()))
+
+            val decoded = decodeDesktopViewerImage(path.toString(), 320)
+
+            assertEquals(320, decoded?.width)
+            assertEquals(160, decoded?.height)
+        } finally {
+            Files.deleteIfExists(path)
+        }
+    }
+
+    @Test
+    fun viewerDecodesWebpImagesAtABoundedSize() {
+        val path = Files.createTempFile("kaede-fictional-viewer-", ".webp")
+        try {
+            val encoded = Bitmap().use { source ->
+                source.allocN32Pixels(640, 320)
+                Image.makeFromBitmap(source).use {
+                    it.encodeToData(EncodedImageFormat.WEBP, 100)
+                }
+            }
+            assertNotNull(encoded)
+            encoded.use { Files.write(path, it.bytes) }
+
+            val decoded = decodeDesktopViewerImage(path.toString(), 320)
+
+            assertEquals(320, decoded?.width)
+            assertEquals(160, decoded?.height)
+        } finally {
+            Files.deleteIfExists(path)
+        }
+    }
+
     @Test
     fun previewReusesGridImageAndUpgradesToLargestCachedSize() {
         DesktopImageMemoryCache.clear()
