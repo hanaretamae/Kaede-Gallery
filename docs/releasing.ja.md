@@ -14,7 +14,7 @@
 
 2026-10-12にGitHub上の公開状態を確認しました。`2.0.0b5` prerelease は Android APK、Linux x86_64/AArch64 bundle、ライセンス通知、チェックサム、Windows ZIP とともに公開済みです。`2.0.0b4` には引き続きWindows ZIPがありません。Windows workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) は `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris` で失敗し、package作成とuploadがskipされました。このためPhase 14 acceptance gateは未完了です。
 
-現在 `2.0.0rc1` を準備しています。versionとchangelogは草案です。RC tagやGitHub Releaseを作成する前に、テスト、version code、release noteを確認してください。過去のtagを移動・作り直ししないでください。
+`2.0.0rc1` candidate commit（`d11b09b`）とannotated tagは `origin/main` にpush済みで、GitHub Releaseはまだ作成していません。changelogは草案のため、`tools/release.sh` で公開する前にrelease noteを確認してください。過去のtagを移動・作り直ししないでください。
 
 Android version codeではbetaをb1〜b898、release candidateをrc1〜rc100、安定版を999として予約します。タグ作成後に許されるのは、`CHANGELOG.md` 以外のMarkdownドキュメント変更だけです。リリーススクリプトは現在のコミットと `origin/main` が一致することも検査します。リリースノートとドキュメント以外のリリースコードはタグ時点のままにしてください。
 

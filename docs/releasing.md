@@ -14,7 +14,7 @@
 
 The public GitHub releases were checked on 2026-10-12. `2.0.0b5` is published as a prerelease with Android APKs, Linux x86_64/AArch64 bundles, license notices, checksums, and the Windows ZIP. `2.0.0b4` remains without its Windows ZIP; workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`, so the Phase 14 acceptance gate remains open.
 
-This worktree prepares `2.0.0rc1`. The version and changelog are drafts; review its tests, version code, and release notes before creating the RC tag or GitHub Release. Do not move or recreate historical tags.
+The `2.0.0rc1` candidate commit (`d11b09b`) and annotated tag are pushed to `origin/main`; no GitHub Release has been created. The changelog remains a draft, so review its release notes before publishing with `tools/release.sh`. Do not move or recreate historical tags.
 
 Android version codes reserve suffixes b1-b898 for beta builds, rc1-rc100 for release candidates, and 999 for the final release. The release script permits Markdown-only documentation commits after the tag, except changes to `CHANGELOG.md`; it requires the current commit to match `origin/main`. Keep the release notes and all non-documentation release code at the tagged commit.
 
