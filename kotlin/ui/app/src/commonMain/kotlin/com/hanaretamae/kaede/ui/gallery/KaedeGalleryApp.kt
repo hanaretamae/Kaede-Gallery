@@ -28,6 +28,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -104,6 +105,7 @@ fun KaedeGalleryApp(
     var selectedEntries by remember { mutableStateOf<List<GalleryEntry>>(emptyList()) }
     var showSettings by remember { mutableStateOf(false) }
     var viewerBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
+    var settingsBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var latestScanWarningCount by remember(repository) { mutableStateOf(scanWarningCount) }
     LaunchedEffect(repository, scanWarningCount) {
         latestScanWarningCount = scanWarningCount
@@ -141,15 +143,27 @@ fun KaedeGalleryApp(
     val settings = settingsState.settings
     val settingsResolved = settings != null || !settingsState.loading
     LaunchedEffect(settingsResolved) { if (settingsResolved) onReady() }
-    val systemBackHandler = remember(showSettings, selectedEntries) {
-        when {
-            showSettings -> ({ showSettings = false })
-            selectedEntries.isNotEmpty() -> ({ selectedEntries = selectedEntries.dropLast(1) })
-            else -> null
+    val latestShowSettings = rememberUpdatedState(showSettings)
+    val latestSelectedEntries = rememberUpdatedState(selectedEntries)
+    val systemBackHandler = remember {
+        {
+            when {
+                latestShowSettings.value -> showSettings = false
+                latestSelectedEntries.value.isNotEmpty() -> {
+                    selectedEntries = latestSelectedEntries.value.dropLast(1)
+                }
+            }
         }
     }
+    val canHandleSystemBack = showSettings || selectedEntries.isNotEmpty()
     SideEffect {
-        onBackHandlerChanged?.invoke(viewerBackHandler ?: systemBackHandler)
+        onBackHandlerChanged?.invoke(
+            if (showSettings) {
+                settingsBackHandler ?: systemBackHandler.takeIf { canHandleSystemBack }
+            } else {
+                viewerBackHandler ?: systemBackHandler.takeIf { canHandleSystemBack }
+            },
+        )
     }
     val tagColorRules = remember(settings?.flutterTagSettingsJson) {
         try {
@@ -254,10 +268,12 @@ fun KaedeGalleryApp(
                 selectedEntries.isNotEmpty() -> GalleryDestination.Viewer(selectedEntries.toList())
                 else -> GalleryDestination.Gallery
             }
+            val rootBackGestureProgress =
+                if (showSettings && settingsBackHandler != null) 0f else backGestureProgress
             AnimatedContent(
                 targetState = destination,
                 modifier = Modifier.fillMaxSize().graphicsLayer {
-                    val progress = backGestureProgress.coerceIn(-1f, 1f)
+                    val progress = rootBackGestureProgress.coerceIn(-1f, 1f)
                     translationX = size.width * progress
                     alpha = 1f - abs(progress) * 0.08f
                 },
@@ -324,6 +340,20 @@ fun KaedeGalleryApp(
                         onForgetVault = onForgetVault,
                         vaultName = vaultName,
                         scanWarningCount = latestScanWarningCount,
+                        backGestureProgress = if (settingsBackHandler != null) {
+                            backGestureProgress
+                        } else {
+                            0f
+                        },
+                        onBackHandlerChanged = { backHandler ->
+                            settingsBackHandler = backHandler
+                            if (showSettings) {
+                                onBackHandlerChanged?.invoke(
+                                    backHandler
+                                        ?: systemBackHandler.takeIf { canHandleSystemBack },
+                                )
+                            }
+                        },
                     )
                     is GalleryDestination.Viewer -> {
                     val entry = currentDestination.entries.last()
@@ -350,7 +380,9 @@ fun KaedeGalleryApp(
                         },
                         onBackHandlerChanged = { backHandler ->
                             viewerBackHandler = backHandler
-                            onBackHandlerChanged?.invoke(backHandler ?: systemBackHandler)
+                            onBackHandlerChanged?.invoke(
+                                backHandler ?: systemBackHandler.takeIf { canHandleSystemBack },
+                            )
                         },
                         tagColorRules = tagColorRules,
                         hiddenTagPrefixes = settings.hiddenTagPrefixes,

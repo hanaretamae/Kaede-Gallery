@@ -7,6 +7,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.expandVertically
@@ -103,6 +104,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
@@ -264,6 +266,19 @@ fun GalleryViewerScreen(
     val presentation = remember(stateHolder) {
         mutableStateOf(GalleryViewerPresentationState(detailsVisible = true))
     }
+    var playbackOverlayVisible by remember(stateHolder) { mutableStateOf(false) }
+    val playbackOverlayShiftPx by animateFloatAsState(
+        targetValue = if (
+            playbackOverlayVisible &&
+            presentation.value.detailsVisible &&
+            !presentation.value.fullscreen
+        ) {
+            detailsExpansionDistancePx * PLAYBACK_OVERLAY_DETAILS_SHIFT
+        } else {
+            0f
+        },
+        label = "playbackOverlayDetailsShift",
+    )
     var showMediaActions by remember(stateHolder) { mutableStateOf(false) }
     var viewerClosing by remember(stateHolder) { mutableStateOf(false) }
     val mediaScale = remember(stateHolder) { mutableFloatStateOf(1f) }
@@ -630,7 +645,9 @@ fun GalleryViewerScreen(
                         mutableStateOf(false)
                     }
                     val detailsPanelHeight = maxHeight * galleryViewerDetailsPanelFraction(
-                        scrollOffsetPx = detailsPanelExpansionPx.floatValue.roundToInt(),
+                        scrollOffsetPx = (
+                            detailsPanelExpansionPx.floatValue + playbackOverlayShiftPx
+                            ).roundToInt(),
                         expandDistancePx = detailsExpansionDistancePx,
                     )
                     Column(
@@ -931,6 +948,9 @@ fun GalleryViewerScreen(
                                                     } else {
                                                         emptyList()
                                                     },
+                                                    onPlaybackOverlayVisibilityChanged = {
+                                                        playbackOverlayVisible = it
+                                                    },
                                                     onToggleFullscreen = if (onFullscreenChanged != null) {
                                                         ::toggleFullscreen
                                                     } else {
@@ -989,6 +1009,7 @@ fun GalleryViewerScreen(
                                         .height(detailsPanelHeight)
                                         .verticalScroll(detailsScrollState)
                                         .background(MaterialTheme.colorScheme.surfaceContainer)
+                                        .testTag("viewer-note-details")
                                         .padding(16.dp),
                                 ) {
                                     NoteDetails(
@@ -1212,6 +1233,8 @@ internal fun galleryViewerDetailsPanelFraction(
     val expansion = (scrollOffsetPx / expandDistancePx).coerceIn(0f, 1f)
     return baseFraction + (maximumFraction - baseFraction) * expansion
 }
+
+private const val PLAYBACK_OVERLAY_DETAILS_SHIFT = 0.5f
 
 internal data class GalleryViewerPresentationState(
     val detailsVisible: Boolean = false,

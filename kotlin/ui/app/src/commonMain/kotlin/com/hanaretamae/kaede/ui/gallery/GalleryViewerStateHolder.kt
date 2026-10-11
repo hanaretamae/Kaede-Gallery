@@ -29,6 +29,7 @@ data class GalleryViewerMediaState(
     /** Whether the viewer is in full screen; video players show it on their own control. */
     val fullscreen: Boolean = false,
     val onToggleFullscreen: (() -> Unit)? = null,
+    val onPlaybackOverlayVisibilityChanged: ((Boolean) -> Unit)? = null,
     /** Locations of adjacent media that platforms may decode ahead of time. */
     val prefetchLocations: List<String> = emptyList(),
     /** IDs of adjacent media that platforms may load ahead of time. */

@@ -756,7 +756,7 @@ fun GalleryScreen(
                 Row(
                     modifier = Modifier.fillMaxWidth()
                         .heightIn(min = 72.dp)
-                        .padding(vertical = 12.dp),
+                        .padding(horizontal = 20.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AnimatedVisibility(
@@ -793,13 +793,13 @@ fun GalleryScreen(
                 }
                 Surface(
                     modifier = Modifier.fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                        .padding(horizontal = 16.dp, vertical = 8.dp)
                         .testTag("GalleryFilterSortSurface"),
                     shape = MaterialTheme.shapes.large,
                     color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 ) {
                     Column(
-                        Modifier.padding(vertical = 12.dp),
+                        Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                     ConnectedChoiceGroup(
@@ -817,7 +817,8 @@ fun GalleryScreen(
                     }
                 }
                 Row(
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -894,13 +895,14 @@ fun GalleryScreen(
                         focusedIndicatorColor = Color.Transparent,
                         unfocusedIndicatorColor = Color.Transparent,
                     ),
-                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
                 )
                 state.categoriesError?.let {
                     Text(
                         strings.error(it),
                         color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                     )
                 }
                 if (state.categoriesLoading && state.categories.isEmpty()) {
@@ -908,7 +910,7 @@ fun GalleryScreen(
                         modifier = Modifier.align(Alignment.CenterHorizontally).padding(16.dp),
                     )
                 } else if (state.categories.isEmpty()) {
-                    Text(strings.noTags, modifier = Modifier.padding(vertical = 16.dp))
+                    Text(strings.noTags, modifier = Modifier.padding(16.dp))
                 } else {
                     LazyColumn(
                         modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -940,7 +942,8 @@ fun GalleryScreen(
                                 item(key = "category:${category.path}") {
                                     Surface(
                                         modifier = Modifier.fillMaxWidth()
-                                            .padding(vertical = 4.dp),
+                                            .padding(horizontal = 12.dp, vertical = 4.dp)
+                                            .testTag("GalleryFilterCategorySurface"),
                                         shape = MaterialTheme.shapes.large,
                                         color = MaterialTheme.colorScheme.surfaceContainerHigh,
                                     ) {
@@ -978,15 +981,16 @@ fun GalleryScreen(
                                                     }
                                                 },
                                             ) {
-                                                Text(category.displayName)
+                                                Text(
+                                                    category.displayName,
+                                                    modifier = Modifier.padding(start = 16.dp),
+                                                )
                                             }
                                             if (expanded) {
                                                 FlowRow(
                                                     modifier = Modifier.fillMaxWidth()
-                                                        .padding(
-                                                            top = 8.dp,
-                                                            bottom = 12.dp,
-                                                        ),
+                                                        .padding(horizontal = 16.dp)
+                                                        .padding(top = 8.dp, bottom = 12.dp),
                                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                                     verticalArrangement = Arrangement.spacedBy(4.dp),
                                                 ) {

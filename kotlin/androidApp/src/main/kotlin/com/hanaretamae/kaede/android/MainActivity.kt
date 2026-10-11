@@ -8,8 +8,7 @@ import androidx.compose.material3.FilledTonalIconToggleButton
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.aspectRatio
-import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.material.icons.automirrored.filled.VolumeOff
 import androidx.compose.material.icons.automirrored.filled.VolumeUp
@@ -782,6 +781,8 @@ private fun AndroidGalleryRoot(onStartupReady: () -> Unit = {}) {
                     isVideo = state.media.isVideo,
                     fullscreen = state.fullscreen,
                     onToggleFullscreen = state.onToggleFullscreen,
+                    onPlaybackOverlayVisibilityChanged =
+                        state.onPlaybackOverlayVisibilityChanged,
                     prefetchLocations = state.prefetchLocations,
                 )
             },
@@ -1153,6 +1154,7 @@ private fun AndroidMediaContent(
     isVideo: Boolean,
     fullscreen: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
+    onPlaybackOverlayVisibilityChanged: ((Boolean) -> Unit)? = null,
     prefetchLocations: List<String> = emptyList(),
 ) {
     if (isVideo) {
@@ -1177,7 +1179,12 @@ private fun AndroidMediaContent(
         }
         when (val loaded = mediaState) {
             AndroidResolvedMediaState.Loading -> LoadingIndicator()
-            is AndroidResolvedMediaState.Ready -> AndroidVideoPlayer(loaded.uri, fullscreen, onToggleFullscreen)
+            is AndroidResolvedMediaState.Ready -> AndroidVideoPlayer(
+                loaded.uri,
+                fullscreen,
+                onToggleFullscreen,
+                onPlaybackOverlayVisibilityChanged,
+            )
             AndroidResolvedMediaState.Unavailable -> Unit
         }
     } else if (locationLoading) {
@@ -1296,6 +1303,7 @@ private fun AndroidVideoPlayer(
     uri: Uri,
     fullscreen: Boolean,
     onToggleFullscreen: (() -> Unit)?,
+    onPlaybackOverlayVisibilityChanged: ((Boolean) -> Unit)?,
 ) {
     val context = LocalContext.current
     var looping by remember(uri) { mutableStateOf(false) }
@@ -1320,6 +1328,7 @@ private fun AndroidVideoPlayer(
         }
         player.addListener(listener)
         onDispose {
+            onPlaybackOverlayVisibilityChanged?.invoke(false)
             player.removeListener(listener)
             player.release()
         }
@@ -1396,149 +1405,177 @@ private fun AndroidVideoPlayer(
                 lastInteractionAtMs = SystemClock.elapsedRealtime()
             }
         },
-        contentAlignment = Alignment.Center,
     ) {
-        // TextureView composes like a normal view, so it does not leave a black SurfaceView
-        // hole behind while the viewer exits.
-        AndroidView(
-            factory = { viewContext ->
-                TextureView(viewContext).also(player::setVideoTextureView)
-            },
-            update = player::setVideoTextureView,
-            onRelease = player::clearVideoTextureView,
-            modifier = if (videoAspectRatio > 0f) {
-                Modifier.fillMaxSize().wrapContentSize().aspectRatio(videoAspectRatio)
-            } else {
-                Modifier.fillMaxSize()
-            },
-        )
-        AnimatedVisibility(
-            visible = controlsVisible,
-            enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
-            exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
-            modifier = Modifier.align(Alignment.BottomCenter),
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally) {
+            BoxWithConstraints(
+                modifier = Modifier.weight(1f).fillMaxWidth(),
+                contentAlignment = Alignment.Center,
             ) {
-                Slider(
-                    state = sliderState,
-                    onValueChange = {
-                        if (durationMs > 0L) {
-                            sliderState.value = it
-                            scrubFraction = it
-                            seekTo((it * durationMs).toLong())
-                            revealControls()
-                        }
+                val fittedWidth = if (videoAspectRatio > 0f) {
+                    minOf(maxWidth, maxHeight * videoAspectRatio)
+                } else {
+                    maxWidth
+                }
+                val fittedHeight = if (videoAspectRatio > 0f) {
+                    minOf(maxHeight, maxWidth / videoAspectRatio)
+                } else {
+                    maxHeight
+                }
+                // TextureView avoids the black SurfaceView hole during viewer transitions.
+                AndroidView(
+                    factory = { viewContext ->
+                        TextureView(viewContext).also(player::setVideoTextureView)
                     },
-                    onValueChangeFinished = {
-                        scrubFraction?.let { seekTo((it * durationMs).toLong()) }
-                        scrubFraction = null
-                        revealControls()
-                    },
-                    enabled = durationMs > 0L,
-                    modifier = Modifier.fillMaxWidth().height(64.dp),
+                    update = player::setVideoTextureView,
+                    onRelease = player::clearVideoTextureView,
+                    modifier = Modifier.size(width = fittedWidth, height = fittedHeight),
                 )
-                GalleryPlaybackActions(leading = {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                    KaedeTooltip(if (isPlaying) "Pause" else "Play") {
-                        FilledIconButton(
-                            shapes = IconButtonDefaults.shapes(),
-                            onClick = {
-                                when {
-                                    isPlaying -> player.pause()
-                                    player.playbackState == Player.STATE_ENDED -> {
-                                        player.seekTo(0L)
-                                        player.play()
-                                    }
-                                    else -> player.play()
-                                }
-                                isPlaying = !isPlaying
+            }
+            AnimatedVisibility(
+                visible = controlsVisible,
+                enter = fadeIn(MaterialTheme.motionScheme.fastEffectsSpec()),
+                exit = fadeOut(MaterialTheme.motionScheme.fastEffectsSpec()),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 8.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Slider(
+                        state = sliderState,
+                        onValueChange = {
+                            if (durationMs > 0L) {
+                                sliderState.value = it
+                                scrubFraction = it
+                                seekTo((it * durationMs).toLong())
                                 revealControls()
-                            },
-                        ) {
-                            Icon(
-                                if (isPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
-                                if (isPlaying) "Pause" else "Play",
-                            )
-                        }
-                    }
-                    PlaybackPill(
-                        "${playbackTimeLabel(positionMs)} / ${playbackTimeLabel(durationMs)}",
+                            }
+                        },
+                        onValueChangeFinished = {
+                            scrubFraction?.let { seekTo((it * durationMs).toLong()) }
+                            scrubFraction = null
+                            revealControls()
+                        },
+                        enabled = durationMs > 0L,
+                        modifier = Modifier.fillMaxWidth().height(64.dp),
                     )
-                    }
-                }, trailing = {
-                    Box {
-                        PlaybackPill(
-                            label = "${speed.toPlaybackSpeedLabel()}x",
-                            onClick = {
-                                showSpeedMenu = !showSpeedMenu
+                    GalleryPlaybackActions(
+                        leading = {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                KaedeTooltip(if (isPlaying) "Pause" else "Play") {
+                                    FilledIconButton(
+                                        shapes = IconButtonDefaults.shapes(),
+                                        onClick = {
+                                            when {
+                                                isPlaying -> player.pause()
+                                                player.playbackState == Player.STATE_ENDED -> {
+                                                    player.seekTo(0L)
+                                                    player.play()
+                                                }
+                                                else -> player.play()
+                                            }
+                                            isPlaying = !isPlaying
+                                            revealControls()
+                                        },
+                                    ) {
+                                        Icon(
+                                            if (isPlaying) {
+                                                Icons.Filled.Pause
+                                            } else {
+                                                Icons.Filled.PlayArrow
+                                            },
+                                            if (isPlaying) "Pause" else "Play",
+                                        )
+                                    }
+                                }
+                                PlaybackPill(
+                                    "${playbackTimeLabel(positionMs)} / ${playbackTimeLabel(durationMs)}",
+                                )
+                            }
+                        },
+                        trailing = {
+                            PlaybackPill(
+                                label = "${speed.toPlaybackSpeedLabel()}x",
+                                onClick = {
+                                    val expanded = !showSpeedMenu
+                                    showSpeedMenu = expanded
+                                    onPlaybackOverlayVisibilityChanged?.invoke(expanded)
+                                    revealControls()
+                                },
+                            )
+                            KaedeTooltip(if (looping) "Turn looping off" else "Loop video") {
+                                FilledTonalIconToggleButton(
+                                    checked = looping,
+                                    onCheckedChange = {
+                                        looping = it
+                                        revealControls()
+                                    },
+                                    shapes = IconButtonDefaults.toggleableShapes(),
+                                ) {
+                                    Icon(
+                                        Icons.Filled.Repeat,
+                                        if (looping) "Loop on" else "Loop off",
+                                    )
+                                }
+                            }
+                            KaedeTooltip(if (muted) "Unmute" else "Mute") {
+                                FilledTonalIconToggleButton(
+                                    checked = !muted,
+                                    onCheckedChange = {
+                                        muted = !it
+                                        revealControls()
+                                    },
+                                    shapes = IconButtonDefaults.toggleableShapes(),
+                                ) {
+                                    Icon(
+                                        if (muted) {
+                                            Icons.AutoMirrored.Filled.VolumeOff
+                                        } else {
+                                            Icons.AutoMirrored.Filled.VolumeUp
+                                        },
+                                        if (muted) "Unmute" else "Mute",
+                                    )
+                                }
+                            }
+                            onToggleFullscreen?.let { toggle ->
+                                KaedeTooltip(
+                                    if (fullscreen) "Exit full screen" else "Full screen",
+                                ) {
+                                    FilledTonalIconButton(
+                                        shapes = IconButtonDefaults.shapes(),
+                                        onClick = {
+                                            toggle()
+                                            revealControls()
+                                        },
+                                    ) {
+                                        Icon(
+                                            if (fullscreen) {
+                                                Icons.Filled.FullscreenExit
+                                            } else {
+                                                Icons.Filled.Fullscreen
+                                            },
+                                            if (fullscreen) "Exit full screen" else "Full screen",
+                                        )
+                                    }
+                                }
+                            }
+                        },
+                    )
+                    if (showSpeedMenu) {
+                        GalleryPlaybackSpeedChoices(
+                            selected = speed,
+                            onSelect = {
+                                speed = it
+                                showSpeedMenu = false
+                                onPlaybackOverlayVisibilityChanged?.invoke(false)
                                 revealControls()
                             },
                         )
                     }
-                    KaedeTooltip(if (looping) "Turn looping off" else "Loop video") {
-                        FilledTonalIconToggleButton(
-                            checked = looping,
-                            onCheckedChange = {
-                                looping = it
-                                revealControls()
-                            },
-                            shapes = IconButtonDefaults.toggleableShapes(),
-                        ) {
-                            Icon(Icons.Filled.Repeat, if (looping) "Loop on" else "Loop off")
-                        }
-                    }
-                    KaedeTooltip(if (muted) "Unmute" else "Mute") {
-                        FilledTonalIconToggleButton(
-                            checked = !muted,
-                            onCheckedChange = {
-                                muted = !it
-                                revealControls()
-                            },
-                            shapes = IconButtonDefaults.toggleableShapes(),
-                        ) {
-                            Icon(
-                                if (muted) {
-                                    Icons.AutoMirrored.Filled.VolumeOff
-                                } else {
-                                    Icons.AutoMirrored.Filled.VolumeUp
-                                },
-                                if (muted) "Unmute" else "Mute",
-                            )
-                        }
-                    }
-                    onToggleFullscreen?.let { toggle ->
-                        KaedeTooltip(if (fullscreen) "Exit full screen" else "Full screen") {
-                            FilledTonalIconButton(
-                                shapes = IconButtonDefaults.shapes(),
-                                onClick = {
-                                    toggle()
-                                    revealControls()
-                                },
-                            ) {
-                                Icon(
-                                    if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
-                                    if (fullscreen) "Exit full screen" else "Full screen",
-                                )
-                            }
-                        }
-                    }
-                })
-                if (showSpeedMenu) {
-                    GalleryPlaybackSpeedChoices(
-                        selected = speed,
-                        onSelect = {
-                            speed = it
-                            showSpeedMenu = false
-                            revealControls()
-                        },
-                    )
                 }
             }
         }
@@ -1552,7 +1589,8 @@ private fun PlaybackPill(label: String, onClick: (() -> Unit)? = null) {
         Text(
             label,
             style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            maxLines = 1,
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 8.dp),
         )
     }
     if (onClick == null) {

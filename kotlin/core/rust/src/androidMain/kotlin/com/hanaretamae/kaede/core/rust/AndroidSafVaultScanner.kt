@@ -2,6 +2,7 @@ package com.hanaretamae.kaede.core.rust
 
 import android.content.ContentResolver
 import android.content.Context
+import android.content.res.AssetFileDescriptor
 import android.database.sqlite.SQLiteException
 import android.database.Cursor
 import android.graphics.Bitmap
@@ -37,7 +38,8 @@ data class AndroidSafScanSnapshot(
 )
 
 class AndroidSafVaultScanner(context: Context) {
-    private val resolver: ContentResolver = context.applicationContext.contentResolver
+    private val appContext = context.applicationContext
+    private val resolver: ContentResolver = appContext.contentResolver
     private val mediaUriCache = AndroidSafMediaUriCache(context)
     private val thumbnailLoadScheduler = ThumbnailLoadScheduler(MAX_CONCURRENT_THUMBNAIL_DECODES)
     private val imageRequests = SingleFlight<String, Bitmap?>()
@@ -464,46 +466,79 @@ class AndroidSafVaultScanner(context: Context) {
             }
         }
         val descriptor = try {
-            resolver.openFileDescriptor(uri, "r") ?: return@withContext null
+            resolver.openAssetFileDescriptor(uri, "r")
         } catch (_: SecurityException) {
             throw SafAccessException()
         } catch (_: IOException) {
-            throw SafAccessException()
+            null
         }
-        val bitmap = descriptor.use { file ->
-            val retriever = MediaMetadataRetriever()
-            try {
-                retriever.setDataSource(file.fileDescriptor)
-                val firstFrame = retriever.getScaledFrameAtTime(
-                    0,
-                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                    maxDimension,
-                    maxDimension,
-                )
-                firstFrame
-                    ?: retriever.getScaledFrameAtTime(
-                        -1,
-                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
-                        maxDimension,
-                        maxDimension,
-                    )
-                    ?: retriever.getScaledFrameAtTime(
-                        1_000_000,
-                        MediaMetadataRetriever.OPTION_CLOSEST,
-                        maxDimension,
-                        maxDimension,
-                    )
-            } catch (_: IllegalArgumentException) {
-                null
-            } catch (_: IllegalStateException) {
-                null
-            } finally {
-                retriever.release()
+        val bitmap = descriptor?.use { file ->
+            decodeVideoFrame(maxDimension) { retriever ->
+                if (file.length != AssetFileDescriptor.UNKNOWN_LENGTH) {
+                    retriever.setDataSource(file.fileDescriptor, file.startOffset, file.length)
+                } else if (file.startOffset == 0L) {
+                    retriever.setDataSource(file.fileDescriptor)
+                } else {
+                    retriever.setDataSource(appContext, uri)
+                }
             }
+        } ?: decodeVideoFrame(maxDimension) { retriever ->
+            retriever.setDataSource(appContext, uri)
         }
         if (cacheThumbnail && bitmap != null) cacheThumbnail(treeUri, relativePath, bitmap)
         bitmap?.let { decodedThumbnails.put(memoryCacheKey, it) }
         bitmap
+    }
+
+    private fun decodeVideoFrame(
+        maxDimension: Int,
+        setDataSource: (MediaMetadataRetriever) -> Unit,
+    ): Bitmap? {
+        val retriever = MediaMetadataRetriever()
+        return try {
+            setDataSource(retriever)
+            val durationMs = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_DURATION,
+            )?.toLongOrNull()?.coerceIn(0L, MAX_VIDEO_DURATION_MILLIS)
+            val timestamps = buildList {
+                add(0L)
+                add(1_000_000L)
+                add(-1L)
+                durationMs?.let { duration ->
+                    add(duration * 100L)
+                    add(duration * 500L)
+                }
+            }.distinct()
+            timestamps.firstNotNullOfOrNull { timestamp ->
+                listOf(
+                    MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                    MediaMetadataRetriever.OPTION_CLOSEST,
+                ).firstNotNullOfOrNull { option ->
+                    try {
+                        retriever.getScaledFrameAtTime(
+                            timestamp,
+                            option,
+                            maxDimension,
+                            maxDimension,
+                        )
+                    } catch (_: IllegalArgumentException) {
+                        null
+                    } catch (_: IllegalStateException) {
+                        null
+                    } catch (_: UnsupportedOperationException) {
+                        null
+                    }
+                }
+            }
+        } catch (_: IllegalArgumentException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        } catch (_: UnsupportedOperationException) {
+            null
+        } finally {
+            retriever.release()
+        }
     }
 
     private fun cacheThumbnail(treeUri: Uri, relativePath: String, bitmap: Bitmap) {
@@ -534,7 +569,7 @@ class AndroidSafVaultScanner(context: Context) {
         val startedAt = SystemClock.elapsedRealtime()
         var scannedContentBytes = 0L
         try {
-            for (batch in documents.chunked(MAX_BATCH_NOTES)) {
+            for (batch in documents.chunked(MAX_SCAN_BATCH_NOTES)) {
                 val result = ArrayList<com.hanaretamae.kaede.core.repository.SafScanNote>(
                     batch.size,
                 )
@@ -542,17 +577,11 @@ class AndroidSafVaultScanner(context: Context) {
                 val reads = coroutineScope {
                     val readLimit = Semaphore(AndroidSafLimits.MAX_CONCURRENT_NOTE_READS)
                     batch.map { document ->
-                        val expectedBytes = if (document.size > 0) {
-                            document.size
-                        } else {
-                            MAX_NOTE_BYTES.toLong()
-                        }
                         val remaining = minOf(
                             MAX_BATCH_BYTES - reservedBatchBytes,
                             AndroidSafLimits.MAX_SCAN_NOTE_BYTES - scannedContentBytes,
                         ).coerceAtLeast(0)
                         val allocation = minOf(
-                            expectedBytes,
                             MAX_NOTE_BYTES.toLong(),
                             remaining,
                         )
@@ -574,7 +603,7 @@ class AndroidSafVaultScanner(context: Context) {
                         com.hanaretamae.kaede.core.repository.SafScanNote(
                             path = read.document.path,
                             modifiedNanos = read.document.modifiedNanos,
-                            size = read.document.size,
+                            size = content?.size?.toLong() ?: read.document.size,
                             content = content,
                         ),
                     )
@@ -591,11 +620,7 @@ class AndroidSafVaultScanner(context: Context) {
 
     private suspend fun readNote(document: NoteDocument, byteBudget: Long): NoteRead =
         withContext(Dispatchers.IO) {
-            if (
-                document.size > MAX_NOTE_BYTES ||
-                byteBudget <= 0 ||
-                (document.size > 0 && document.size > byteBudget)
-            ) {
+            if (byteBudget <= 0) {
                 return@withContext NoteRead(document, null)
             }
             val limit = minOf(MAX_NOTE_BYTES.toLong(), byteBudget).toInt()
@@ -605,9 +630,7 @@ class AndroidSafVaultScanner(context: Context) {
                     null,
                 )
                 val content = input.use { it.readBounded(limit) }
-                if (content.size > limit ||
-                    (document.size > 0 && content.size.toLong() != document.size)
-                ) {
+                if (content.size > limit) {
                     NoteRead(document, null)
                 } else {
                     NoteRead(document, content)
@@ -717,9 +740,11 @@ class AndroidSafVaultScanner(context: Context) {
         const val MAX_PATH_BYTES = 4_096
         const val MAX_AGGREGATE_PATH_BYTES = 32L * 1024 * 1024
         const val MAX_NOTE_BYTES = 2 * 1024 * 1024
-        const val MAX_BATCH_NOTES = 128
         const val MAX_BATCH_BYTES = 16L * 1024 * 1024
+        // Reserve the full per-note bound while keeping each batch within its byte limit.
+        const val MAX_SCAN_BATCH_NOTES = 8
         const val MAX_MEDIA_BYTES = 64 * 1024 * 1024
+        const val MAX_VIDEO_DURATION_MILLIS = 24L * 60 * 60 * 1_000
         const val MAX_CONCURRENT_THUMBNAIL_DECODES = 4
         private const val MAX_THUMBNAIL_MEMORY_BYTES = 32 * 1024 * 1024
         private const val MAX_VIEWER_IMAGE_MEMORY_BYTES = 96 * 1024 * 1024

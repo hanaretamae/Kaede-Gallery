@@ -19,10 +19,10 @@ class GalleryPlaybackActionsTest {
     val compose = createComposeRule()
 
     @Test
-    fun trailingControlsAreRightAlignedAtMinimumAndWideWindowWidths() {
+    fun controlsStayOnOneLineAndTrailingActionsRemainReachable() {
         compose.setContent {
             Column {
-                listOf(400, 800).forEach { width ->
+                listOf(320, 360, 400, 800).forEach { width ->
                     Box(Modifier.width(width.dp).testTag("row-$width")) {
                         GalleryPlaybackActions(
                             leading = { Box(Modifier.size(48.dp).testTag("leading-$width")) },
@@ -36,14 +36,14 @@ class GalleryPlaybackActionsTest {
                 }
             }
         }
-        listOf(400, 800).forEach { width ->
+        listOf(320, 360, 400, 800).forEach { width ->
             val row = compose.onNodeWithTag("row-$width").fetchSemanticsNode().boundsInRoot
             val leading = compose.onNodeWithTag("leading-$width").fetchSemanticsNode().boundsInRoot
             val trailing = compose.onNodeWithTag("action-$width-3").fetchSemanticsNode().boundsInRoot
             assertEquals(row.left, leading.left, 1f)
-            assertEquals(row.right, trailing.right, 1f)
-            if (width == 400) assertTrue(trailing.top >= leading.bottom)
-            else assertEquals(leading.center.y, trailing.center.y, 1f)
+            assertTrue(trailing.right <= row.right)
+            assertEquals(leading.center.y, trailing.center.y, 1f)
+            if (width >= 400) assertEquals(row.right, trailing.right, 1f)
         }
     }
 }

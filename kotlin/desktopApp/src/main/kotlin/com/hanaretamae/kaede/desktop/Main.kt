@@ -1119,6 +1119,8 @@ internal fun DesktopMediaContent(
                             onLoop = panel::setLooping,
                             onMute = panel::setMuted,
                             onInteractionChanged = { controlsInteracting = it },
+                            onPlaybackOverlayVisibilityChanged =
+                                mediaState.onPlaybackOverlayVisibilityChanged,
                         )
                     }
                     if (mediaState.fullscreen && !controlsVisible) {
@@ -1240,6 +1242,7 @@ internal fun DesktopVideoControls(
     fullscreen: Boolean = false,
     onToggleFullscreen: (() -> Unit)? = null,
     onInteractionChanged: (Boolean) -> Unit = {},
+    onPlaybackOverlayVisibilityChanged: ((Boolean) -> Unit)? = null,
 ) {
     var seekPreview by remember { mutableStateOf<Float?>(null) }
     var speedMenuExpanded by remember { mutableStateOf(false) }
@@ -1257,7 +1260,10 @@ internal fun DesktopVideoControls(
         if (!speedMenuExpanded) controlsFocus.requestFocus()
     }
     DisposableEffect(Unit) {
-        onDispose { onInteractionChanged(false) }
+        onDispose {
+            onInteractionChanged(false)
+            onPlaybackOverlayVisibilityChanged?.invoke(false)
+        }
     }
     Column(
         modifier = Modifier.fillMaxWidth().focusRequester(controlsFocus).focusable()
@@ -1303,7 +1309,12 @@ internal fun DesktopVideoControls(
         }, trailing = {
             DesktopPlaybackPill(
                 "${state.playbackSpeed}x",
-                onClick = { speedMenuExpanded = !speedMenuExpanded }.takeIf { state.connected },
+                onClick = {
+                    val expanded = !speedMenuExpanded
+                    speedMenuExpanded = expanded
+                    onPlaybackOverlayVisibilityChanged?.invoke(expanded)
+                    Unit
+                }.takeIf { state.connected },
                 contentDescription = "Playback speed",
             )
             KaedeTooltip(if (state.looping) "Turn looping off" else "Loop video") {
@@ -1346,6 +1357,7 @@ internal fun DesktopVideoControls(
                 onSelect = {
                     onSpeed(it)
                     speedMenuExpanded = false
+                    onPlaybackOverlayVisibilityChanged?.invoke(false)
                 },
             )
         }

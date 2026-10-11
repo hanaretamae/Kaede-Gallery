@@ -10,6 +10,17 @@ import kotlin.test.assertTrue
 
 class SettingsTransferCodecTest {
     @Test
+    fun defaultsSystemAccentOnWhenImportOmitsThePreference() {
+        val legacyExport = SettingsTransferCodec.encode(GallerySettings())
+            .replace(""""useSystemColor":true,""", "")
+        assertFalse(legacyExport.contains(""""useSystemColor""""))
+
+        val decoded = assertNotNull(SettingsTransferCodec.decode(legacyExport))
+
+        assertTrue(decoded.appearance.useSystemColor)
+    }
+
+    @Test
     fun exportsVersionOneFlutterJsonAndRoundTripsKmpSettings() {
         val defaultExport = SettingsTransferCodec.encode(GallerySettings())
         assertTrue(defaultExport.contains(""""prefix":"source/art","color":"#4dd0e1""""))
