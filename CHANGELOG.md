@@ -11,6 +11,10 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 
 ### Changed
 
+- Linux release bundles no longer include FFmpeg or mpv and are distributed as `.tar.zst` archives; install `mpv` and `ffmpeg` on `PATH` for video playback and thumbnails.
+- Windows: fixed verbatim (`\\?\`) paths that broke image/video loading and "open"/"show in file manager"; opening notes in Obsidian no longer goes through the browser; the system accent color and theme are applied; the Vault picker uses the modern folder dialog; leaving fullscreen relayouts the window; forgetting a Vault no longer loads forever. A bundled `tools/ffmpeg.exe` or `tools/mpv.exe` next to the launcher is preferred over `PATH`. The Windows ZIP now ships `Kaede-Gallery.exe` with LICENSE and README files, and an ARM64 build job was added (build-only, not hardware-verified).
+- Linux releases also ship `.AppImage` files, built with a Nix-pinned `appimagetool`; the Windows ZIP bundles pinned GPL `mpv.exe` and `ffmpeg.exe` under `tools/`.
+- Viewing a related item keeps the in-app details view; the link-resolution heading matches other settings rows.
 - Refined gallery loading, viewer transitions, responsive controls, and appearance settings.
 
 ## [2.0.0b5] - 2026-10-11 (Beta)

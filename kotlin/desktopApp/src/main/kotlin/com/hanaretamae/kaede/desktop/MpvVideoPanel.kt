@@ -60,7 +60,7 @@ internal object MpvVideoCommand {
         osName: String = System.getProperty("os.name"),
         ipcSocketPath: String? = null,
     ): List<String> = buildList {
-        add("mpv")
+        add(desktopToolCommand("mpv", osName))
         add("--no-config")
         add("--no-load-scripts")
         add("--no-ytdl")
@@ -189,7 +189,7 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
             return
         }
         val path = try {
-            Path.of(mediaPath)
+            desktopPathOf(mediaPath)
         } catch (_: RuntimeException) {
             setPlaybackError("The selected video is unavailable.")
             return

@@ -11,6 +11,38 @@
         "aarch64-linux"
       ];
       forAllSystems = nixpkgs.lib.genAttrs systems;
+
+      # nixpkgs does not ship appimagetool, so pin the upstream release and run it in an FHS env.
+      appimagetool =
+        pkgs:
+        pkgs.appimageTools.wrapType2 {
+          pname = "appimagetool";
+          version = "1.9.1";
+          extraPkgs = p: [
+            p.file
+            p.squashfsTools
+            p.desktop-file-utils
+          ];
+          src = pkgs.fetchurl {
+            url = "https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage";
+            hash = "sha256-7UzoTw2cr/ZvULzKb/bzWq5UzoE1QIs/ozq/w8s4TrA=";
+          };
+        };
+      # Pinned type2-runtime files passed to appimagetool so it never downloads one.
+      appimageRuntimes = {
+        x86_64 =
+          pkgs:
+          pkgs.fetchurl {
+            url = "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64";
+            hash = "sha256-L8qLRDySUQ8Ug6iD9gBhrQm0a5eLJjHIB82HOkfsJg0=";
+          };
+        aarch64 =
+          pkgs:
+          pkgs.fetchurl {
+            url = "https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-aarch64";
+            hash = "sha256-AMvfz5F8xsD/bTNH1Z4Moff0Wm3xpCig1tinhmTYdEQ=";
+          };
+      };
       version = nixpkgs.lib.removeSuffix "\n" (builtins.readFile ./VERSION);
       mkPkgs =
         system:
@@ -83,7 +115,6 @@
               makeWrapper
             ];
             buildInputs = with pkgs; [
-              ffmpeg
               fontconfig
               glib
               libGL
@@ -96,7 +127,6 @@
               libjpeg
               libplacebo
               libxkbcommon
-              mpv
               stdenv.cc.cc.lib
             ];
 
@@ -154,8 +184,6 @@
               #!${pkgs.bash}/bin/bash
               set -euo pipefail
               export PATH="${pkgs.lib.makeBinPath [
-                pkgs.ffmpeg
-                pkgs.mpv
                 pkgs.coreutils
                 pkgs.glib
               ]}''${PATH:+:$PATH}"
@@ -305,8 +333,6 @@
                     #!${targetPkgs.bash}/bin/bash
                     set -euo pipefail
                     export PATH="${targetPkgs.lib.makeBinPath [
-                      targetPkgs.ffmpeg
-                      targetPkgs.mpv
                       targetPkgs.coreutils
                       targetPkgs.glib
                     ]}''${PATH:+:$PATH}"
@@ -384,6 +410,9 @@
         }
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           aarch64Cross = aarch64CrossDesktop;
+          appimagetool = appimagetool pkgs;
+          appimageRuntimeX86_64 = appimageRuntimes.x86_64 pkgs;
+          appimageRuntimeAarch64 = appimageRuntimes.aarch64 pkgs;
         }
       );
 
@@ -455,7 +484,11 @@
                 libGL
                 jdk17
               ])
-              ++ [ androidSdk.androidsdk ];
+              ++ [ androidSdk.androidsdk ]
+              ++ pkgs.lib.optionals (system == "x86_64-linux") [
+                (appimagetool pkgs)
+                pkgs.zstd
+              ];
             JAVA_HOME = "${pkgs.jdk17}";
             RUSTC = "${pkgs.rustc}/bin/rustc";
             RUSTDOC = "${pkgs.rustc}/bin/rustdoc";

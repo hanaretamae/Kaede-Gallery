@@ -325,7 +325,7 @@ caches are invalidated on rescan or Vault removal. Video previews also fall
 back across multiple sync-frame timestamps when the first MP4 frame cannot be
 decoded. These changes still require a fresh large-media latency benchmark.
 Linux and Windows video are rendered in an embedded native child window from a
-separate `mpv` process; desktop runtime requires `mpv` and `ffmpeg` on `PATH`.
+separate `mpv` process; desktop runtime requires `mpv` and `ffmpeg` on `PATH` (Linux bundles do not ship them; the Windows ZIP bundles pinned GPL `mpv.exe`/`ffmpeg.exe` under `tools/`, which take precedence over `PATH`).
 Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
 and automatic sidecar loading. Linux playback forces mpv's X11 video output so
 its `--wid` targets the Swing canvas under XWayland instead of creating a
@@ -873,9 +873,9 @@ validated add/edit/remove segmented lists instead of multiline bulk editors.
 Tapping a tag-color rule row opens its editor; the row retains dedicated remove
 and edit actions.
 The internal-link-resolution choices sit below the note-detail order list on a
-separate settings panel. Its list surface has a `MarkdownLink / WikiLink`
-heading using the same expressive primary-colored heading style as other
-settings panels, above the shared resolution choices.
+separate settings panel. Its single segmented row uses a `MarkdownLink / WikiLink`
+headline in the same style as the Appearance "Theme" row, above the shared
+resolution choices.
 Tag settings and appearance settings can be exported together as JSON.
 Flutter's private `tag-settings.json` contains configurable gallery-target tag
 prefixes, Markdown heading aliases for memo, related items, and the end of post

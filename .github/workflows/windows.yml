@@ -13,8 +13,22 @@ permissions:
 
 jobs:
   build:
-    name: windows-x64
-    runs-on: windows-latest
+    name: windows-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+            media_arch: x86_64
+            mpv_sha256: 769a9bb120b35aad20c25ae502c44ed8f59b4e607fcbc7f6cdde61f98dceabaf
+            ffmpeg_sha256: 417681c7e000d2fb3d25d3403bd02d542a34fdb0d35a708f22b98750668b94c5
+          - arch: arm64
+            runner: windows-11-arm
+            media_arch: aarch64
+            mpv_sha256: b40be5bfc5ac5ac2f7086f1a1c3ec26e9fccebb1f6f20c3be6c9a56de7e33826
+            ffmpeg_sha256: fd3e75c5775443dcc6a296757a0ba26557ad3b62e63d280e84f3a47a2d97b11b
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -52,6 +66,33 @@ jobs:
           :desktopApp:test
           :desktopApp:createDistributable
 
+      - name: Fetch pinned mpv and FFmpeg (GPL builds)
+        shell: pwsh
+        env:
+          MEDIA_ARCH: ${{ matrix.media_arch }}
+          MPV_SHA256: ${{ matrix.mpv_sha256 }}
+          FFMPEG_SHA256: ${{ matrix.ffmpeg_sha256 }}
+        run: |
+          $base = 'https://github.com/zhongfly/mpv-winbuild/releases/download/2026-10-11-88eb9f2e73'
+          $sevenZip = (Get-Command 7z -ErrorAction SilentlyContinue).Source
+          if (-not $sevenZip) { $sevenZip = 'C:\Program Files\7-Zip\7z.exe' }
+          if (-not (Test-Path $sevenZip)) { throw '7-Zip is required to unpack mpv and FFmpeg' }
+          $tools = Join-Path $env:RUNNER_TEMP 'kaede-tools'
+          New-Item -ItemType Directory -Force -Path $tools | Out-Null
+          $downloads = @(
+            @{ Name = "mpv-$env:MEDIA_ARCH-20261011-git-88eb9f2e73.7z"; Sha = $env:MPV_SHA256; Exe = 'mpv.exe' },
+            @{ Name = "ffmpeg-$env:MEDIA_ARCH-git-b5902e69c.7z"; Sha = $env:FFMPEG_SHA256; Exe = 'ffmpeg.exe' }
+          )
+          foreach ($item in $downloads) {
+            $archive = Join-Path $tools $item.Name
+            Invoke-WebRequest -Uri "$base/$($item.Name)" -OutFile $archive
+            $actual = (Get-FileHash -Algorithm SHA256 -LiteralPath $archive).Hash.ToLowerInvariant()
+            if ($actual -ne $item.Sha) { throw "Checksum mismatch for $($item.Name)" }
+            & $sevenZip x -y "-o$tools\$($item.Exe).d" $archive $item.Exe | Out-Null
+            if ($LASTEXITCODE -ne 0) { throw "Could not unpack $($item.Name)" }
+          }
+          "KAEDE_TOOLS_DIR=$tools" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+
       - name: Assemble Windows release archive
         shell: pwsh
         run: |
@@ -63,7 +104,15 @@ jobs:
             throw "Expected one Compose Desktop launcher in the Windows distribution; found $($launchers.Count)"
           }
           $bundle = $launchers[0].Directory.FullName
-          Copy-Item -LiteralPath LICENSE, THIRD_PARTY_NOTICES.md -Destination $bundle
+          # The launcher reads <name>.cfg from app/, so rename both together.
+          Rename-Item -LiteralPath $launchers[0].FullName -NewName 'Kaede-Gallery.exe'
+          Rename-Item -LiteralPath (Join-Path $bundle 'app/desktopApp.cfg') -NewName 'Kaede-Gallery.cfg'
+          Copy-Item -LiteralPath LICENSE, README.md, README.ja.md, THIRD_PARTY_NOTICES.md, THIRD_PARTY_NOTICES.ja.md -Destination $bundle
+          $toolsDestination = Join-Path $bundle 'tools'
+          New-Item -ItemType Directory -Force -Path $toolsDestination | Out-Null
+          foreach ($exe in 'mpv.exe', 'ffmpeg.exe') {
+            Copy-Item -LiteralPath (Join-Path $env:KAEDE_TOOLS_DIR "$exe.d/$exe") -Destination $toolsDestination
+          }
           $licenseSource = 'kotlin/shared-assets/licenses'
           $licenseDestination = Join-Path $bundle 'licenses'
           New-Item -ItemType Directory -Force -Path $licenseDestination | Out-Null
@@ -73,13 +122,13 @@ jobs:
               throw "License notice $name is missing from the Windows package"
             }
           }
-          $zip = "kaede-gallery-$version-windows-x64.zip"
+          $zip = "kaede-gallery-$version-windows-${{ matrix.arch }}.zip"
           Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
           try {
             $rootLauncher = $archive.Entries | Where-Object {
-              $_.FullName -eq $launchers[0].Name
+              $_.FullName -eq "Kaede-Gallery.exe"
             }
             if (-not $rootLauncher) {
               throw "The Windows launcher must be in the ZIP root."
@@ -91,7 +140,7 @@ jobs:
 
       - uses: actions/upload-artifact@v4
         with:
-          name: kaede-gallery-kmp-windows-x64
+          name: kaede-gallery-kmp-windows-${{ matrix.arch }}
           path: ${{ env.ZIP_NAME }}
           if-no-files-found: error
           retention-days: 7

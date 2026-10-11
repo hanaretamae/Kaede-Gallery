@@ -18,6 +18,18 @@ internal data class DesktopSystemAppearance(
 )
 
 internal fun readDesktopSystemAppearance(): DesktopSystemAppearance {
+    if (isWindowsDesktop()) {
+        val personalize = """HKCU\Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"""
+        val dwm = """HKCU\Software\Microsoft\Windows\DWM"""
+        return DesktopSystemAppearance(
+            darkTheme = parseWindowsRegistryDword(
+                readWindowsRegistryValue(personalize, "AppsUseLightTheme"),
+            )?.let { it == 0L },
+            accentColor = parseWindowsAccentColor(
+                parseWindowsRegistryDword(readWindowsRegistryValue(dwm, "AccentColor")),
+            ),
+        )
+    }
     if (!isLinuxDesktop()) return DesktopSystemAppearance()
     val darkTheme = parsePortalDarkTheme(readPortalAppearanceSetting("color-scheme"))
     val accentColor = parsePortalAccentColor(readPortalAppearanceSetting("accent-color"))
@@ -82,6 +94,42 @@ private fun readPortalAppearanceSetting(key: String): String? {
         } else {
             null
         }
+    } catch (_: InterruptedException) {
+        process.destroyForcibly()
+        Thread.currentThread().interrupt()
+        null
+    } catch (_: IOException) {
+        null
+    }
+}
+
+internal fun parseWindowsRegistryDword(output: String?): Long? =
+    output?.let { Regex("""REG_DWORD\s+0x([0-9a-fA-F]+)""").find(it)?.groupValues?.get(1) }
+        ?.toLongOrNull(16)
+
+// DWM stores the accent as 0xAABBGGRR.
+internal fun parseWindowsAccentColor(value: Long?): Color? {
+    if (value == null) return null
+    val red = (value and 0xff).toInt()
+    val green = ((value shr 8) and 0xff).toInt()
+    val blue = ((value shr 16) and 0xff).toInt()
+    return Color(red, green, blue)
+}
+
+private fun readWindowsRegistryValue(key: String, name: String): String? {
+    val process = try {
+        ProcessBuilder("reg.exe", "query", key, "/v", name).redirectErrorStream(true).start()
+    } catch (_: IOException) {
+        return null
+    } catch (_: SecurityException) {
+        return null
+    }
+    return try {
+        if (!process.waitFor(PORTAL_READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+            process.destroyForcibly()
+            return null
+        }
+        if (process.exitValue() == 0) process.inputStream.bufferedReader().use { it.readText() } else null
     } catch (_: InterruptedException) {
         process.destroyForcibly()
         Thread.currentThread().interrupt()

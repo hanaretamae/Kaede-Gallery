@@ -9,8 +9,17 @@ permissions:
   contents: read
 
 jobs:
-  windows-x64:
-    runs-on: windows-latest
+  windows:
+    name: windows-${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-latest
+          - arch: arm64
+            runner: windows-11-arm
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -31,6 +40,6 @@ jobs:
           :desktopApp:createDistributable
       - uses: actions/upload-artifact@v4
         with:
-          name: kaede-gallery-kotlin-windows-x64
+          name: kaede-gallery-kotlin-windows-${{ matrix.arch }}
           path: kotlin/desktopApp/build/compose/binaries/main/app/desktopApp
           if-no-files-found: error

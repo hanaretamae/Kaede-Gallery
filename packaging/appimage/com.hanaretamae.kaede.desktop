@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Kaede Gallery
+Comment=Offline, read-only gallery for Obsidian Vaults
+Exec=kaede-gallery
+Icon=kaede-gallery
+Categories=Graphics;Viewer;
+StartupWMClass=com.hanaretamae.kaede
+Terminal=false

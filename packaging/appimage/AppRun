@@ -1,0 +1,4 @@
+#!/bin/sh
+# The payload is the self-contained Nix bundle, so no host libraries are needed.
+here="$(dirname "$(readlink -f "$0")")"
+exec "$here/usr/bin/kaede-gallery" "$@"

@@ -177,6 +177,21 @@ fun main() {
             state = windowState,
             resizable = true,
         ) {
+            var wasFullscreen by remember { mutableStateOf(false) }
+            LaunchedEffect(windowState.placement) {
+                val fullscreen = windowState.placement == WindowPlacement.Fullscreen
+                if (wasFullscreen && !fullscreen && isWindowsDesktop()) {
+                    // Windows leaves a stale layout after leaving fullscreen; a 1px resize forces a relayout.
+                    kotlinx.coroutines.delay(200)
+                    val size = window.size
+                    window.setSize(size.width + 1, size.height)
+                    kotlinx.coroutines.delay(50)
+                    window.setSize(size.width, size.height)
+                    window.revalidate()
+                    window.repaint()
+                }
+                wasFullscreen = fullscreen
+            }
             val density = LocalDensity.current
             val debugLayout = java.lang.Boolean.getBoolean(DESKTOP_LAYOUT_DEBUG_PROPERTY)
             var composeRootSize by remember { mutableStateOf(IntSize.Zero) }
@@ -709,6 +724,9 @@ private fun DesktopApplication(
                         is RepositoryResult.Success -> {
                             vaultPath = null
                             error = null
+                            loading = false
+                            vaultSelectionResolved = true
+                            initialScanRequired = false
                             RepositoryResult.Success(Unit)
                         }
                     }
@@ -772,6 +790,7 @@ private fun loadDesktopLicenseText(assetPath: String): String? = try {
 private fun launchObsidianNote(notePath: String, vaultPath: String?): Boolean {
     val note = resolveVaultNotePath(notePath, vaultPath)
     val uri = note?.let(::obsidianOpenUri)
+    if (uri != null && isWindowsDesktop()) return launchWindowsProtocol(uri)
     return uri != null &&
         Desktop.isDesktopSupported() &&
         Desktop.getDesktop().isSupported(Desktop.Action.BROWSE) &&
@@ -785,6 +804,19 @@ private fun launchObsidianNote(notePath: String, vaultPath: String?): Boolean {
         } catch (_: UnsupportedOperationException) {
             false
         }
+}
+
+// Hands the URI straight to the registered protocol handler instead of the browser.
+private fun launchWindowsProtocol(uri: URI): Boolean = try {
+    ProcessBuilder("rundll32.exe", "url.dll,FileProtocolHandler", uri.toASCIIString())
+        .redirectOutput(ProcessBuilder.Redirect.DISCARD)
+        .redirectError(ProcessBuilder.Redirect.DISCARD)
+        .start()
+    true
+} catch (_: IOException) {
+    false
+} catch (_: SecurityException) {
+    false
 }
 
 private fun setLinuxWallpaper(location: String?, vaultPath: String?): Boolean {
@@ -842,7 +874,7 @@ internal fun obsidianOpenUri(note: Path): URI? {
 internal fun isLinuxDesktop(): Boolean =
     System.getProperty("os.name").lowercase(java.util.Locale.ROOT).contains("linux")
 
-private fun isWindowsDesktop(): Boolean =
+internal fun isWindowsDesktop(): Boolean =
     System.getProperty("os.name").lowercase(java.util.Locale.ROOT).contains("windows")
 
 private fun isGnomeDesktop(): Boolean =
@@ -911,8 +943,8 @@ internal fun linuxFileManagerShowItemsCommand(media: Path): List<String> {
 internal fun resolveVaultMediaPath(location: String?, vaultPath: String?): Path? {
     if (location == null || vaultPath == null) return null
     return try {
-        val root = Path.of(vaultPath).toRealPath()
-        val media = Path.of(location).toRealPath()
+        val root = desktopPathOf(vaultPath).toRealPath()
+        val media = desktopPathOf(location).toRealPath()
         media.takeIf {
             it.startsWith(root) && Files.isRegularFile(it, LinkOption.NOFOLLOW_LINKS)
         }
@@ -928,7 +960,7 @@ internal fun resolveVaultMediaPath(location: String?, vaultPath: String?): Path?
 internal fun resolveVaultNotePath(notePath: String?, vaultPath: String?): Path? {
     if (notePath.isNullOrBlank() || vaultPath.isNullOrBlank()) return null
     return try {
-        val root = Path.of(vaultPath).toRealPath()
+        val root = desktopPathOf(vaultPath).toRealPath()
         val relative = Path.of(notePath)
         if (relative.isAbsolute) return null
         val candidate = root.resolve(relative).normalize()
@@ -1566,6 +1598,13 @@ private suspend fun chooseVaultDirectory(): String? {
             if (!shouldUseSwingFallback(failure)) throw failure
             val reason = failure.message ?: "System folder picker failed."
             return chooseVaultDirectoryWithSwing("$reason Select an existing Vault")
+        }
+    }
+    if (isWindowsDesktop()) {
+        try {
+            return withContext(Dispatchers.IO) { chooseWindowsDirectory("Select an existing Vault") }
+        } catch (_: IOException) {
+            return chooseVaultDirectoryWithSwing()
         }
     }
     return chooseVaultDirectoryWithSwing()

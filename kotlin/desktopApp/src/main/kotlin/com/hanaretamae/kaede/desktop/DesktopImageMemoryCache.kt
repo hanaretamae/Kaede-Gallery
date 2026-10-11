@@ -100,7 +100,7 @@ internal fun decodeDesktopImage(bytes: ByteArray): ImageBitmap? = try {
 internal fun decodeDesktopViewerImage(path: String?, maxDimension: Int): ImageBitmap? {
     if (path.isNullOrBlank() || maxDimension !in 1..MAX_VIEWER_IMAGE_DIMENSION) return null
     val file = try {
-        Path.of(path).toRealPath()
+        desktopPathOf(path).toRealPath()
     } catch (_: IOException) {
         return null
     } catch (_: RuntimeException) {

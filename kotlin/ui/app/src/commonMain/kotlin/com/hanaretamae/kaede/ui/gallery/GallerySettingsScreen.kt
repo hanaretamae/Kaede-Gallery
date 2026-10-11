@@ -1736,20 +1736,10 @@ fun GallerySettingsScreen(
                     }
                 SettingsPanel(strings.linkResolution) {
                     SettingsGroup {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = MaterialTheme.shapes.large,
-                            color = MaterialTheme.colorScheme.surfaceBright,
-                        ) {
-                            Column(
-                                Modifier.fillMaxWidth().padding(16.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp),
-                            ) {
-                                Text(
-                                    "${strings.markdownLink} / ${strings.wikiLink}",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+                        SegmentedListItem(
+                            shapes = ListItemDefaults.segmentedShapes(0, 1),
+                            colors = settingsItemColors(),
+                            supportingContent = {
                                 ConnectedChoiceGroup(
                                     options = GalleryLinkResolution.entries,
                                     selected = noteStructureDraft.linkResolution,
@@ -1771,8 +1761,8 @@ fun GallerySettingsScreen(
                                         noteStructureDraft = noteStructureDraft.copy(linkResolution = resolution)
                                     },
                                 )
-                            }
-                        }
+                            },
+                        ) { Text("${strings.markdownLink} / ${strings.wikiLink}") }
                     }
                 }
                 }

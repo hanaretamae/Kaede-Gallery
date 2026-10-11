@@ -257,6 +257,8 @@ fun GalleryViewerScreen(
     tagColorRules: List<GalleryTagColorRule> = GalleryTagColorCodec.DEFAULT_RULES,
     hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
     noteStructure: GalleryNoteStructureSettings = GalleryNoteStructureSettings(),
+    initialDetailsVisible: Boolean = false,
+    onDetailsVisibleChanged: ((Boolean) -> Unit)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val clipboardManager = LocalClipboardManager.current
@@ -288,7 +290,10 @@ fun GalleryViewerScreen(
 
     val focusRequester = remember(stateHolder) { FocusRequester() }
     val presentation = remember(stateHolder) {
-        mutableStateOf(GalleryViewerPresentationState())
+        mutableStateOf(GalleryViewerPresentationState(detailsVisible = initialDetailsVisible))
+    }
+    LaunchedEffect(presentation.value.detailsVisible) {
+        onDetailsVisibleChanged?.invoke(presentation.value.detailsVisible)
     }
     var playbackOverlayVisible by remember(stateHolder) { mutableStateOf(false) }
     val playbackOverlayShiftPx by animateFloatAsState(

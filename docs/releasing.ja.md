@@ -6,7 +6,7 @@
 
 | 方法 | 成果物 | 実行場所 |
 | --- | --- | --- |
-| 完全なリリース（beta／release candidate向け） | production署名済みuniversal／arm64-v8a／x86_64 Android APK、x86_64/AArch64 Linux bundle、チェックサム、GitHub prerelease | ローカルLinuxで `tools/release.sh` を実行し、その後Windows ZIPをActionsで添付 |
+| 完全なリリース（beta／release candidate向け） | production署名済みuniversal／arm64-v8a／x86_64 Android APK、x86_64/AArch64 Linux bundle（`.tar.zst` と `.AppImage`）、チェックサム、GitHub prerelease | ローカルLinuxで `tools/release.sh` を実行し、その後Windows ZIPをActionsで添付 |
 | 任意のリモートビルド | Android debug APK、および／またはLinux AArch64 bundleの一時artifact | 手動起動するActions。production releaseではない |
 | 署名付きリリースを全てActionsで実行 | **現在は未対応** | Android production署名から完全なRelease作成までを行うworkflowはまだない |
 

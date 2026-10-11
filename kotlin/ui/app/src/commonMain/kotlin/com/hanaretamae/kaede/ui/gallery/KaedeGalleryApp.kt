@@ -105,6 +105,7 @@ fun KaedeGalleryApp(
     }
     val settingsState by activeSettingsStateHolder.state.collectAsState()
     var selectedEntries by remember { mutableStateOf<List<GalleryEntry>>(emptyList()) }
+    var viewerDetailsVisible by remember { mutableStateOf(false) }
     var showSettings by remember { mutableStateOf(false) }
     var viewerBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
     var settingsBackHandler by remember { mutableStateOf<(() -> Unit)?>(null) }
@@ -391,12 +392,17 @@ fun KaedeGalleryApp(
                         tagColorRules = tagColorRules,
                         hiddenTagPrefixes = settings.hiddenTagPrefixes,
                         noteStructure = noteStructure,
+                        initialDetailsVisible = viewerDetailsVisible,
+                        onDetailsVisibleChanged = { viewerDetailsVisible = it },
                     )
                 }
                     GalleryDestination.Gallery -> GalleryScreen(
                         stateHolder = galleryStateHolder,
                         gridState = galleryGridState,
-                        onEntrySelected = { selectedEntries = selectedEntries + it },
+                        onEntrySelected = {
+                            viewerDetailsVisible = false
+                            selectedEntries = selectedEntries + it
+                        },
                         onSettings = { showSettings = true },
                         vaultName = vaultName,
                         strings = activeGalleryStrings,

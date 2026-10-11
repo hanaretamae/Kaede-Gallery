@@ -230,6 +230,9 @@ key_dir=
 
 # Self-contained Linux executables (no Nix needed on the target machine).
 command -v nix >/dev/null || fail "Nix is required to build the Linux bundles"
+command -v zstd >/dev/null || fail "zstd is required to package the Linux bundles"
+appimagetool="$(nix build --no-link --print-out-paths ".#packages.x86_64-linux.appimagetool")" ||
+  fail "could not build the pinned appimagetool"
 for arch in x86_64 aarch64; do
   package=default
   [[ $arch != aarch64 ]] || package=aarch64Cross
@@ -238,9 +241,34 @@ for arch in x86_64 aarch64; do
     ".#packages.x86_64-linux.$package" ||
     fail "could not build the Linux $arch bundle"
   [[ -f $linux_out ]] || fail "the Linux $arch bundle was not produced"
-  cp -- "$(readlink -f "$linux_out")" "$dist_dir/kaede-gallery-$version-linux-$arch"
+  linux_name="kaede-gallery-$version-linux-$arch"
+  linux_stage="$dist_dir/$linux_name"
+  mkdir -p -- "$linux_stage"
+  cp -- "$(readlink -f "$linux_out")" "$linux_stage/kaede-gallery"
   rm -f -- "$linux_out"
-  chmod 755 "$dist_dir/kaede-gallery-$version-linux-$arch"
+  chmod 755 "$linux_stage/kaede-gallery"
+
+  appdir="$dist_dir/AppDir-$arch"
+  mkdir -p -- "$appdir/usr/bin"
+  cp -- "$linux_stage/kaede-gallery" "$appdir/usr/bin/kaede-gallery"
+  install -m 755 packaging/appimage/AppRun "$appdir/AppRun"
+  install -m 644 packaging/appimage/com.hanaretamae.kaede.desktop "$appdir/com.hanaretamae.kaede.desktop"
+  install -m 644 kotlin/shared-assets/branding/kaede-gallery-icon.png "$appdir/kaede-gallery.png"
+  cp -- "$appdir/kaede-gallery.png" "$appdir/.DirIcon"
+  runtime_package=appimageRuntimeX86_64
+  [[ $arch != aarch64 ]] || runtime_package=appimageRuntimeAarch64
+  appimage_runtime="$(nix build --no-link --print-out-paths ".#packages.x86_64-linux.$runtime_package")" ||
+    fail "could not fetch the AppImage $arch runtime"
+  ARCH=$arch "$appimagetool/bin/appimagetool" --no-appstream \
+    --runtime-file "$appimage_runtime" \
+    "$appdir" "$dist_dir/kaede-gallery-$version-linux-$arch.AppImage" ||
+    fail "could not create the Linux $arch AppImage"
+  rm -rf -- "$appdir"
+  cp -- LICENSE README.md README.ja.md THIRD_PARTY_NOTICES.md THIRD_PARTY_NOTICES.ja.md "$linux_stage/"
+  tar -C "$dist_dir" --owner=0 --group=0 --numeric-owner -cf - "$linux_name" |
+    zstd -19 -T0 -q -o "$dist_dir/$linux_name.tar.zst" ||
+    fail "could not create the Linux $arch tar.zst archive"
+  rm -rf -- "$linux_stage"
 done
 
 cp -- LICENSE "$dist_dir/kaede-gallery-LICENSE.txt"

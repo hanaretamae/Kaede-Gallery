@@ -17,7 +17,7 @@ internal object DesktopVideoThumbnail {
     private val cache = LinkedHashMap<String, ByteArray>(CACHE_ENTRIES, 0.75f, true)
 
     fun command(mediaPath: String): List<String> = listOf(
-        "ffmpeg",
+        desktopToolCommand("ffmpeg"),
         "-nostdin",
         "-hide_banner",
         "-loglevel",
@@ -52,7 +52,7 @@ internal object DesktopVideoThumbnail {
             return null
         }
         val path = try {
-            Path.of(mediaLocation).toRealPath()
+            desktopPathOf(mediaLocation).toRealPath()
         } catch (_: IOException) {
             return null
         } catch (_: RuntimeException) {
