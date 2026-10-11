@@ -276,9 +276,13 @@ class GalleryStateHolderTest {
         holder.start()
         advanceUntilIdle()
         holder.setQuery(
-            holder.state.value.query.copy(searchText = "#tag"),
+            holder.state.value.query.copy(
+                searchText = "#tag",
+                fuzzySearchEnabled = false,
+            ),
             debounceSearch = true,
         )
+        assertTrue(holder.state.value.searching)
         advanceTimeBy(249)
         assertEquals(1, repository.queries.size)
         advanceTimeBy(1)
@@ -286,7 +290,9 @@ class GalleryStateHolderTest {
 
         assertEquals(2, repository.queries.size)
         assertEquals("#tag", repository.queries.last().searchText)
-        assertEquals(0, repository.queries.last().offset)
+        assertFalse(repository.queries.last().fuzzySearchEnabled)
+        assertEquals(0L, repository.queries.last().offset)
+        assertFalse(holder.state.value.searching)
     }
 
     @Test

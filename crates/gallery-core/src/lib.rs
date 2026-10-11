@@ -1243,6 +1243,32 @@ impl Gallery {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<NoteSummary>, CoreError> {
+        self.query_filtered_page_search_with_all_and_sort_fuzzy(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            sort,
+            true,
+            offset,
+            limit,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_filtered_page_search_with_all_and_sort_fuzzy(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        sort: NoteSort,
+        fuzzy_search: bool,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<NoteSummary>, CoreError> {
         let ordered = self.sorted_note_ids_with_all_and_sort(
             filters,
             all_filters,
@@ -1250,6 +1276,7 @@ impl Gallery {
             virtual_filters,
             search_query,
             sort,
+            fuzzy_search,
         )?;
         let mut result = Vec::new();
         for id in ordered.into_iter().skip(offset).take(limit) {
@@ -1307,13 +1334,33 @@ impl Gallery {
         virtual_filters: &[VirtualFilter],
         search_query: &str,
     ) -> Result<usize, CoreError> {
+        self.count_filtered_notes_with_all_fuzzy(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            true,
+        )
+    }
+
+    pub fn count_filtered_notes_with_all_fuzzy(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        fuzzy_search: bool,
+    ) -> Result<usize, CoreError> {
         Ok(self
-            .sorted_note_ids_with_all(
+            .sorted_note_ids_with_all_fuzzy(
                 filters,
                 all_filters,
                 excluded_filters,
                 virtual_filters,
                 search_query,
+                fuzzy_search,
             )?
             .len())
     }
@@ -1387,6 +1434,32 @@ impl Gallery {
         offset: usize,
         limit: usize,
     ) -> Result<Vec<MediaSummary>, CoreError> {
+        self.query_media_filtered_page_search_with_all_and_sort_fuzzy(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            sort,
+            true,
+            offset,
+            limit,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    pub fn query_media_filtered_page_search_with_all_and_sort_fuzzy(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        sort: NoteSort,
+        fuzzy_search: bool,
+        offset: usize,
+        limit: usize,
+    ) -> Result<Vec<MediaSummary>, CoreError> {
         let ordered = self.sorted_note_ids_with_all_and_sort(
             filters,
             all_filters,
@@ -1394,6 +1467,7 @@ impl Gallery {
             virtual_filters,
             search_query,
             sort,
+            fuzzy_search,
         )?;
         let mut result = Vec::new();
         let mut skipped = 0usize;
@@ -1462,12 +1536,32 @@ impl Gallery {
         virtual_filters: &[VirtualFilter],
         search_query: &str,
     ) -> Result<usize, CoreError> {
-        let note_ids = self.sorted_note_ids_with_all(
+        self.count_filtered_media_with_all_fuzzy(
             filters,
             all_filters,
             excluded_filters,
             virtual_filters,
             search_query,
+            true,
+        )
+    }
+
+    pub fn count_filtered_media_with_all_fuzzy(
+        &self,
+        filters: &[String],
+        all_filters: &[String],
+        excluded_filters: &[String],
+        virtual_filters: &[VirtualFilter],
+        search_query: &str,
+        fuzzy_search: bool,
+    ) -> Result<usize, CoreError> {
+        let note_ids = self.sorted_note_ids_with_all_fuzzy(
+            filters,
+            all_filters,
+            excluded_filters,
+            virtual_filters,
+            search_query,
+            fuzzy_search,
         )?;
         let mut statement = self
             .connection
@@ -1481,13 +1575,14 @@ impl Gallery {
         })
     }
 
-    fn sorted_note_ids_with_all(
+    fn sorted_note_ids_with_all_fuzzy(
         &self,
         filters: &[String],
         all_filters: &[String],
         excluded_filters: &[String],
         virtual_filters: &[VirtualFilter],
         search_query: &str,
+        fuzzy_search: bool,
     ) -> Result<Vec<i64>, CoreError> {
         self.sorted_note_ids_with_all_and_sort(
             filters,
@@ -1496,6 +1591,7 @@ impl Gallery {
             virtual_filters,
             search_query,
             NoteSort::default(),
+            fuzzy_search,
         )
     }
 
@@ -1507,21 +1603,33 @@ impl Gallery {
         virtual_filters: &[VirtualFilter],
         search_query: &str,
         sort: NoteSort,
+        fuzzy_search: bool,
     ) -> Result<Vec<i64>, CoreError> {
-        let (search_text, query_filters, query_all_filters, query_excluded_filters) =
+        let (search_terms, query_filters, query_all_filters, query_excluded_filters) =
             parse_note_search_query(search_query);
         let mut filters = filters.to_vec();
-        filters.extend(self.expand_fuzzy_tag_queries(query_filters)?);
+        filters.extend(if fuzzy_search {
+            self.expand_fuzzy_tag_queries(query_filters)?
+        } else {
+            query_filters
+        });
         let mut all_filters = all_filters.to_vec();
-        all_filters.extend(self.expand_fuzzy_tag_queries(query_all_filters)?);
+        all_filters.extend(if fuzzy_search {
+            self.expand_fuzzy_tag_queries(query_all_filters)?
+        } else {
+            query_all_filters
+        });
         let mut excluded_filters = excluded_filters.to_vec();
-        excluded_filters.extend(self.expand_fuzzy_tag_queries(query_excluded_filters)?);
+        excluded_filters.extend(if fuzzy_search {
+            self.expand_fuzzy_tag_queries(query_excluded_filters)?
+        } else {
+            query_excluded_filters
+        });
         let mut ids = self
             .matching_note_ids_with_all(&filters, &all_filters, &excluded_filters, virtual_filters)?
             .into_iter()
             .collect::<Vec<_>>();
-        if !search_text.trim().is_empty() {
-            let query = search_text.trim().chars().take(128).collect::<String>();
+        if !search_terms.is_empty() {
             let mut searched_ids = Vec::with_capacity(ids.len());
             let mut tag_statement = self
                 .connection
@@ -1543,11 +1651,27 @@ impl Gallery {
                     .map_err(|_| CoreError::Database)?
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|_| CoreError::Database)?;
-                let matches = query.split_whitespace().all(|term| {
-                    fuzzy_note_match(&title, &path, term)
-                        || tags
-                            .iter()
-                            .any(|tag| fuzzy_tag_match_score(tag, term).is_some())
+                let matches = search_terms.iter().all(|term| {
+                    let fuzzy = match term.mode {
+                        SearchTextMode::Default => fuzzy_search,
+                        SearchTextMode::Fuzzy => true,
+                        SearchTextMode::ExactWord => false,
+                    };
+                    if term.mode == SearchTextMode::ExactWord {
+                        exact_word_match(&title, &term.text)
+                            || exact_word_match(&path, &term.text)
+                            || tags.iter().any(|tag| exact_word_match(tag, &term.text))
+                    } else if fuzzy {
+                        fuzzy_note_match(&title, &path, &term.text)
+                            || tags
+                                .iter()
+                                .any(|tag| fuzzy_tag_match_score(tag, &term.text).is_some())
+                    } else {
+                        let term = term.text.to_lowercase();
+                        title.to_lowercase().contains(&term)
+                            || path.to_lowercase().contains(&term)
+                            || tags.iter().any(|tag| tag.to_lowercase().contains(&term))
+                    }
                 });
                 if matches {
                     searched_ids.push(id);
@@ -2659,12 +2783,28 @@ fn other_bucket(name: &str, split_deep: bool, tag: &str) -> CategoryBucket {
     }
 }
 
-fn parse_note_search_query(query: &str) -> (String, Vec<String>, Vec<String>, Vec<String>) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SearchTextMode {
+    Default,
+    Fuzzy,
+    ExactWord,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SearchTextTerm {
+    text: String,
+    mode: SearchTextMode,
+}
+
+fn parse_note_search_query(
+    query: &str,
+) -> (Vec<SearchTextTerm>, Vec<String>, Vec<String>, Vec<String>) {
+    let bounded_query = query.chars().take(128).collect::<String>();
     let mut text = Vec::new();
     let mut any_tags = Vec::new();
     let mut all_tags = Vec::new();
     let mut excluded_tags = Vec::new();
-    for term in query.split_whitespace() {
+    for term in bounded_query.split_whitespace() {
         if let Some(tag) = term
             .strip_prefix("+#")
             .or_else(|| term.strip_prefix("&#"))
@@ -2676,10 +2816,32 @@ fn parse_note_search_query(query: &str) -> (String, Vec<String>, Vec<String>, Ve
         } else if let Some(tag) = term.strip_prefix('#').filter(|tag| !tag.is_empty()) {
             any_tags.push(tag.to_owned());
         } else {
-            text.push(term);
+            let (mode, term_text) =
+                if let Some(text) = term.strip_prefix('~').filter(|text| !text.is_empty()) {
+                    (SearchTextMode::Fuzzy, text)
+                } else if let Some(text) = term.strip_prefix('=').filter(|text| !text.is_empty()) {
+                    (SearchTextMode::ExactWord, text)
+                } else {
+                    (SearchTextMode::Default, term)
+                };
+            text.push(SearchTextTerm {
+                text: term_text.chars().take(128).collect(),
+                mode,
+            });
         }
     }
-    (text.join(" "), any_tags, all_tags, excluded_tags)
+    (text, any_tags, all_tags, excluded_tags)
+}
+
+fn exact_word_match(value: &str, query: &str) -> bool {
+    let query = query.to_lowercase();
+    value
+        .chars()
+        .take(512)
+        .collect::<String>()
+        .to_lowercase()
+        .split(|character: char| !character.is_alphanumeric())
+        .any(|word| word == query)
 }
 
 fn fuzzy_note_match(title: &str, path: &str, query: &str) -> bool {
@@ -3355,6 +3517,31 @@ mod tests {
             "雨上がりの観測.md",
             "夕暮れ"
         ));
+    }
+
+    #[test]
+    fn note_search_syntax_overrides_default_matching_per_term() {
+        let (terms, any_tags, all_tags, excluded_tags) =
+            parse_note_search_query("~fictinal =Portrait #source/art +#blue -#draft");
+
+        assert_eq!(
+            terms,
+            [
+                SearchTextTerm {
+                    text: "fictinal".to_owned(),
+                    mode: SearchTextMode::Fuzzy,
+                },
+                SearchTextTerm {
+                    text: "Portrait".to_owned(),
+                    mode: SearchTextMode::ExactWord,
+                },
+            ],
+        );
+        assert_eq!(any_tags, ["source/art"]);
+        assert_eq!(all_tags, ["blue"]);
+        assert_eq!(excluded_tags, ["draft"]);
+        assert!(exact_word_match("Fictional Portrait", "portrait"));
+        assert!(!exact_word_match("Fictional Portraits", "portrait"));
     }
 
     #[test]
@@ -4066,6 +4253,24 @@ mod tests {
             .expect("fuzzy name search");
         assert_eq!(fuzzy.len(), 1);
         assert_eq!(fuzzy[0].title, "Fictional Portrait");
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all_fuzzy(&[], &[], &[], &[], "~fictinal", false)
+                .expect("explicit fuzzy search while disabled"),
+            1
+        );
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all_fuzzy(&[], &[], &[], &[], "=Portrait", false)
+                .expect("exact whole-word search"),
+            1
+        );
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all_fuzzy(&[], &[], &[], &[], "=trait", false)
+                .expect("partial words do not match exact-word syntax"),
+            0
+        );
         let tag_name_search = gallery
             .query_filtered_page_search(&[], &[], &[], "hidamari", 0, 10)
             .expect("plain-text tag-name search");
@@ -4771,6 +4976,31 @@ mod tests {
                 )
                 .expect("count filtered notes"),
             1
+        );
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all_fuzzy(&[], &[], &[], &[], "Mny", true)
+                .expect("fuzzy title search"),
+            1
+        );
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all_fuzzy(&[], &[], &[], &[], "Mny", false)
+                .expect("exact title search"),
+            0
+        );
+        assert_eq!(
+            gallery
+                .count_filtered_notes_with_all_fuzzy(
+                    &[],
+                    &[],
+                    &[],
+                    &[],
+                    "+#source/rating/saf",
+                    false,
+                )
+                .expect("exact tag search"),
+            0
         );
 
         // Flattened: three media items total (two from "many", one from "single"),

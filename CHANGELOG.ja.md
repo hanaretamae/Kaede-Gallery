@@ -5,6 +5,24 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
+## [2.0.0b5] - 草案
+
+### 追加
+
+- あいまい検索の設定と `~word`／`=word` 構文、ギャラリーの読み込み表示、ドラッグ可能なスクロールバーの位置ポップアップを追加しました。
+- ギャラリーのページ切り替えと詳細ビューの遷移を滑らかにし、横スクロールのトラックパッド操作と Android 動画サムネイルの代替取得を改善しました。
+
+### 修正
+
+- 件数 badge を既定のエラー赤ではなく、Material You の secondary container 系 role に統一しました。
+- 詳細パネルのスクロールとメディアサイズ、全画面動作、再生速度変更時の遷移、スクロールバーの位置表示を修正しました。
+- ライト／ダーク、システムアクセント、fallback、ピュアブラックの外観設定を Material 3 Expressive の色 role に合わせました。
+
+### 変更
+
+- fallback 配色を MaterialKolor の Expressive 2025 palette に変更し、システム／fallback／ピュアブラック配色の選択処理を共通化しました。
+- フィルターと Vault 選択画面を Material 3 Expressive コンポーネントに合わせて整理しました。
+
 ## [2.0.0] - 草案（1.6.2以降の変更・未リリース）
 
 1.6.2以降の2.0.0向け変更をまとめた草案です。公開前に最終Release commitと
@@ -32,7 +50,7 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 - Vault は読み取り専用とし、設定・index・cache はアプリの非公開領域に保存します。Vault 内へ書き込みません。
 - 現行 Material 3 Expressive 依存に合わせて Android の最小対応を API 24 にし、`VERSION` を唯一のリリース版数源に統一しました。
 
-## [2.0.0b4] - 2026-10-10 (Beta)
+## [2.0.0b4] - 2026-10-11 (Beta)
 
 ### 追加
 

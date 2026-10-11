@@ -25,6 +25,7 @@ data class GalleryUiState(
     val categories: List<GalleryCategory> = emptyList(),
     val totalCount: Long? = null,
     val loading: Boolean = false,
+    val searching: Boolean = false,
     val error: RepositoryError? = null,
     val categoriesLoading: Boolean = false,
     val categoriesError: RepositoryError? = null,
@@ -73,6 +74,7 @@ class GalleryStateHolder(
         mutableState.value = mutableState.value.copy(
             query = normalized,
             loading = false,
+            searching = true,
             error = null,
         )
         if (debounceSearch) {
@@ -103,6 +105,7 @@ class GalleryStateHolder(
             pageOffset = 0,
             totalCount = null,
             loading = false,
+            searching = false,
             error = null,
         )
         requestCategories()
@@ -168,6 +171,7 @@ class GalleryStateHolder(
             entries = emptyList(),
             totalCount = null,
             loading = false,
+            searching = false,
             error = null,
         )
         requestCategories()
@@ -292,6 +296,7 @@ class GalleryStateHolder(
                         pendingJumpItemOffset = null
                         mutableState.value = latest.copy(
                             loading = false,
+                            searching = false,
                             error = if (invalidJump) {
                                 RepositoryError.INVALID_REQUEST
                             } else {
@@ -309,6 +314,7 @@ class GalleryStateHolder(
                             pageOffset = if (prepend || reset) offset else latest.pageOffset,
                             totalCount = page.totalCount,
                             loading = false,
+                            searching = false,
                             error = null,
                         )
                         if (targetPageOffset != null && offset != targetPageOffset) {
@@ -331,6 +337,7 @@ class GalleryStateHolder(
                         pageOffset = if (reset) 0 else latest.pageOffset,
                         totalCount = if (reset) null else latest.totalCount,
                         loading = false,
+                        searching = false,
                         error = result.error,
                     )
                 }

@@ -106,6 +106,7 @@ import androidx.compose.ui.input.pointer.isShiftPressed
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.AnnotatedString
@@ -126,8 +127,9 @@ import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import com.hanaretamae.kaede.core.settings.GalleryNoteBlock
 import com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings
 
-private const val TRACKPAD_GESTURE_IDLE_MILLIS = 220L
+private const val TRACKPAD_GESTURE_IDLE_MILLIS = 600L
 private const val TRACKPAD_SWIPE_THRESHOLD = 48f
+private const val PLAYBACK_OVERLAY_DETAILS_SHIFT = 0.5f
 
 data class GalleryViewerStrings(
     val close: String,
@@ -231,6 +233,8 @@ fun GalleryViewerScreen(
     modifier: Modifier = Modifier,
     strings: GalleryViewerStrings = EnglishGalleryViewerStrings,
     onFullscreenChanged: ((Boolean) -> Unit)? = null,
+    windowFullscreen: Boolean = false,
+    onWindowFullscreenChanged: ((Boolean) -> Unit)? = null,
     onMediaOnlyChanged: ((Boolean) -> Unit)? = null,
     onOpenMedia: ((GalleryViewerMediaState) -> Unit)? = null,
     onRevealMedia: ((GalleryViewerMediaState) -> Unit)? = null,
@@ -318,6 +322,9 @@ fun GalleryViewerScreen(
     }
     DisposableEffect(onFullscreenChanged) {
         onDispose { onFullscreenChanged?.invoke(false) }
+    }
+    DisposableEffect(onWindowFullscreenChanged) {
+        onDispose { onWindowFullscreenChanged?.invoke(false) }
     }
     fun changeDetailsPanelExpansion(deltaPx: Float) {
         detailsPanelExpansionPx.floatValue =
@@ -421,11 +428,15 @@ fun GalleryViewerScreen(
         Column(modifier = Modifier.fillMaxSize()) {
             AnimatedVisibility(
                 visible = presentation.value.detailsVisible && !presentation.value.fullscreen,
-                enter = slideInVertically(
+                enter = expandVertically(
+                    animationSpec = motionScheme.defaultSpatialSpec(),
+                ) + slideInVertically(
                     animationSpec = motionScheme.defaultSpatialSpec(),
                     initialOffsetY = { -it / 2 },
                 ) + fadeIn(animationSpec = motionScheme.defaultEffectsSpec()),
-                exit = slideOutVertically(
+                exit = shrinkVertically(
+                    animationSpec = motionScheme.defaultSpatialSpec(),
+                ) + slideOutVertically(
                     animationSpec = motionScheme.defaultSpatialSpec(),
                     targetOffsetY = { -it / 2 },
                 ) + fadeOut(animationSpec = motionScheme.defaultEffectsSpec()),
@@ -435,7 +446,8 @@ fun GalleryViewerScreen(
                         .background(viewerTopBarColor)
                         .windowInsetsPadding(WindowInsets.statusBars)
                         .heightIn(min = 64.dp)
-                        .padding(horizontal = 4.dp),
+                        .padding(horizontal = 4.dp)
+                        .testTag("viewer-details-toolbar"),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     KaedeIconButton(
@@ -461,12 +473,16 @@ fun GalleryViewerScreen(
                     } else {
                         Spacer(Modifier.weight(1f))
                     }
-                    if (onFullscreenChanged != null && state.selectedMedia != null) {
+                    if (onWindowFullscreenChanged != null && state.selectedMedia != null) {
                         KaedeIconButton(
-                            label = strings.fullscreen,
-                            onClick = ::enterFullscreen,
+                            label = if (windowFullscreen) strings.exitFullscreen else strings.fullscreen,
+                            onClick = { onWindowFullscreenChanged(!windowFullscreen) },
                         ) {
-                            Icon(Icons.Filled.Fullscreen, strings.fullscreen)
+                            Icon(
+                                if (windowFullscreen) Icons.Filled.FullscreenExit
+                                else Icons.Filled.Fullscreen,
+                                if (windowFullscreen) strings.exitFullscreen else strings.fullscreen,
+                            )
                         }
                     }
                     if (mediaActions.isNotEmpty()) {
@@ -609,7 +625,47 @@ fun GalleryViewerScreen(
                                 Column(
                                     modifier = Modifier.fillMaxWidth()
                                         .height(detailsPanelHeight)
-                                        .verticalScroll(detailsScrollState)
+                                        .zIndex(1f)
+                                        .pointerInput(
+                                            presentation.value.detailsVisible,
+                                            presentation.value.fullscreen,
+                                        ) {
+                                            if (
+                                                !presentation.value.detailsVisible ||
+                                                presentation.value.fullscreen
+                                            ) {
+                                                return@pointerInput
+                                            }
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent(
+                                                        PointerEventPass.Initial,
+                                                    )
+                                                    if (event.type != PointerEventType.Scroll) {
+                                                        continue
+                                                    }
+                                                    val change = event.changes.firstOrNull()
+                                                        ?: continue
+                                                    val deltaY = change.scrollDelta.y
+                                                    if (
+                                                        detailsScrollState.maxValue > 0 &&
+                                                        abs(deltaY) > abs(change.scrollDelta.x) &&
+                                                        (
+                                                            (deltaY > 0f &&
+                                                                detailsScrollState.canScrollForward) ||
+                                                                (deltaY < 0f &&
+                                                                    detailsScrollState.canScrollBackward)
+                                                            )
+                                                    ) {
+                                                        changeDetailsPanelExpansion(deltaY)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .verticalScroll(
+                                            detailsScrollState,
+                                            enabled = detailsScrollState.maxValue > 0,
+                                        )
                                         .background(MaterialTheme.colorScheme.surfaceContainer)
                                         .padding(16.dp),
                                 ) {
@@ -644,12 +700,12 @@ fun GalleryViewerScreen(
                     var trackpadGestureConsumed by remember(stateHolder) {
                         mutableStateOf(false)
                     }
-                    val detailsPanelHeight = maxHeight * galleryViewerDetailsPanelFraction(
-                        scrollOffsetPx = (
-                            detailsPanelExpansionPx.floatValue + playbackOverlayShiftPx
-                            ).roundToInt(),
-                        expandDistancePx = detailsExpansionDistancePx,
-                    )
+                    val detailsPanelHeight = (
+                        maxHeight * galleryViewerDetailsPanelFraction(
+                            scrollOffsetPx = detailsPanelExpansionPx.floatValue.roundToInt(),
+                            expandDistancePx = detailsExpansionDistancePx,
+                        ) - with(density) { playbackOverlayShiftPx.toDp() }
+                        ).coerceAtLeast((maxHeight * 0.2f).coerceAtMost(120.dp))
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1007,7 +1063,47 @@ fun GalleryViewerScreen(
                                 Column(
                                     modifier = Modifier.fillMaxWidth()
                                         .height(detailsPanelHeight)
-                                        .verticalScroll(detailsScrollState)
+                                        .zIndex(1f)
+                                        .pointerInput(
+                                            presentation.value.detailsVisible,
+                                            presentation.value.fullscreen,
+                                        ) {
+                                            if (
+                                                !presentation.value.detailsVisible ||
+                                                presentation.value.fullscreen
+                                            ) {
+                                                return@pointerInput
+                                            }
+                                            awaitPointerEventScope {
+                                                while (true) {
+                                                    val event = awaitPointerEvent(
+                                                        PointerEventPass.Initial,
+                                                    )
+                                                    if (event.type != PointerEventType.Scroll) {
+                                                        continue
+                                                    }
+                                                    val change = event.changes.firstOrNull()
+                                                        ?: continue
+                                                    val deltaY = change.scrollDelta.y
+                                                    if (
+                                                        detailsScrollState.maxValue > 0 &&
+                                                        abs(deltaY) > abs(change.scrollDelta.x) &&
+                                                        (
+                                                            (deltaY > 0f &&
+                                                                detailsScrollState.canScrollForward) ||
+                                                                (deltaY < 0f &&
+                                                                    detailsScrollState.canScrollBackward)
+                                                            )
+                                                    ) {
+                                                        changeDetailsPanelExpansion(deltaY)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .verticalScroll(
+                                            detailsScrollState,
+                                            enabled = detailsScrollState.maxValue > 0,
+                                        )
                                         .background(MaterialTheme.colorScheme.surfaceContainer)
                                         .testTag("viewer-note-details")
                                         .padding(16.dp),
@@ -1229,12 +1325,10 @@ internal fun galleryViewerDetailsPanelFraction(
     expandDistancePx: Float = 220f,
 ): Float {
     val baseFraction = 0.4f
-    val maximumFraction = 0.82f
+    val maximumFraction = 0.9f
     val expansion = (scrollOffsetPx / expandDistancePx).coerceIn(0f, 1f)
     return baseFraction + (maximumFraction - baseFraction) * expansion
 }
-
-private const val PLAYBACK_OVERLAY_DETAILS_SHIFT = 0.5f
 
 internal data class GalleryViewerPresentationState(
     val detailsVisible: Boolean = false,

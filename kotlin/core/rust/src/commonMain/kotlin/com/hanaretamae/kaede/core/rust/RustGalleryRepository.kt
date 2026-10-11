@@ -148,6 +148,7 @@ private fun ModelGalleryQuery.toRustQuery() = GalleryQuery(
         ModelGalleryContent.MEDIA -> GalleryContent.MEDIA
     },
     searchText = searchText,
+    fuzzySearch = fuzzySearchEnabled,
     includeTags = includeTags.sorted(),
     andTags = andTags.sorted(),
     excludedTags = excludedTags.sorted(),

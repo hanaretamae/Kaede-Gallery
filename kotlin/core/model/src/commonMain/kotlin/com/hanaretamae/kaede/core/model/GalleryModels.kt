@@ -31,6 +31,7 @@ enum class VirtualFilter {
 data class GalleryQuery(
     val content: GalleryContent = GalleryContent.NOTES,
     val searchText: String = "",
+    val fuzzySearchEnabled: Boolean = true,
     val includeTags: Set<String> = emptySet(),
     val andTags: Set<String> = emptySet(),
     val excludedTags: Set<String> = emptySet(),

@@ -14,11 +14,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -186,13 +189,7 @@ fun main() {
                     if (composeRootSize != size) composeRootSize = size
                 },
             ) {
-                DesktopApplication(windowState) { fullscreen ->
-                    windowState.placement = if (fullscreen) {
-                        WindowPlacement.Maximized
-                    } else {
-                        WindowPlacement.Floating
-                    }
-                }
+                DesktopApplication(windowState)
             }
         }
     }
@@ -202,7 +199,6 @@ fun main() {
 @Composable
 private fun DesktopApplication(
     windowState: WindowState,
-    onFullscreenChanged: (Boolean) -> Unit,
 ) {
     val portalAppearance by produceState(DesktopSystemAppearance()) {
         while (true) {
@@ -566,7 +562,15 @@ private fun DesktopApplication(
                     mediaState = mediaState,
                 )
             },
-            onViewerFullscreenChanged = onFullscreenChanged,
+            onViewerFullscreenChanged = {},
+            viewerWindowFullscreen = windowState.placement == WindowPlacement.Fullscreen,
+            onViewerWindowFullscreenChanged = { fullscreen ->
+                windowState.placement = if (fullscreen) {
+                    WindowPlacement.Fullscreen
+                } else {
+                    WindowPlacement.Floating
+                }
+            },
             onOpenMedia = { media ->
                 scope.launch {
                     val opened = withContext(Dispatchers.IO) {
@@ -963,43 +967,69 @@ private fun DesktopWelcome(
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             Surface(modifier = Modifier.fillMaxSize()) {
-                Column(
-                    modifier = Modifier.fillMaxSize().padding(32.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
-                    Spacer(Modifier.height(16.dp))
-                    Text(
-                        if (japanese) {
-                            "既存のVaultフォルダーを選択してください。アクセスは読み取り専用です。"
-                        } else {
-                            "Choose an existing, read-only Vault folder to begin."
-                        },
-                    )
-                    Spacer(Modifier.height(24.dp))
-                    Button(shapes = ButtonDefaults.shapes(), onClick = onChooseVault, enabled = !loading) {
-                        Text(if (japanese) "Vaultを選択" else "Choose Vault")
-                    }
-                    Button(shapes = ButtonDefaults.shapes(), onClick = onOpenExample, enabled = !loading) {
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(10.dp),
-                            verticalAlignment = Alignment.CenterVertically,
+                Box(Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
+                    Surface(
+                        modifier = Modifier.widthIn(max = 560.dp).fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        tonalElevation = 2.dp,
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxWidth().padding(32.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center,
                         ) {
-                            Icon(Icons.Filled.Description, contentDescription = null)
-                            Text(if (japanese) "ノートの例を見る" else "View example note")
+                            Icon(
+                                Icons.Filled.Description,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(56.dp),
+                            )
+                            Spacer(Modifier.height(16.dp))
+                            Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
+                            Spacer(Modifier.height(12.dp))
+                            Text(
+                                if (japanese) {
+                                    "既存のVaultフォルダーを選択してください。アクセスは読み取り専用です。"
+                                } else {
+                                    "Choose an existing, read-only Vault folder to begin."
+                                },
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Spacer(Modifier.height(24.dp))
+                            Button(
+                                shapes = ButtonDefaults.shapes(),
+                                onClick = onChooseVault,
+                                enabled = !loading,
+                            ) {
+                                Text(if (japanese) "Vaultを選択" else "Choose Vault")
+                            }
+                            Button(
+                                shapes = ButtonDefaults.shapes(),
+                                onClick = onOpenExample,
+                                enabled = !loading,
+                            ) {
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(Icons.Filled.Description, contentDescription = null)
+                                    Text(if (japanese) "ノートの例を見る" else "View example note")
+                                }
+                            }
+                            if (error != null) {
+                                Spacer(Modifier.height(16.dp))
+                                Text(
+                                    if (japanese) {
+                                        "Vaultを読み込めませんでした。フォルダーへのアクセス権限を確認してください。"
+                                    } else {
+                                        error
+                                    },
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
                         }
-                    }
-                    if (error != null) {
-                        Spacer(Modifier.height(16.dp))
-                        Text(
-                            if (japanese) {
-                                "Vaultを読み込めませんでした。フォルダーへのアクセス権限を確認してください。"
-                            } else {
-                                error
-                            },
-                            color = MaterialTheme.colorScheme.error,
-                        )
                     }
                 }
             }
@@ -1270,21 +1300,27 @@ internal fun DesktopVideoControls(
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Slider(
-            state = sliderState,
-            onValueChange = { fraction ->
-                sliderState.value = fraction
-                val seconds = fraction * duration
-                seekPreview = seconds
-                onSeek(seconds)
-            },
-            onValueChangeFinished = {
-                seekPreview?.let(onSeek)
-                seekPreview = null
-            },
-            enabled = duration > 0f && state.connected,
-            modifier = Modifier.fillMaxWidth().height(64.dp),
-        )
+        AnimatedVisibility(
+            visible = !speedMenuExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
+            Slider(
+                state = sliderState,
+                onValueChange = { fraction ->
+                    sliderState.value = fraction
+                    val seconds = fraction * duration
+                    seekPreview = seconds
+                    onSeek(seconds)
+                },
+                onValueChangeFinished = {
+                    seekPreview?.let(onSeek)
+                    seekPreview = null
+                },
+                enabled = duration > 0f && state.connected,
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+            )
+        }
         GalleryPlaybackActions(leading = {
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -1351,7 +1387,11 @@ internal fun DesktopVideoControls(
                 DesktopFullscreenButton(fullscreen = fullscreen, onClick = toggle)
             }
         })
-        if (speedMenuExpanded) {
+        AnimatedVisibility(
+            visible = speedMenuExpanded,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut(),
+        ) {
             GalleryPlaybackSpeedChoices(
                 selected = state.playbackSpeed,
                 onSelect = {

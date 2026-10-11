@@ -3,6 +3,24 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.0b5] - Draft
+
+### Added
+
+- Added fuzzy-search controls and `~word` / `=word` search syntax, plus gallery loading feedback and a position popup for the draggable scrollbar.
+- Added responsive gallery paging and viewer/detail transitions, horizontal trackpad navigation, and improved Android video-thumbnail fallbacks.
+
+### Fixed
+
+- Kept count badges in the Material You secondary-container roles instead of the default error red.
+- Corrected detail-panel scrolling and media sizing, fullscreen behavior, playback-speed transitions, and the scrollbar position popup.
+- Aligned light, dark, system-accent, fallback, and pure-black appearance behavior with the Material 3 Expressive color roles.
+
+### Changed
+
+- Updated fallback palettes to the MaterialKolor Expressive 2025 palette and consolidated system/fallback/pure-black scheme selection.
+- Refined the filter and Vault-selection surfaces around Material 3 Expressive components.
+
 ## [2.0.0] - Draft (changes since 1.6.2; not released)
 
 This is a consolidated draft of the 2.0.0 changes from 1.6.2 onward. Review and
@@ -31,7 +49,7 @@ publishing.
 - Moved Vault selection, settings, indexes, and caches to read-only Vault access with app-private persistence; the application does not write into the Vault.
 - Raised Android's minimum supported version to API 24 for the current Material 3 Expressive dependencies and standardized release versioning through `VERSION`.
 
-## [2.0.0b4] - 2026-10-10 (Beta)
+## [2.0.0b4] - 2026-10-11 (Beta)
 
 ### Added
 

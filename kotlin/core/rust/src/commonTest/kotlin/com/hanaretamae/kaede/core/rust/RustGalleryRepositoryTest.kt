@@ -48,6 +48,7 @@ class RustGalleryRepositoryTest {
         )
         val query = ModelGalleryQuery(
             searchText = "#art",
+            fuzzySearchEnabled = false,
             includeTags = setOf("tag/z", "tag/a"),
             andTags = setOf("tag/and"),
             excludedTags = setOf("tag/excluded"),
@@ -64,6 +65,7 @@ class RustGalleryRepositoryTest {
             GalleryQuery(
                 content = GalleryContent.NOTES,
                 searchText = "#art",
+                fuzzySearch = false,
                 includeTags = listOf("tag/a", "tag/z"),
                 andTags = listOf("tag/and"),
                 excludedTags = listOf("tag/excluded"),

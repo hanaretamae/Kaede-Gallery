@@ -104,8 +104,10 @@ integrations.
     never signs production Android packages or publishes releases. The prior Android and Windows Actions runs
     passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-    Do not mark this phase complete until the `2.0.0b4` GitHub prerelease exists
-    and the Windows release archive is attached successfully. An earlier
+    Do not mark this phase complete until the `2.0.0b4` GitHub prerelease has
+    its Windows release archive attached successfully. The prerelease exists;
+    its Windows workflow failed in `LinuxPortalDirectoryPickerTest` before
+    packaging, so the archive is still outstanding. An earlier
     aarch64 attempt could not fetch pinned OpenJDK/Nix-cache artifacts because
     cache.nixos.org connections timed out; that failure was later resolved.
 15. **Future platform:** Keep the common architecture extensible to macOS and
@@ -123,8 +125,11 @@ Android debug and Linux AArch64 build artifacts available only through explicit
 manual dispatch, either in the Actions UI or via `tools/run-optional-builds.sh`.
 Local builds remain primary, and the manual workflow does not sign or publish
 Android releases. The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
-must not be moved. The `2.0.0b4` GitHub prerelease and Windows beta archive are
-still pending. Full Actions-only
+must not be moved. The public `2.0.0b4` GitHub prerelease was verified on
+2026-10-11. Its Android and Linux release assets are present, but the Windows
+archive is still pending after workflow run
+[38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
+failed in `LinuxPortalDirectoryPickerTest`. Full Actions-only
 production release is not implemented: the current signing flow uses the local
 KeePassXC database. See `docs/releasing.md` for the supported local/remote paths
 and the signing prerequisite. There is no active Flutter application or release path.
@@ -145,7 +150,7 @@ does not waive other Linux desktop, Android, Windows, or parity checks.
 | Area                                                                         | Evidence                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 | Status                                                                                                                                   |
 | ---------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
 | Rust parsing, indexing, filtering, and FFI                                   | Workspace tests pass against fictional data; Vault immutability and bounded SAF scan behavior are covered.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               | Verified                                                                                                                                 |
-| Shared gallery, search, filters, paging, settings transfer, and note details | KMP state, codec, and UI tests pass; Android API 36 fixture checks cover gallery/search/detail navigation and settings transfer. A disposable 30-note fictional SAF fixture confirmed indexed jumps, backward paging, and filter clearing. Settings-transfer fixtures cover Flutter `showItemCount`, the separate KMP tile-count preference, and older KMP v1 exports. The details panel now follows Flutter's 40%-to-82% expansion over 220dp and unzoomed media-area vertical drags forward to its scroll state. A post-change API 36 check with an unzoomed fictional image confirmed vertical swipes over media expand and collapse the details panel; JVM tests cover the exact density-scaled threshold and hidden/fullscreen/video/zoom suppression. New Flutter and KMP repository-adapter tests independently read the same read-only `testdata/dummy-vault` with temporary private index/cache data and assert matching 12-note/1-warning scans, `note-000000.md` details/image, and `source/rating/safe` filtering. Both tests pass in the pinned Nix development shell. The API 36 side-by-side acceptance run then used the same disposable fictional Vault in Flutter and KMP: both showed the same two gallery notes and matching note 000004 details (title, date, visible tags, body, and related targets). It exposed KMP's missing hidden-tag handling and duplicate link labels; KMP now honors persisted hidden prefixes and uses the same human-readable link labels; Android and Desktop also avoid upscaling the fixture's 1×1 image, matching Flutter's natural-size rendering. These changes are covered by new JVM tests and the rebuilt, rechecked acceptance APK. Search/filter/paging/settings transfer retain their existing automated and target-specific coverage; this run directly compared gallery and note details. | Repository fixture and recorded Android gallery/detail runtime parity verified                                                           |
+| Shared gallery, search, filters, paging, settings transfer, and note details | KMP state, codec, and UI tests pass; Android API 36 fixture checks cover gallery/search/detail navigation and settings transfer. A disposable 30-note fictional SAF fixture confirmed indexed jumps, backward paging, and filter clearing. Settings-transfer fixtures cover Flutter `showItemCount`, the separate KMP tile-count preference, and older KMP v1 exports. The details panel now expands from 40% to 90% over 220dp and unzoomed media-area vertical drags forward to its scroll state. A post-change API 36 check with an unzoomed fictional image confirmed vertical swipes over media expand and collapse the details panel; JVM tests cover the exact density-scaled threshold and hidden/fullscreen/video/zoom suppression. New Flutter and KMP repository-adapter tests independently read the same read-only `testdata/dummy-vault` with temporary private index/cache data and assert matching 12-note/1-warning scans, `note-000000.md` details/image, and `source/rating/safe` filtering. Both tests pass in the pinned Nix development shell. The API 36 side-by-side acceptance run then used the same disposable fictional Vault in Flutter and KMP: both showed the same two gallery notes and matching note 000004 details (title, date, visible tags, body, and related targets). It exposed KMP's missing hidden-tag handling and duplicate link labels; KMP now honors persisted hidden prefixes and uses the same human-readable link labels; Android and Desktop also avoid upscaling the fixture's 1×1 image, matching Flutter's natural-size rendering. These changes are covered by new JVM tests and the rebuilt, rechecked acceptance APK. Search/filter/paging/settings transfer retain their existing automated and target-specific coverage; this run directly compared gallery and note details. | Repository fixture and recorded Android gallery/detail runtime parity verified                                                           |
 | Android SAF, media, and performance                                          | API 36 fixture checks cover SAF selection, image and video display, navigation, and private-index reuse; the 2,000-note scan and scroll measurements are recorded in `docs/phase1-performance.md`.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | Verified for the recorded device, provider, and scenarios only                                                                           |
 | Linux Compose Desktop                                                        | An earlier packaged-launcher Xvfb smoke test with fresh private app data covered fictional Vault selection, gallery, note detail, fullscreen, file-manager reveal, and external image open. On Niri/XWayland, the owner-confirmed resize check found and fixed black margins by synchronizing X11 client geometry with AWT and Compose window state while accounting for AWT insets; JVM tests cover the inset conversion and the 540×720dp (3:4) minimum window size. Linux Vault selection now calls `org.freedesktop.portal.FileChooser.OpenFile` with directory mode; on the current Niri host, the portal returned a request handle and displayed its GTK picker. The owner subsequently confirmed end-to-end selection of the fictional Vault through the Compose UI and GTK portal on this host. Settings import and export also use the system portal's `OpenFile` and `SaveFile` methods, with Swing fallback only when a portal request cannot be started; parameter and path-resolution JVM tests cover those integrations. JVM tests cover request construction, request/response parsing, and local-directory validation. If the portal request cannot be started, desktop falls back to the Swing directory chooser. Once a Portal request may have opened a dialog, failures are shown in the app instead of launching a second chooser. Direct calls against fictional `media/pixel.png` returned a portal request from `xdg-open` and `()` from `FileManager1.ShowItems`; process inspection showed Koko opening the fixture and Dolphin launched with `--select` for that path. These direct handler calls exercise the current non-GNOME dispatch, but were not clicks through the Compose Desktop UI. GNOME wallpaper interaction is explicitly waived for Phase 13 by the owner-approved exception above; no host wallpaper was changed.                                                                                                                                                                                                                           | Linux Vault selection confirmed through Compose UI; documented Xvfb/handler checks verified; GNOME wallpaper check waived                |
 | Windows Compose Desktop                                                      | [CI run 15](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37635275860) on `bebb37e` passes the Windows JVM test set and `:desktopApp:createDistributable`, and uploads the Windows x64 artifact. Runs 13 and 14 exposed path-handling issues in the new fixture-parity assertion; the final separator-normalized assertion passes on Windows. Physical-device execution remains outside this acceptance plan.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                | Windows-host tests and distributable verified; physical execution excluded                                                               |
@@ -231,8 +236,15 @@ produced the self-contained Linux release bundle. The Gradle dependency updater
 completed and its JSON output parsed successfully. No real signing key or Vault
 was used.
 
-**Still pending before Phase 14 can be marked complete:** create the
-`2.0.0b4` GitHub prerelease and successfully attach the Windows ZIP. The owner
+**Still pending before Phase 14 can be marked complete:** attach the Windows ZIP
+to the `2.0.0b4` GitHub prerelease. The public release and Android/Linux assets
+were verified on 2026-10-11, but the asset list does not include a Windows ZIP.
+Windows workflow run
+[38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
+failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`
+on its path-equality assertion; the archive and upload steps were skipped. The
+test now checks the resolved parent and filename separately, but Windows CI
+must pass and attach the archive before this gate is complete. The owner
 verified the declared AArch64 Linux Desktop build on 2026-10-09 with
 `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
 (exit status 0); the exact builder mechanism was not recorded. The previous
@@ -284,9 +296,11 @@ The `desktopApp` Compose Desktop module provides Linux and Windows/JVM entrypoin
 directory selection, private settings persistence, Rust filesystem indexing,
 index reuse on launch, an explicit rescan action, and bounded-resolution image
 display. Shared gallery tiles now load bounded image previews through the
-platform boundary. Android also extracts scaled video frames through the SAF
-read-only file descriptor on API 27 and later; older Android releases do not
-support video tile thumbnails. Linux Desktop extracts one bounded PNG frame
+platform boundary. Android extracts scaled video frames through the SAF
+read-only file descriptor on API 27 and later, with a bounded
+`getFrameAtTime` and resize fallback on older Android versions and when
+scaled-frame extraction fails. Unsupported codecs still depend on the device's
+Android media decoders. Linux Desktop extracts one bounded PNG frame
 through FFmpeg for gallery tiles. The same extractor supports Windows when an
 `ffmpeg` executable is available on `PATH`; Windows runtime behavior has not
 yet been verified. A fictional H.264 video was selected from a dedicated SAF
@@ -559,15 +573,17 @@ opening a folder picker.
 
 The maintained UI uses Compose Multiplatform Material 3 Expressive and Material
 You. Follow the official Compose Material 3 guidance for semantic color roles,
-typography, and shape theming rather than inventing per-control treatments:
+dynamic color, typography, and shape theming rather than inventing per-control treatments:
 https://developer.android.com/develop/ui/compose/designsystems/material3.
 The shared UI uses `MaterialExpressiveTheme`, the expressive `MotionScheme`,
 and the Material 3 Expressive default shape scale. When system color is off or
 unavailable, light and dark schemes are generated from the launcher's maple-leaf
-red seed (`#D0342C`) with MaterialKolor's Material You `TonalSpot` palette and
+red seed (`#D0342C`) with MaterialKolor's Material You `Expressive` palette and
 the 2025 color spec; the Material baseline purple is not used. Android 12+
-dynamic color comes from the platform roles, so Android releases that ship the
-2025 Expressive color spec supply those roles directly. Expressive components
+uses Compose Material 3's platform `dynamicLightColorScheme` and
+`dynamicDarkColorScheme` roles when system color is enabled; other platforms
+use the same Material semantic roles with their available system accent or the
+built-in seed. Expressive components
 are preferred: buttons and icon buttons use press shape-morphing `shapes`
 overloads, indeterminate loading uses `LoadingIndicator`, switches show a check
 thumb icon when on, the gallery app bar uses the title/subtitle slots, settings
@@ -622,7 +638,8 @@ without the app name. Notes and media are switched with a dropdown menu at the
 top app bar using an icon button; the switch no longer adds a second toolbar
 row. The app-bar title and count are leading-aligned. Gallery tiles
 prioritize media and show no note title or Vault path; media, memo, and related
-counts use icon badges with tonal backgrounds, and videos use an accessible
+counts use `secondaryContainer` / `onSecondaryContainer` icon badges rather
+than the error-colored default badge, and videos use an accessible
 video icon. Tiles use a 3:4 aspect ratio and at least two adaptive columns;
 users may choose an explicit column count in Settings, with zero selecting
 adaptive columns. Search, tag filters, publication/creation date, and sort
@@ -636,9 +653,14 @@ closing the sheet animates its dismissal.
 Tag filters use selectable chips with distinct selected-mode icons, and
 categories start collapsed. Expanded tags remain inside their category's
 tonal surface. Matching categories temporarily expand during tag search before
-restoring the prior expansion state. Search syntax supports `#tag` for OR,
-`+#tag` for AND, and `-#tag` to exclude a tag; the older `&#tag` AND spelling
-remains accepted. Date-field and sort-direction choices share one tonal group. Search uses a
+restoring the prior expansion state. The filter legend shows executable
+note-search terms: `#tag` includes a matching tag (OR), `+#tag` requires the
+tag (AND), and `-#tag` excludes it; the older `&#tag` AND spelling remains
+accepted. Fuzzy matching can be disabled from Filters; prefixing a word with
+`~` forces fuzzy matching for that word, while `=` requires a whole-word match.
+Unprefixed words follow the fuzzy-search setting. The setting is presented as a
+list row outside and directly below the sort surface. Date-field and sort-direction choices
+share one tonal group. Search uses a
 rounded filled field without embedded buttons; note-search and clear actions
 are right-aligned outside the field, with 56dp actions and 28dp icons to match
 the field height. Filter actions use icons, and tag-chip rows use tight vertical
@@ -691,7 +713,9 @@ links below.
 Theme changes animate every color role with the expressive slow-effects spec.
 Pure black applies only to dark mode and changes only the page `background`
 role to black. All other surfaces, selection colors, and foreground roles retain
-the current Material You scheme, including its accent. Initial Vault selection
+the current Material You scheme, including its accent. This pure-black page
+background is an app-specific dark-mode option, not a generated Material color
+role. Initial Vault selection
 uses saved appearance and system-language preferences, and exposes the settings
 screen before a Vault is selected. On launch, restore the saved Vault and open
 its session before showing the Vault picker, avoiding a picker flash for an
@@ -713,7 +737,8 @@ Navigation between the gallery, settings, and nested viewer notes uses
 Material 3 Expressive spatial/effects motion specs for its horizontal
 transitions; entering the viewer fades in place so its media is centered from
 the first displayed frame. Viewer controls and the details panel use the same expressive
-motion scheme. Android predictive-back gestures also track
+motion scheme, including animated layout expansion so the media viewport does
+not jump when the toolbar appears. Android predictive-back gestures also track
 gesture progress and move the current route for left- and right-edge swipes
 before popping the viewer stack. The viewer starts with note details visible,
 shows tags as a wrapping row of chips, and groups dates, post text, memos, and
@@ -722,10 +747,14 @@ note title, outside the date surface; profile, source-page, and copy-URL
 actions stay right-aligned in that same row. The date surface contains dates
 only. The toolbar keeps back and the title on the left and other actions on the
 right. Trackpad horizontal scroll events and touch swipes both navigate among
-media in a note. Its toolbar uses icons for fullscreen, a media-action menu,
+media in a note. its toolbar uses icons for host-window fullscreen, a media-action menu,
 and opening the note in Obsidian; the fullscreen and media-action buttons
-remain available for video. The video player itself only toggles its controls;
-its fullscreen control is a separate button in the control row. Media navigation is by swipe/keyboard rather
+remain available for video. On Android, the toolbar fullscreen action hides
+system bars; on desktop it toggles the actual operating-system window
+fullscreen state. Image taps and the video player's separate fullscreen
+control remain viewer-level fullscreen actions. The video player itself only
+toggles its controls; its fullscreen control is a separate button in the
+control row. Media navigation is by swipe/keyboard rather
 than toolbar previous/next buttons. Fullscreen has an explicit exit button and
 also exits with Escape or Android system Back. Desktop also handles Escape while
 the embedded native video canvas owns focus. Repeat is off by default and can
@@ -742,8 +771,8 @@ SAF document IDs and bounded image/video thumbnails are cached only in private
 app data and invalidated on rescan or Vault removal.
 Viewer tag chips use compact vertical spacing; date metadata uses the smaller
 body size, and clicking an image to hide details does not show a pointer
-highlight. The desktop viewer's fullscreen action maximizes the app window
-without entering operating-system fullscreen. Images support touch pinch and
+highlight. Playback-speed choices smoothly compress the lower note-details panel instead
+of shrinking the media viewport. Images support touch pinch and
 cursor-anchored Ctrl+scroll zoom; horizontal trackpad scrolling uses desktop
 wheel units and consumes one navigation per gesture, including momentum.
 The current media index/count is shown at the bottom right for multi-media notes.
@@ -874,7 +903,14 @@ rebuilding visible media placeholders during prepends. Progress appears in a can
 dialog that closes on success and remains open on failure; the target receives
 two animated outline flashes. The count range follows the visible configured page, not
 the number of items prefetched into memory. Thumbnail loading never disables
-gallery scrolling. Pull-to-refresh is disabled; use the explicit rescan action.
+gallery scrolling. Stable gallery tiles animate their placement and size as
+pages are prepended or appended; search and page requests show progress. The
+right-margin scrollbar sits in the narrow gutter between the window edge and
+tiles, appears while scrolling or dragging, and fades away after inactivity.
+Hovering its track also reveals the pill. Dragging it shows the target
+one-based item position and result count without a count suffix in a tonal
+Material 3 Expressive popup to the left of the track, sized to its content.
+Pull-to-refresh is disabled; use the explicit rescan action.
 General usage guidance is grouped under a separate Help screen rather than shown
 as a settings-only explanation.
 Within a category ordinary included tags are OR; between categories conditions
@@ -885,7 +921,9 @@ accepts `#tag` for included tags, `-#tag` for excluded tags, and `&#tag` for
 tags that must all match. Unprefixed note-search terms also match tag names,
 in addition to note titles and paths. These query tags affect gallery results
 only; they never filter the tag options shown in the filter panel. Both search
-fields support bounded typo-tolerant matching, and a non-empty tag search
+fields support bounded typo-tolerant matching; in note search `~word` forces
+fuzzy matching and `=word` matches only a complete word, regardless of the
+global fuzzy-search setting. A non-empty tag search
 expands the matching categories while preserving their prior expanded/collapsed
 state.
 Filter categories are user-configurable rules (`tagCategories` in the private
@@ -966,9 +1004,10 @@ rather than showing the smaller gallery thumbnail or a transient decode error.
 The viewer uses an animated transition between media and details. Opening
 details resets image zoom. Dates, post text, memo, and related content use
 grouped Material 3 surface containers; section headings such as Related sit
-outside their tonal content surfaces, like the tag heading. Detail-panel expansion is independent
-from scrolling its text so content scrolling does not continuously resize the
-panel; unzoomed vertical drags over media still expand or collapse it.
+outside their tonal content surfaces, like the tag heading. Detail-panel expansion responds to vertical scrolling in its content as well
+as unzoomed vertical drags over media. Inner details scrolling stops at its
+content bounds, including when the content does not overflow; a details panel
+with no scrollable overflow cannot resize itself through wheel scrolling.
 A post
 body containing only empty blockquote markers is not displayed. The appearance
 settings independently select system/light/dark brightness, use of the OS
@@ -981,10 +1020,10 @@ are supported. GTK system accent colors are the fallback; if neither source
 is available, the app palette is used. Media
 swipes, horizontal trackpad scrolling, and arrow keys
 change media with overlays shown or hidden. Pinch and zoom/pan do not toggle
-overlays. An explicit full-screen action toggles native display/window
-full-screen mode for image and video and hides the details and control overlays.
-Tapping the media, using the visible full-screen exit button, or pressing
-Escape/Android system Back returns to details and exits full-screen mode. The
+overlays. An image tap or the video player's own full-screen control toggles viewer-level
+full-screen mode and hides details and controls. Tapping the media, using the
+visible media full-screen exit button, or pressing Escape/Android system Back
+returns to details and exits viewer-level full-screen mode. The
 page counter is shown in the media
 area when not full-screen. Viewer and filter tags use consistent category
 colors and selection remains attached to stable tag identities.

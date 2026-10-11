@@ -7,12 +7,14 @@ internal fun tagOptionMatches(
     name: String,
     fullTag: String,
     query: String,
+    fuzzySearchEnabled: Boolean = true,
 ): Boolean {
     val text = "$category $name $fullTag".takeCodePoints(MAX_SEARCH_CODE_POINTS).lowercase()
     val terms = query.trim().split(WHITESPACE).filter(String::isNotEmpty)
     return terms.any { rawTerm ->
         val term = rawTerm.takeCodePoints(MAX_SEARCH_CODE_POINTS).lowercase()
         if (text.contains(term)) return@any true
+        if (!fuzzySearchEnabled) return@any false
         val tolerance = when (term.codePointCount()) {
             in 0..2 -> 0
             in 3..5 -> 1

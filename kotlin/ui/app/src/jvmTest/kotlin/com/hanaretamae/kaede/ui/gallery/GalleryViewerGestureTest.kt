@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performMouseInput
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performTouchInput
@@ -42,6 +43,7 @@ class GalleryViewerGestureTest {
     val compose = createComposeRule()
 
     private fun showViewer(
+        withLongBody: Boolean = false,
         onHolderCreated: (GalleryViewerStateHolder) -> Unit = {},
         onPlaybackOverlayVisibilityChanged: (((Boolean) -> Unit) -> Unit) = {},
     ) {
@@ -50,7 +52,9 @@ class GalleryViewerGestureTest {
         }
         val note = GalleryNoteDetail(
             NoteId(1), "fictional.md", "Fictional note", null, null, null,
-            null, null, null, emptyList(), "", emptyList(), emptyList(), media,
+            null, null, null, emptyList(),
+            if (withLongBody) "Fictional paragraph. ".repeat(300) else "",
+            emptyList(), emptyList(), media,
         )
         val repository = object : GalleryRepository {
             override suspend fun queryPage(query: GalleryQuery) =
@@ -103,7 +107,19 @@ class GalleryViewerGestureTest {
     }
 
     @Test
-    fun playbackSpeedChoicesTemporarilyMoveNoteDetailsOutOfTheWay() {
+    fun horizontalTrackpadGestureKeepsAccumulatingAcrossBriefPauses() {
+        showViewer()
+        compose.onNodeWithTag("media-area", useUnmergedTree = true).performMouseInput {
+            enter(center)
+            scroll(-1f, ScrollWheel.Horizontal)
+            advanceEventTime(350)
+            scroll(-1f, ScrollWheel.Horizontal)
+        }
+        compose.onNodeWithText("2 / 2").assertExists()
+    }
+
+    @Test
+    fun playbackSpeedChoicesDoNotResizeTheMediaArea() {
         lateinit var setPlaybackOverlayVisible: (Boolean) -> Unit
         showViewer(
             onPlaybackOverlayVisibilityChanged = { callback ->
@@ -115,15 +131,105 @@ class GalleryViewerGestureTest {
                 .fetchSemanticsNodes().isNotEmpty()
         }
         val panel = compose.onNodeWithTag("viewer-note-details")
-        val initialTop = panel.fetchSemanticsNode().boundsInRoot.top
+        val mediaArea = compose.onNodeWithTag("media-area", useUnmergedTree = true)
+        val initialMediaHeight = mediaArea
+            .fetchSemanticsNode().boundsInRoot.height
+        val initialPanelTop = panel.fetchSemanticsNode().boundsInRoot.top
 
         compose.runOnIdle { setPlaybackOverlayVisible(true) }
-        val shiftedTop = panel.fetchSemanticsNode().boundsInRoot.top
-        assertTrue(shiftedTop < initialTop, "The note details should move up for playback choices.")
+        compose.waitUntil(5_000) {
+            mediaArea.fetchSemanticsNode().boundsInRoot.height > initialMediaHeight + 1f
+        }
+        val openMediaHeight = mediaArea.fetchSemanticsNode().boundsInRoot.height
+        val openPanelTop = panel.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(
+            openMediaHeight >= initialMediaHeight,
+            "Playback choices must not shrink the media viewport.",
+        )
+        assertTrue(openPanelTop > initialPanelTop)
 
         compose.runOnIdle { setPlaybackOverlayVisible(false) }
-        val restoredTop = panel.fetchSemanticsNode().boundsInRoot.top
-        assertTrue(restoredTop >= initialTop - 1f, "The note details should return after dismissal.")
+        compose.waitUntil(5_000) {
+            mediaArea.fetchSemanticsNode().boundsInRoot.height <= initialMediaHeight + 1f
+        }
+        val restoredMediaHeight = mediaArea.fetchSemanticsNode().boundsInRoot.height
+        assertTrue(abs(restoredMediaHeight - initialMediaHeight) < 1f)
+    }
+
+    @Test
+    fun scrollingNoteDetailsAlsoResizesTheMediaArea() {
+        showViewer(withLongBody = true)
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-note-details")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val details = compose.onNodeWithTag("viewer-note-details")
+        val initialTop = details.fetchSemanticsNode().boundsInRoot.top
+        details.performMouseInput {
+            enter(center)
+            scroll(3f, ScrollWheel.Vertical)
+        }
+        compose.waitUntil(5_000) {
+            details.fetchSemanticsNode().boundsInRoot.top < initialTop
+        }
+    }
+
+    @Test
+    fun scrollingDetailsWithoutOverflowDoesNotShrinkTheImageArea() {
+        showViewer()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-note-details")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val details = compose.onNodeWithTag("viewer-note-details")
+        val mediaArea = compose.onNodeWithTag("media-area", useUnmergedTree = true)
+        val initialDetailsTop = details.fetchSemanticsNode().boundsInRoot.top
+        val initialMediaHeight = mediaArea.fetchSemanticsNode().boundsInRoot.height
+
+        details.performMouseInput {
+            enter(center)
+            scroll(8f, ScrollWheel.Vertical)
+        }
+        compose.waitForIdle()
+
+        assertTrue(
+            abs(details.fetchSemanticsNode().boundsInRoot.top - initialDetailsTop) < 1f,
+            "Details without overflowing content must not change panel size.",
+        )
+        assertTrue(
+            abs(mediaArea.fetchSemanticsNode().boundsInRoot.height - initialMediaHeight) < 1f,
+            "Scrolling an empty details panel must not shrink the image area.",
+        )
+    }
+
+    @Test
+    fun viewerToolbarAndMediaViewportEnterWithoutLayoutJump() {
+        showViewer()
+        val toolbar = compose.onNodeWithTag("viewer-details-toolbar")
+        val mediaArea = compose.onNodeWithTag("media-area", useUnmergedTree = true)
+        mediaArea.performClick()
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-details-toolbar")
+                .fetchSemanticsNodes().isEmpty()
+        }
+        compose.mainClock.autoAdvance = false
+        mediaArea.performClick()
+        compose.mainClock.advanceTimeByFrame()
+        val initialToolbarHeight = toolbar.fetchSemanticsNode().boundsInRoot.height
+        val initialMediaTop = mediaArea.fetchSemanticsNode().boundsInRoot.top
+
+        compose.mainClock.advanceTimeBy(80)
+        val intermediateToolbarHeight = toolbar.fetchSemanticsNode().boundsInRoot.height
+        val intermediateMediaTop = mediaArea.fetchSemanticsNode().boundsInRoot.top
+
+        compose.mainClock.advanceTimeBy(1_000)
+        val finalToolbarHeight = toolbar.fetchSemanticsNode().boundsInRoot.height
+        val finalMediaTop = mediaArea.fetchSemanticsNode().boundsInRoot.top
+
+        assertTrue(initialToolbarHeight < intermediateToolbarHeight)
+        assertTrue(intermediateToolbarHeight < finalToolbarHeight)
+        assertTrue(initialMediaTop < intermediateMediaTop)
+        assertTrue(intermediateMediaTop < finalMediaTop)
     }
 
     @Test

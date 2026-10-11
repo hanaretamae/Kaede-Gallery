@@ -14,13 +14,14 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,16 +34,22 @@ import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
 import androidx.compose.material3.LoadingIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -71,6 +78,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.StickyNote2
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Collections
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
@@ -83,6 +91,7 @@ import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.LocationSearching
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.VideoLibrary
@@ -96,10 +105,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.focus.FocusRequester
@@ -125,12 +140,14 @@ import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.floor
 
 private const val GALLERY_GRID_MIN_CELL_WIDTH_DP = 200f
 private const val GALLERY_GRID_HORIZONTAL_PADDING_DP = 24f
 private const val GALLERY_GRID_SPACING_DP = 12f
 private const val GALLERY_GRID_MINIMUM_COLUMN_COUNT = 2
+private const val GALLERY_SCROLLBAR_HIDE_DELAY_MILLIS = 900L
 
 internal fun galleryAdaptiveColumnCount(availableWidthDp: Float): Int {
     if (!availableWidthDp.isFinite() || availableWidthDp <= 0f) {
@@ -176,6 +193,9 @@ data class GalleryStrings(
     val applySearch: String,
     val clearAllSearchAndFilters: String,
     val filterSearch: String,
+    val fuzzySearch: String,
+    val fuzzySearchTerm: String,
+    val exactWordTerm: String,
     val loadingTags: String,
     val noTags: String,
     val includeAny: String,
@@ -194,6 +214,7 @@ data class GalleryStrings(
     val count: (Long, Long, Long) -> String,
     val totalCount: (Long) -> String,
     val optionCount: (Long) -> String,
+    val scrollbarPosition: (Long, Long) -> String,
     val virtualLabel: (VirtualFilter) -> String,
 )
 
@@ -229,6 +250,9 @@ val EnglishGalleryStrings = GalleryStrings(
     applySearch = "Search",
     clearAllSearchAndFilters = "Clear all",
     filterSearch = "Filter tags",
+    fuzzySearch = "Fuzzy search",
+    fuzzySearchTerm = "Fuzzy (~word)",
+    exactWordTerm = "Exact word (=word)",
     loadingTags = "Loading tags…",
     noTags = "No matching tags",
     includeAny = "Include (OR)",
@@ -249,6 +273,7 @@ val EnglishGalleryStrings = GalleryStrings(
     },
     totalCount = { "$it items" },
     optionCount = { "$it" },
+    scrollbarPosition = { position, total -> "$position / $total" },
     virtualLabel = ::englishVirtualLabel,
 )
 
@@ -284,6 +309,9 @@ val JapaneseGalleryStrings = GalleryStrings(
     applySearch = "検索",
     clearAllSearchAndFilters = "検索とフィルターを解除",
     filterSearch = "タグを検索",
+    fuzzySearch = "あいまい検索",
+    fuzzySearchTerm = "あいまい (~word)",
+    exactWordTerm = "単語一致 (=word)",
     loadingTags = "タグを読み込み中…",
     noTags = "一致するタグがありません",
     includeAny = "いずれかを含む",
@@ -304,6 +332,7 @@ val JapaneseGalleryStrings = GalleryStrings(
     },
     totalCount = { "$it 件" },
     optionCount = { "$it" },
+    scrollbarPosition = { position, total -> "$position / $total" },
     virtualLabel = ::japaneseVirtualLabel,
 )
 
@@ -335,7 +364,7 @@ fun GalleryScreen(
             gridState.layoutInfo.visibleItemsInfo.mapTo(mutableSetOf()) { it.index }
         }
     }
-    val coroutineScope = rememberCoroutineScope()
+    val galleryCoroutineScope = rememberCoroutineScope()
     var showFilters by remember(stateHolder) { mutableStateOf(false) }
     val filterSheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -359,12 +388,22 @@ fun GalleryScreen(
     var pendingJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
     var jumpProgressVisible by remember(stateHolder) { mutableStateOf(false) }
     var highlightedJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
+    var showScrollbar by remember(gridState) { mutableStateOf(false) }
+    var draggingScrollbar by remember(gridState) { mutableStateOf(false) }
+    val scrollbarInteractionSource = remember(gridState) { MutableInteractionSource() }
+    val hoveringScrollbar by scrollbarInteractionSource.collectIsHoveredAsState()
+    var scrollbarDragFraction by remember(gridState) { mutableStateOf<Float?>(null) }
+    val scrollbarAlpha by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (showScrollbar) 1f else 0f,
+        animationSpec = tween(180),
+        label = "galleryScrollbarAlpha",
+    )
     var visibleItemIndex by remember(stateHolder) { mutableStateOf(0) }
     var previousQuery by remember(stateHolder) { mutableStateOf(state.query) }
     val jumpFocusRequester = remember { FocusRequester() }
     fun applyNoteSearch() {
         stateHolder.setQuery(state.query.copy(searchText = noteSearchDraft))
-        coroutineScope.launch {
+        galleryCoroutineScope.launch {
             filterSheetState.hide()
             showFilters = false
         }
@@ -422,6 +461,20 @@ fun GalleryScreen(
                 firstVisibleIndex <= PREFETCH_THRESHOLD
             ) {
                 stateHolder.loadPrevious()
+            }
+        }
+    }
+    LaunchedEffect(gridState, draggingScrollbar, hoveringScrollbar) {
+        if (draggingScrollbar || hoveringScrollbar) {
+            showScrollbar = true
+        } else {
+            snapshotFlow { gridState.isScrollInProgress }.collectLatest { scrolling ->
+                if (scrolling) {
+                    showScrollbar = true
+                } else {
+                    delay(GALLERY_SCROLLBAR_HIDE_DELAY_MILLIS)
+                    showScrollbar = false
+                }
             }
         }
     }
@@ -502,11 +555,17 @@ fun GalleryScreen(
                         BadgedBox(
                             badge = {
                                 if (activeCount > 0) {
-                                    Badge { Text(activeCount.toString()) }
+                                    GalleryNumberBadge { Text(activeCount.toString()) }
                                 }
                             },
                         ) {
-                            KaedeIconButton(label = strings.filters, onClick = { showFilters = true }) {
+                            KaedeIconButton(
+                                label = strings.filters,
+                                onClick = { showFilters = true },
+                                colors = IconButtonDefaults.iconButtonColors(
+                                    disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                ),
+                            ) {
                                 Icon(Icons.Filled.FilterList, strings.filters)
                             }
                         }
@@ -518,6 +577,9 @@ fun GalleryScreen(
                                 showJumpDialog = true
                             },
                             enabled = !state.loading && (state.totalCount ?: 0L) > 0,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                         ) {
                             Icon(Icons.Filled.LocationSearching, strings.jump)
                         }
@@ -588,6 +650,9 @@ fun GalleryScreen(
                                 }
                             },
                             enabled = !state.loading && !state.rescanning,
+                            colors = IconButtonDefaults.iconButtonColors(
+                                disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                            ),
                         ) {
                             Icon(Icons.Filled.Refresh, strings.reload)
                         }
@@ -659,6 +724,9 @@ fun GalleryScreen(
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 )
             }
+            AnimatedVisibility(visible = state.searching || state.loading) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+            }
             if (state.entries.isEmpty() && !state.loading) {
                 Column(
                     modifier = Modifier.align(Alignment.CenterHorizontally).padding(24.dp),
@@ -676,47 +744,167 @@ fun GalleryScreen(
                 BoxWithConstraints(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) {
-                    LazyVerticalGrid(
-                        state = gridState,
-                        columns = if (fixedColumnCount == 0) {
-                            GridCells.Fixed(galleryAdaptiveColumnCount(maxWidth.value))
-                        } else {
-                            GridCells.Fixed(fixedColumnCount)
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
-                    itemsIndexed(
-                        items = state.entries,
-                        key = { _, entry -> entry.stableKey() },
-                    ) { index, entry ->
-                        GalleryTile(
-                            entry = entry,
-                            strings = strings,
-                            position = state.pageOffset + index + 1L,
-                            showPosition = showTilePosition,
-                            showCounts = showCounts,
-                            showMissingMediaIcon = showMissingMediaIcon,
-                            galleryThumbnail = galleryThumbnail,
-                            isVisible = index in visibleGridIndices,
-                            highlighted = highlightedJumpOffset == state.pageOffset + index,
-                            onClick = { onEntrySelected(entry) },
-                        )
-                    }
-                    if (state.error != null && state.entries.isNotEmpty()) {
-                        item(key = "load-more") {
-                            TextButton(
-                                shapes = ButtonDefaults.shapes(),
-                                onClick = stateHolder::loadMore,
-                                enabled = !state.loading,
-                            ) {
-                                Text(strings.retry)
+                    val galleryWidthDp = maxWidth.value
+                    Box(Modifier.fillMaxSize()) {
+                        LazyVerticalGrid(
+                            state = gridState,
+                            columns = if (fixedColumnCount == 0) {
+                                GridCells.Fixed(galleryAdaptiveColumnCount(galleryWidthDp))
+                            } else {
+                                GridCells.Fixed(fixedColumnCount)
+                            },
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                        ) {
+                            itemsIndexed(
+                                items = state.entries,
+                                key = { _, entry -> entry.stableKey() },
+                            ) { index, entry ->
+                                GalleryTile(
+                                    modifier = Modifier.animateItem(),
+                                    entry = entry,
+                                    strings = strings,
+                                    position = state.pageOffset + index + 1L,
+                                    showPosition = showTilePosition,
+                                    showCounts = showCounts,
+                                    showMissingMediaIcon = showMissingMediaIcon,
+                                    galleryThumbnail = galleryThumbnail,
+                                    isVisible = index in visibleGridIndices,
+                                    highlighted = highlightedJumpOffset == state.pageOffset + index,
+                                    onClick = { onEntrySelected(entry) },
+                                )
+                            }
+                            if (state.error != null && state.entries.isNotEmpty()) {
+                                item(key = "load-more") {
+                                    TextButton(
+                                        shapes = ButtonDefaults.shapes(),
+                                        onClick = stateHolder::loadMore,
+                                        enabled = !state.loading,
+                                    ) {
+                                        Text(strings.retry)
+                                    }
+                                }
                             }
                         }
+                        val visibleItems = gridState.layoutInfo.visibleItemsInfo.size
+                        val totalItems = state.totalCount?.coerceAtMost(Int.MAX_VALUE.toLong())
+                            ?.toInt() ?: 0
+                        if (totalItems > visibleItems && visibleItems > 0) {
+                            BoxWithConstraints(
+                                modifier = Modifier.align(Alignment.CenterEnd)
+                                    .fillMaxHeight()
+                                    .width(160.dp)
+                                    .zIndex(1f),
+                            ) {
+                                val trackHeight = (maxHeight - 24.dp).coerceAtLeast(32.dp)
+                                val thumbHeight = (trackHeight * visibleItems / totalItems)
+                                    .coerceIn(32.dp, trackHeight)
+                                val lastPosition = (state.totalCount?.minus(visibleItems)
+                                    ?: 0L).coerceAtLeast(1L)
+                                val currentPosition = (state.pageOffset +
+                                    gridState.firstVisibleItemIndex).coerceAtLeast(0L)
+                                val fraction = scrollbarDragFraction ?: (
+                                    currentPosition.toFloat() / lastPosition.toFloat()
+                                    ).coerceIn(0f, 1f)
+                                val thumbOffset = 12.dp + (trackHeight - thumbHeight) * fraction
+                                Box(
+                                    modifier = Modifier.align(Alignment.CenterEnd)
+                                        .fillMaxHeight()
+                                        .width(12.dp)
+                                        .padding(vertical = 12.dp)
+                                        .testTag("gallery-scrollbar-track")
+                                        .hoverable(scrollbarInteractionSource)
+                                        .pointerInput(totalItems) {
+                                            fun fractionAt(y: Float): Float =
+                                                (y / size.height).coerceIn(0f, 1f)
+
+                                            awaitEachGesture {
+                                                val down = awaitFirstDown(
+                                                    requireUnconsumed = false,
+                                                    pass = PointerEventPass.Initial,
+                                                )
+                                                draggingScrollbar = true
+                                                scrollbarDragFraction = fractionAt(down.position.y)
+                                                down.consume()
+                                                var pressed = true
+                                                while (pressed) {
+                                                    val event = awaitPointerEvent(
+                                                        PointerEventPass.Initial,
+                                                    )
+                                                    val change = event.changes.firstOrNull {
+                                                        it.id == down.id
+                                                    } ?: break
+                                                    scrollbarDragFraction =
+                                                        fractionAt(change.position.y)
+                                                    change.consume()
+                                                    pressed = change.pressed
+                                                }
+                                                scrollbarDragFraction?.let { dragFraction ->
+                                                    val last =
+                                                        (totalItems - visibleItems).coerceAtLeast(0)
+                                                    val target = (dragFraction * last).toLong()
+                                                    stateHolder.jumpTo(target + 1)
+                                                }
+                                                draggingScrollbar = false
+                                                scrollbarDragFraction = null
+                                            }
+                                        },
+                                )
+                                Box(
+                                    Modifier.align(Alignment.TopEnd)
+                                        .offset(y = thumbOffset)
+                                        .width(4.dp)
+                                        .height(thumbHeight)
+                                        .background(
+                                            MaterialTheme.colorScheme.primary.copy(
+                                                alpha = 0.72f * scrollbarAlpha,
+                                            ),
+                                            CircleShape,
+                                        ),
+                                )
+                                if (draggingScrollbar || hoveringScrollbar) {
+                                    val shownFraction =
+                                        scrollbarDragFraction ?: fraction
+                                    val targetPosition =
+                                        (shownFraction *
+                                            (totalItems - visibleItems).coerceAtLeast(0))
+                                            .toLong() + 1L
+                                    Surface(
+                                        modifier = Modifier
+                                            .zIndex(2f)
+                                            .align(Alignment.TopEnd)
+                                            .offset(
+                                                x = (-20).dp,
+                                                y = thumbOffset + thumbHeight / 2 - 20.dp,
+                                            )
+                                            .testTag("gallery-scrollbar-position"),
+                                        shape = MaterialTheme.shapes.large,
+                                        color = MaterialTheme.colorScheme.secondaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        tonalElevation = 3.dp,
+                                    ) {
+                                        Text(
+                                            strings.scrollbarPosition(
+                                                targetPosition.coerceAtMost(
+                                                    state.totalCount ?: targetPosition,
+                                                ),
+                                                state.totalCount ?: totalItems.toLong(),
+                                            ),
+                                            style = MaterialTheme.typography.labelLarge,
+                                            maxLines = 1,
+                                            modifier = Modifier.padding(
+                                                horizontal = 12.dp,
+                                                vertical = 8.dp,
+                                            ),
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                        }
                     }
-                }
             }
         }
     }
@@ -755,8 +943,8 @@ fun GalleryScreen(
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth()
-                        .heightIn(min = 72.dp)
-                        .padding(horizontal = 20.dp, vertical = 12.dp),
+                        .height(72.dp)
+                        .padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     AnimatedVisibility(
@@ -778,7 +966,7 @@ fun GalleryScreen(
                             FilledTonalIconButton(
                                 shapes = IconButtonDefaults.shapes(),
                                 onClick = {
-                                    coroutineScope.launch {
+                                    galleryCoroutineScope.launch {
                                         filterSheetState.hide()
                                         showFilters = false
                                     }
@@ -802,19 +990,70 @@ fun GalleryScreen(
                         Modifier.padding(12.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                    ConnectedChoiceGroup(
-                        options = listOf(GallerySortField.CREATED, GallerySortField.PUBLISHED),
-                        selected = state.query.sortField,
-                        label = { if (it == GallerySortField.CREATED) strings.created else strings.published },
-                        onSelect = { stateHolder.setQuery(state.query.copy(sortField = it)) },
-                    )
-                    ConnectedChoiceGroup(
-                        options = listOf(SortDirection.DESCENDING, SortDirection.ASCENDING),
-                        selected = state.query.sortDirection,
-                        label = { if (it == SortDirection.DESCENDING) strings.descending else strings.ascending },
-                        onSelect = { stateHolder.setQuery(state.query.copy(sortDirection = it)) },
-                    )
+                        ConnectedChoiceGroup(
+                            options = listOf(
+                                GallerySortField.CREATED,
+                                GallerySortField.PUBLISHED,
+                            ),
+                            selected = state.query.sortField,
+                            label = {
+                                if (it == GallerySortField.CREATED) strings.created
+                                else strings.published
+                            },
+                            onSelect = {
+                                stateHolder.setQuery(state.query.copy(sortField = it))
+                            },
+                        )
+                        ConnectedChoiceGroup(
+                            options = listOf(
+                                SortDirection.DESCENDING,
+                                SortDirection.ASCENDING,
+                            ),
+                            selected = state.query.sortDirection,
+                            label = {
+                                if (it == SortDirection.DESCENDING) strings.descending
+                                else strings.ascending
+                            },
+                            onSelect = {
+                                stateHolder.setQuery(state.query.copy(sortDirection = it))
+                            },
+                        )
                     }
+                }
+                SegmentedListItem(
+                    onClick = {
+                        stateHolder.setQuery(
+                            state.query.copy(
+                                fuzzySearchEnabled = !state.query.fuzzySearchEnabled,
+                            ),
+                            debounceSearch = true,
+                        )
+                    },
+                    shapes = ListItemDefaults.segmentedShapes(0, 1),
+                    modifier = Modifier.fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    trailingContent = {
+                        Switch(
+                            checked = state.query.fuzzySearchEnabled,
+                            onCheckedChange = null,
+                            thumbContent = if (state.query.fuzzySearchEnabled) {
+                                {
+                                    Icon(
+                                        Icons.Filled.Check,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(SwitchDefaults.IconSize),
+                                    )
+                                }
+                            } else {
+                                null
+                            },
+                        )
+                    },
+                    colors = ListItemDefaults.segmentedColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    ),
+                ) {
+                    Text(strings.fuzzySearch)
                 }
                 Row(
                     modifier = Modifier.fillMaxWidth()
@@ -898,6 +1137,37 @@ fun GalleryScreen(
                     modifier = Modifier.fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 8.dp),
                 )
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.Center,
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    listOf(
+                        Icons.Filled.Add to "${strings.includeAny} (#tag)",
+                        Icons.Filled.DoneAll to "${strings.includeAll} (+#tag)",
+                        Icons.Filled.Remove to "${strings.exclude} (-#tag)",
+                        Icons.Filled.Search to strings.fuzzySearchTerm,
+                        Icons.Filled.Check to strings.exactWordTerm,
+                    ).forEach { (icon, label) ->
+                        Row(
+                            modifier = Modifier.padding(horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Icon(
+                                icon,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                label,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                }
                 state.categoriesError?.let {
                     Text(
                         strings.error(it),
@@ -933,6 +1203,7 @@ fun GalleryScreen(
                                             name = label,
                                             fullTag = option.fullTag,
                                             query = tagFilterSearch,
+                                            fuzzySearchEnabled = state.query.fuzzySearchEnabled,
                                         )
                                     )
                             }
@@ -1104,7 +1375,6 @@ fun GalleryScreen(
         )
     }
 }
-}
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -1164,16 +1434,21 @@ private fun FilterOption(
 
 @Composable
 private fun FilterCountBadge(count: String) {
+    GalleryNumberBadge { Text(count) }
+}
+
+@Composable
+private fun GalleryNumberBadge(content: @Composable RowScope.() -> Unit) {
     Badge(
         containerColor = MaterialTheme.colorScheme.secondaryContainer,
         contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-    ) {
-        Text(count)
-    }
+        content = content,
+    )
 }
 
 @Composable
 private fun GalleryTile(
+    modifier: Modifier = Modifier,
     entry: GalleryEntry,
     strings: GalleryStrings,
     position: Long,
@@ -1198,6 +1473,7 @@ private fun GalleryTile(
     }
     val shape = MaterialTheme.shapes.large
     Card(
+        modifier = modifier.animateContentSize(tween(220)),
         onClick = onClick,
         colors = CardDefaults.cardColors(
             containerColor = androidx.compose.ui.graphics.lerp(
@@ -1308,7 +1584,7 @@ private fun GalleryCountBadge(
     count: Long,
     description: String,
 ) {
-    BadgedBox(badge = { Badge { Text(count.toString()) } }) {
+    BadgedBox(badge = { GalleryNumberBadge { Text(count.toString()) } }) {
         Surface(
             shape = CircleShape,
             color = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = 0.92f),

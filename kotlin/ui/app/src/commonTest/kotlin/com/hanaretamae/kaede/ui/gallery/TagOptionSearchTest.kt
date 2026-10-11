@@ -17,4 +17,17 @@ class TagOptionSearchTest {
         val longQuery = "x".repeat(256)
         assertFalse(tagOptionMatches("tag", "label", "tag/label", longQuery))
     }
+
+    @Test
+    fun fuzzySearchCanBeDisabled() {
+        assertFalse(
+            tagOptionMatches(
+                "Source",
+                "Illustration",
+                "source/illustration",
+                "illustraton",
+                fuzzySearchEnabled = false,
+            ),
+        )
+    }
 }

@@ -92,6 +92,7 @@ impl From<VirtualFilter> for CoreVirtualFilter {
 pub struct GalleryQuery {
     pub content: GalleryContent,
     pub search_text: String,
+    pub fuzzy_search: bool,
     pub include_tags: Vec<String>,
     pub and_tags: Vec<String>,
     pub excluded_tags: Vec<String>,
@@ -631,13 +632,14 @@ impl GallerySession {
         let (notes, media, count) = match query.content {
             GalleryContent::Notes => {
                 let notes = gallery
-                    .query_filtered_page_search_with_all_and_sort(
+                    .query_filtered_page_search_with_all_and_sort_fuzzy(
                         &query.include_tags,
                         &query.and_tags,
                         &query.excluded_tags,
                         &virtual_filters,
                         &query.search_text,
                         sort,
+                        query.fuzzy_search,
                         offset,
                         limit,
                     )
@@ -646,25 +648,27 @@ impl GallerySession {
                     .map(to_note_summary)
                     .collect();
                 let count = gallery
-                    .count_filtered_notes_with_all(
+                    .count_filtered_notes_with_all_fuzzy(
                         &query.include_tags,
                         &query.and_tags,
                         &query.excluded_tags,
                         &virtual_filters,
                         &query.search_text,
+                        query.fuzzy_search,
                     )
                     .map_err(GalleryError::from)?;
                 (notes, Vec::new(), count)
             }
             GalleryContent::Media => {
                 let media = gallery
-                    .query_media_filtered_page_search_with_all_and_sort(
+                    .query_media_filtered_page_search_with_all_and_sort_fuzzy(
                         &query.include_tags,
                         &query.and_tags,
                         &query.excluded_tags,
                         &virtual_filters,
                         &query.search_text,
                         sort,
+                        query.fuzzy_search,
                         offset,
                         limit,
                     )
@@ -673,12 +677,13 @@ impl GallerySession {
                     .map(to_media_summary)
                     .collect();
                 let count = gallery
-                    .count_filtered_media_with_all(
+                    .count_filtered_media_with_all_fuzzy(
                         &query.include_tags,
                         &query.and_tags,
                         &query.excluded_tags,
                         &virtual_filters,
                         &query.search_text,
+                        query.fuzzy_search,
                     )
                     .map_err(GalleryError::from)?;
                 (Vec::new(), media, count)
@@ -956,6 +961,7 @@ mod tests {
             .query_page(GalleryQuery {
                 content: GalleryContent::Notes,
                 search_text: "Fictional".to_owned(),
+                fuzzy_search: true,
                 include_tags: Vec::new(),
                 and_tags: Vec::new(),
                 excluded_tags: Vec::new(),
@@ -1001,6 +1007,7 @@ mod tests {
         let result = session.query_page(GalleryQuery {
             content: GalleryContent::Notes,
             search_text: String::new(),
+            fuzzy_search: true,
             include_tags: Vec::new(),
             and_tags: Vec::new(),
             excluded_tags: Vec::new(),
@@ -1082,6 +1089,7 @@ mod tests {
             .query_page(GalleryQuery {
                 content: GalleryContent::Notes,
                 search_text: "Fictional SAF".to_owned(),
+                fuzzy_search: true,
                 include_tags: Vec::new(),
                 and_tags: Vec::new(),
                 excluded_tags: Vec::new(),

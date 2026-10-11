@@ -394,10 +394,7 @@ class AndroidSafVaultScanner(context: Context) {
         relativePath: String,
         maxDimension: Int,
     ): Bitmap? {
-        if (
-            Build.VERSION.SDK_INT < Build.VERSION_CODES.O_MR1 ||
-            maxDimension !in 1..MAX_IMAGE_DIMENSION
-        ) {
+        if (maxDimension !in 1..MAX_IMAGE_DIMENSION) {
             return null
         }
         val key = thumbnailCacheKey("video", treeUri, relativePath, maxDimension)
@@ -500,8 +497,20 @@ class AndroidSafVaultScanner(context: Context) {
             val durationMs = retriever.extractMetadata(
                 MediaMetadataRetriever.METADATA_KEY_DURATION,
             )?.toLongOrNull()?.coerceIn(0L, MAX_VIDEO_DURATION_MILLIS)
+            val sourceWidth = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_WIDTH,
+            )?.toIntOrNull()
+            val sourceHeight = retriever.extractMetadata(
+                MediaMetadataRetriever.METADATA_KEY_VIDEO_HEIGHT,
+            )?.toIntOrNull()
+            val canDecodeBoundedFallback = sourceWidth != null &&
+                sourceHeight != null &&
+                sourceWidth in 1..MAX_IMAGE_DIMENSION &&
+                sourceHeight in 1..MAX_IMAGE_DIMENSION &&
+                sourceWidth.toLong() * sourceHeight <= MAX_IMAGE_PIXELS
             val timestamps = buildList {
                 add(0L)
+                add(100_000L)
                 add(1_000_000L)
                 add(-1L)
                 durationMs?.let { duration ->
@@ -514,18 +523,56 @@ class AndroidSafVaultScanner(context: Context) {
                     MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
                     MediaMetadataRetriever.OPTION_CLOSEST,
                 ).firstNotNullOfOrNull { option ->
-                    try {
-                        retriever.getScaledFrameAtTime(
-                            timestamp,
-                            option,
-                            maxDimension,
-                            maxDimension,
-                        )
-                    } catch (_: IllegalArgumentException) {
+                    val scaled = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        try {
+                            retriever.getScaledFrameAtTime(
+                                timestamp,
+                                option,
+                                maxDimension,
+                                maxDimension,
+                            )
+                        } catch (_: IllegalArgumentException) {
+                            null
+                        } catch (_: IllegalStateException) {
+                            null
+                        } catch (_: UnsupportedOperationException) {
+                            null
+                        }
+                    } else {
                         null
-                    } catch (_: IllegalStateException) {
-                        null
-                    } catch (_: UnsupportedOperationException) {
+                    }
+                    scaled ?: if (canDecodeBoundedFallback) {
+                        val frame = try {
+                            retriever.getFrameAtTime(timestamp, option)
+                        } catch (_: IllegalArgumentException) {
+                            null
+                        } catch (_: IllegalStateException) {
+                            null
+                        } ?: return@firstNotNullOfOrNull null
+                        if (
+                            frame.width !in 1..MAX_IMAGE_DIMENSION ||
+                            frame.height !in 1..MAX_IMAGE_DIMENSION ||
+                            frame.width.toLong() * frame.height > MAX_IMAGE_PIXELS
+                        ) {
+                            frame.recycle()
+                            null
+                        } else {
+                            val scale = minOf(
+                                1f,
+                                maxDimension.toFloat() / frame.width,
+                                maxDimension.toFloat() / frame.height,
+                            )
+                            val width = (frame.width * scale).toInt().coerceAtLeast(1)
+                            val height = (frame.height * scale).toInt().coerceAtLeast(1)
+                            if (width == frame.width && height == frame.height) {
+                                frame
+                            } else {
+                                Bitmap.createScaledBitmap(frame, width, height, true).also {
+                                    frame.recycle()
+                                }
+                            }
+                        }
+                    } else {
                         null
                     }
                 }

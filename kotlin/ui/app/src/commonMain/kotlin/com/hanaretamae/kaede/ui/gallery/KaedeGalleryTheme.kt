@@ -34,13 +34,31 @@ internal fun kaedeFallbackColorScheme(darkTheme: Boolean): ColorScheme =
     seededColorScheme(
         seedColor = KaedeSeedColor,
         isDark = darkTheme,
-        style = PaletteStyle.TonalSpot,
+        style = PaletteStyle.Expressive,
         specVersion = ColorSpec.SpecVersion.SPEC_2025,
     )
 
 internal fun pureBlackColorScheme(baseScheme: ColorScheme): ColorScheme = baseScheme.copy(
     background = Color.Black,
 )
+
+internal fun resolveKaedeColorScheme(
+    appearance: AppearanceSettings,
+    darkTheme: Boolean,
+    systemColorScheme: ColorScheme?,
+    fallbackColorScheme: ColorScheme,
+): ColorScheme {
+    val baseScheme = if (appearance.useSystemColor) {
+        systemColorScheme ?: fallbackColorScheme
+    } else {
+        fallbackColorScheme
+    }
+    return if (darkTheme && appearance.pureBlack) {
+        pureBlackColorScheme(baseScheme)
+    } else {
+        baseScheme
+    }
+}
 
 @Composable
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -55,10 +73,13 @@ fun KaedeGalleryTheme(
         ThemePreference.LIGHT -> false
         ThemePreference.DARK -> true
     }
-    val systemScheme = dynamicColorScheme.takeIf { appearance.useSystemColor }
-    val baseScheme = systemScheme ?: remember(darkTheme) { kaedeFallbackColorScheme(darkTheme) }
-    val colorScheme =
-        if (darkTheme && appearance.pureBlack) pureBlackColorScheme(baseScheme) else baseScheme
+    val fallbackScheme = remember(darkTheme) { kaedeFallbackColorScheme(darkTheme) }
+    val colorScheme = resolveKaedeColorScheme(
+        appearance = appearance,
+        darkTheme = darkTheme,
+        systemColorScheme = dynamicColorScheme,
+        fallbackColorScheme = fallbackScheme,
+    )
 
     val animatedScheme = animateColorScheme(colorScheme)
     val googleSansFlexFontFamily = FontFamily(
@@ -151,5 +172,17 @@ private fun animateColorScheme(target: ColorScheme): ColorScheme {
         surfaceContainerHighest = animate(target.surfaceContainerHighest),
         surfaceContainerLow = animate(target.surfaceContainerLow),
         surfaceContainerLowest = animate(target.surfaceContainerLowest),
+        primaryFixed = animate(target.primaryFixed),
+        primaryFixedDim = animate(target.primaryFixedDim),
+        onPrimaryFixed = animate(target.onPrimaryFixed),
+        onPrimaryFixedVariant = animate(target.onPrimaryFixedVariant),
+        secondaryFixed = animate(target.secondaryFixed),
+        secondaryFixedDim = animate(target.secondaryFixedDim),
+        onSecondaryFixed = animate(target.onSecondaryFixed),
+        onSecondaryFixedVariant = animate(target.onSecondaryFixedVariant),
+        tertiaryFixed = animate(target.tertiaryFixed),
+        tertiaryFixedDim = animate(target.tertiaryFixedDim),
+        onTertiaryFixed = animate(target.onTertiaryFixed),
+        onTertiaryFixedVariant = animate(target.onTertiaryFixedVariant),
     )
 }

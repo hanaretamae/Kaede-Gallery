@@ -257,12 +257,12 @@ class GalleryViewerScreenTest {
     @Test
     fun detailPanelExpandsWithScrollAndKeepsMediaVisible() {
         assertEquals(0.4f, galleryViewerDetailsPanelFraction(0), 0.001f)
-        assertEquals(0.61f, galleryViewerDetailsPanelFraction(110), 0.001f)
-        assertEquals(0.82f, galleryViewerDetailsPanelFraction(220), 0.001f)
-        assertEquals(0.82f, galleryViewerDetailsPanelFraction(440), 0.001f)
+        assertEquals(0.65f, galleryViewerDetailsPanelFraction(110), 0.001f)
+        assertEquals(0.9f, galleryViewerDetailsPanelFraction(220), 0.001f)
+        assertEquals(0.9f, galleryViewerDetailsPanelFraction(440), 0.001f)
         assertEquals(0.4f, galleryViewerDetailsPanelFraction(-10), 0.001f)
-        assertEquals(0.61f, galleryViewerDetailsPanelFraction(330, 660f), 0.001f)
-        assertEquals(0.82f, galleryViewerDetailsPanelFraction(660, 660f), 0.001f)
+        assertEquals(0.65f, galleryViewerDetailsPanelFraction(330, 660f), 0.001f)
+        assertEquals(0.9f, galleryViewerDetailsPanelFraction(660, 660f), 0.001f)
     }
 
     @Test

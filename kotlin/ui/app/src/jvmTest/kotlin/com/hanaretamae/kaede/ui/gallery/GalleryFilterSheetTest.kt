@@ -136,6 +136,11 @@ class GalleryFilterSheetTest {
             swipe(center, center - Offset(0f, 450f), durationMillis = 500)
         }
         compose.onNodeWithContentDescription(strings.close).assertIsDisplayed()
+        val closeBounds = compose.onNodeWithContentDescription(strings.close)
+            .fetchSemanticsNode().boundsInRoot
+        val headingBounds = compose.onNodeWithText(strings.filters)
+            .fetchSemanticsNode().boundsInRoot
+        assertEquals(closeBounds.center.y, headingBounds.center.y, 2f)
         val expandedBounds = compose.onNodeWithTag("GalleryFilterSheet").fetchSemanticsNode().boundsInRoot
         assertEquals(windowWidth, expandedBounds.width, 1f)
         assertEquals(0f, expandedBounds.left, 1f)
@@ -157,6 +162,15 @@ class GalleryFilterSheetTest {
         assertTrue(clearAction.right < windowWidth)
         assertTrue(searchAction.top < searchField.bottom)
         assertTrue(clearAction.left > searchAction.left)
+        val fuzzySearchBounds = compose.onNodeWithText(strings.fuzzySearch)
+            .fetchSemanticsNode().boundsInRoot
+        compose.onNodeWithText(strings.fuzzySearchTerm).assertIsDisplayed()
+        compose.onNodeWithText(strings.exactWordTerm).assertIsDisplayed()
+        assertTrue(fuzzySearchBounds.top > sortSurface.bottom)
+        val descendingBounds = compose.onNodeWithText(strings.descending)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(fuzzySearchBounds.top > descendingBounds.bottom)
+        assertTrue(fuzzySearchBounds.bottom < searchField.top)
         compose.onNodeWithText(strings.filters).performTouchInput {
             swipe(center, center + Offset(0f, 180f), durationMillis = 1_000)
         }

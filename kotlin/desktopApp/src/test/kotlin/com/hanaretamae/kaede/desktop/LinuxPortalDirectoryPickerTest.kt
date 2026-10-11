@@ -180,7 +180,10 @@ class LinuxPortalDirectoryPickerTest {
         try {
             assertEquals(file.toRealPath(), resolvePortalRegularFile(file.toUri()))
             assertNull(resolvePortalRegularFile(directory.toUri()))
-            assertEquals(newFile, resolvePortalSaveFile(newFile.toUri()))
+            val resolvedNewFile = assertNotNull(resolvePortalSaveFile(newFile.toUri()))
+            assertEquals(newFile.fileName.toString(), resolvedNewFile.fileName.toString())
+            assertEquals(directory.toRealPath(), resolvedNewFile.parent.toRealPath())
+            assertFalse(Files.exists(resolvedNewFile))
             assertEquals(file.toRealPath(), resolvePortalSaveFile(file.toUri()))
             assertNull(resolvePortalSaveFile(java.net.URI("https://example.invalid/settings")))
         } finally {
