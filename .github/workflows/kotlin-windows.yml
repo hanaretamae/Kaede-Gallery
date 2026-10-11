@@ -17,8 +17,10 @@ jobs:
       matrix:
         include:
           - arch: x64
+            java_distribution: ${{ matrix.java_distribution }}
             runner: windows-latest
           - arch: arm64
+            java_distribution: microsoft
             runner: windows-11-arm
     steps:
       - uses: actions/checkout@v5

@@ -20,11 +20,13 @@ jobs:
       matrix:
         include:
           - arch: x64
+            java_distribution: ${{ matrix.java_distribution }}
             runner: windows-latest
             media_arch: x86_64
             mpv_sha256: 769a9bb120b35aad20c25ae502c44ed8f59b4e607fcbc7f6cdde61f98dceabaf
             ffmpeg_sha256: 417681c7e000d2fb3d25d3403bd02d542a34fdb0d35a708f22b98750668b94c5
           - arch: arm64
+            java_distribution: microsoft
             runner: windows-11-arm
             media_arch: aarch64
             mpv_sha256: b40be5bfc5ac5ac2f7086f1a1c3ec26e9fccebb1f6f20c3be6c9a56de7e33826

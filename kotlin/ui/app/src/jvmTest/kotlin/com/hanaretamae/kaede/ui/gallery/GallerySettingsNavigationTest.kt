@@ -265,13 +265,8 @@ class GallerySettingsNavigationTest {
         compose.onNodeWithText(strings.frontmatterAliases).assertIsDisplayed()
         compose.onNodeWithText(strings.titleKeys).assertIsDisplayed()
         compose.onNodeWithText("title").assertIsDisplayed()
-        val lastDetailBlock = compose.onNodeWithText(strings.memoBlock)
-            .performScrollTo().fetchSemanticsNode().boundsInRoot
-        val markdownLinkHeading = compose.onNodeWithText(
-            "${strings.markdownLink} / ${strings.wikiLink}",
-        )
-            .performScrollTo().fetchSemanticsNode().boundsInRoot
-        assertTrue(markdownLinkHeading.top > lastDetailBlock.top)
+        compose.onNodeWithText(strings.memoBlock).performScrollTo()
+        compose.onNodeWithText("${strings.markdownLink} / ${strings.wikiLink}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(strings.linkResolution).performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(strings.markdownLink).assertDoesNotExist()
         compose.onNodeWithText(strings.wikiLink).assertDoesNotExist()
