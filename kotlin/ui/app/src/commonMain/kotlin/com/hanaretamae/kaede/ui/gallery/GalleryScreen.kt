@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
@@ -96,6 +97,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -106,6 +108,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.hoverable
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.pointer.pointerInput
@@ -385,6 +389,7 @@ fun GalleryScreen(
     var pendingJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
     var jumpProgressVisible by remember(stateHolder) { mutableStateOf(false) }
     var highlightedJumpOffset by remember(stateHolder) { mutableStateOf<Long?>(null) }
+    var jumpHighlightRevision by remember(stateHolder) { mutableIntStateOf(0) }
     var showScrollbar by remember(gridState) { mutableStateOf(false) }
     var draggingScrollbar by remember(gridState) { mutableStateOf(false) }
     val scrollbarInteractionSource = remember(gridState) { MutableInteractionSource() }
@@ -489,6 +494,7 @@ fun GalleryScreen(
                     pendingJumpOffset = null
                     jumpProgressVisible = false
                     highlightedJumpOffset = targetOffset
+                    jumpHighlightRevision++
                     delay(JUMP_HIGHLIGHT_MILLIS)
                     if (highlightedJumpOffset == targetOffset) {
                         highlightedJumpOffset = null
@@ -575,7 +581,8 @@ fun GalleryScreen(
                                 positionError = false
                                 showJumpDialog = true
                             },
-                            enabled = !state.loading && (state.totalCount ?: 0L) > 0,
+                            enabled = !state.loading && !state.searching &&
+                                (state.totalCount ?: 0L) > 0,
                             colors = IconButtonDefaults.iconButtonColors(
                                 disabledContentColor = MaterialTheme.colorScheme.onSurfaceVariant,
                             ),
@@ -744,14 +751,15 @@ fun GalleryScreen(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                 ) {
                     val galleryWidthDp = maxWidth.value
+                    val columnCount = if (fixedColumnCount == 0) {
+                        galleryAdaptiveColumnCount(galleryWidthDp)
+                    } else {
+                        fixedColumnCount
+                    }
                     Box(Modifier.fillMaxSize()) {
                         LazyVerticalGrid(
                             state = gridState,
-                            columns = if (fixedColumnCount == 0) {
-                                GridCells.Fixed(galleryAdaptiveColumnCount(galleryWidthDp))
-                            } else {
-                                GridCells.Fixed(fixedColumnCount)
-                            },
+                            columns = GridCells.Fixed(columnCount),
                             modifier = Modifier.fillMaxSize(),
                             contentPadding = PaddingValues(12.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -771,6 +779,7 @@ fun GalleryScreen(
                                     galleryThumbnail = galleryThumbnail,
                                     isVisible = index in visibleGridIndices,
                                     highlighted = highlightedJumpOffset == state.pageOffset + index,
+                                    highlightRevision = jumpHighlightRevision,
                                     onClick = { onEntrySelected(entry) },
                                 )
                             }
@@ -786,9 +795,17 @@ fun GalleryScreen(
                                 }
                             }
                         }
-                        val visibleItems = gridState.layoutInfo.visibleItemsInfo.size
+                        val visibleItemsInfo = gridState.layoutInfo.visibleItemsInfo.filter {
+                            it.index < state.entries.size
+                        }
+                        val visibleRows = visibleItemsInfo.map { it.offset.y }.distinct().size
                         val totalItems = state.totalCount ?: 0L
-                        if (totalItems > visibleItems && visibleItems > 0) {
+                        val totalRows = if (totalItems == 0L) {
+                            0L
+                        } else {
+                            (totalItems - 1) / columnCount + 1
+                        }
+                        if (totalRows > visibleRows && visibleRows > 0 && !state.searching) {
                             BoxWithConstraints(
                                 modifier = Modifier.align(Alignment.CenterEnd)
                                     .fillMaxHeight()
@@ -797,13 +814,30 @@ fun GalleryScreen(
                             ) {
                                 val trackHeight = (maxHeight - 24.dp).coerceAtLeast(32.dp)
                                 val thumbHeight = (trackHeight *
-                                    (visibleItems.toDouble() / totalItems.toDouble()).toFloat())
+                                    (visibleRows.toDouble() / totalRows.toDouble()).toFloat())
                                     .coerceIn(32.dp, trackHeight)
-                                val lastPosition = (totalItems - visibleItems).coerceAtLeast(1L)
+                                val lastPosition = (totalRows - visibleRows).coerceAtLeast(1L) *
+                                    columnCount
                                 val currentPosition = (state.pageOffset +
                                     gridState.firstVisibleItemIndex).coerceAtLeast(0L)
-                                val fraction = scrollbarDragFraction
-                                    ?: galleryScrollbarFraction(currentPosition, lastPosition)
+                                val firstVisibleItem = visibleItemsInfo.firstOrNull()
+                                val withinRowFraction = firstVisibleItem?.size?.height
+                                    ?.takeIf { it > 0 }
+                                    ?.let {
+                                        gridState.firstVisibleItemScrollOffset.toFloat() / it
+                                    } ?: 0f
+                                val targetFraction = galleryScrollbarFraction(
+                                    currentPosition = currentPosition,
+                                    lastPosition = lastPosition,
+                                    scrollOffsetFraction = withinRowFraction,
+                                    itemsPerRow = columnCount,
+                                )
+                                val animatedFraction by animateFloatAsState(
+                                    targetValue = targetFraction,
+                                    animationSpec = spring(stiffness = 700f),
+                                    label = "galleryScrollbarPosition",
+                                )
+                                val fraction = scrollbarDragFraction ?: animatedFraction
                                 val thumbOffset = 12.dp + (trackHeight - thumbHeight) * fraction
                                 Box(
                                     modifier = Modifier.align(Alignment.CenterEnd)
@@ -812,39 +846,58 @@ fun GalleryScreen(
                                         .padding(vertical = 12.dp)
                                         .testTag("gallery-scrollbar-track")
                                         .hoverable(scrollbarInteractionSource)
-                                        .pointerInput(totalItems) {
+                                        .pointerInput(
+                                            totalItems,
+                                            visibleRows,
+                                            columnCount,
+                                            state.loading,
+                                            state.searching,
+                                        ) {
+                                            if (state.loading || state.searching) {
+                                                return@pointerInput
+                                            }
                                             fun fractionAt(y: Float): Float =
                                                 (y / size.height).coerceIn(0f, 1f)
 
-                                            awaitEachGesture {
-                                                val down = awaitFirstDown(
-                                                    requireUnconsumed = false,
-                                                    pass = PointerEventPass.Initial,
-                                                )
-                                                draggingScrollbar = true
-                                                scrollbarDragFraction = fractionAt(down.position.y)
-                                                down.consume()
-                                                var pressed = true
-                                                while (pressed) {
-                                                    val event = awaitPointerEvent(
-                                                        PointerEventPass.Initial,
+                                            try {
+                                                awaitEachGesture {
+                                                    val down = awaitFirstDown(
+                                                        requireUnconsumed = false,
+                                                        pass = PointerEventPass.Initial,
                                                     )
-                                                    val change = event.changes.firstOrNull {
-                                                        it.id == down.id
-                                                    } ?: break
+                                                    draggingScrollbar = true
                                                     scrollbarDragFraction =
-                                                        fractionAt(change.position.y)
-                                                    change.consume()
-                                                    pressed = change.pressed
+                                                        fractionAt(down.position.y)
+                                                    down.consume()
+                                                    var pressed = true
+                                                    while (pressed) {
+                                                        val event = awaitPointerEvent(
+                                                            PointerEventPass.Initial,
+                                                        )
+                                                        val change = event.changes.firstOrNull {
+                                                            it.id == down.id
+                                                        } ?: break
+                                                        scrollbarDragFraction =
+                                                            fractionAt(change.position.y)
+                                                        change.consume()
+                                                        pressed = change.pressed
+                                                    }
+                                                    scrollbarDragFraction?.let { dragFraction ->
+                                                        val target = galleryScrollbarPosition(
+                                                            dragFraction,
+                                                            totalItems,
+                                                            visibleRows,
+                                                            columnCount,
+                                                            visibleRows,
+                                                        )
+                                                        pendingJumpOffset = target
+                                                        jumpHighlightRevision++
+                                                        stateHolder.jumpTo(target + 1)
+                                                    }
+                                                    draggingScrollbar = false
+                                                    scrollbarDragFraction = null
                                                 }
-                                                scrollbarDragFraction?.let { dragFraction ->
-                                                    val target = galleryScrollbarPosition(
-                                                        dragFraction,
-                                                        totalItems,
-                                                        visibleItems,
-                                                    )
-                                                    stateHolder.jumpTo(target + 1)
-                                                }
+                                            } finally {
                                                 draggingScrollbar = false
                                                 scrollbarDragFraction = null
                                             }
@@ -869,7 +922,9 @@ fun GalleryScreen(
                                         galleryScrollbarPosition(
                                             shownFraction,
                                             totalItems,
-                                            visibleItems,
+                                            visibleRows,
+                                            columnCount,
+                                            visibleRows,
                                         ) + 1L
                                     Surface(
                                         modifier = Modifier
@@ -1307,11 +1362,13 @@ fun GalleryScreen(
                             positionError = true
                         } else {
                             pendingJumpOffset = position - 1
+                            jumpHighlightRevision++
                             jumpProgressVisible = true
                             showJumpDialog = false
                             stateHolder.jumpTo(position)
                         }
                     },
+                    enabled = !state.loading && !state.searching,
                 ) { Text(strings.jump) }
             },
             dismissButton = {
@@ -1345,7 +1402,17 @@ private const val PREFETCH_THRESHOLD = 4
 private const val JUMP_HIGHLIGHT_MILLIS = 900L
 
 internal fun galleryScrollbarFraction(currentPosition: Long, lastPosition: Long): Float =
-    (currentPosition.toDouble() / lastPosition.coerceAtLeast(1L).toDouble())
+    galleryScrollbarFraction(currentPosition, lastPosition, 0f, 1)
+
+internal fun galleryScrollbarFraction(
+    currentPosition: Long,
+    lastPosition: Long,
+    scrollOffsetFraction: Float,
+    itemsPerRow: Int,
+): Float =
+    ((currentPosition.toDouble() +
+        scrollOffsetFraction.coerceIn(0f, 1f).toDouble() * itemsPerRow.coerceAtLeast(1)) /
+        lastPosition.coerceAtLeast(1L).toDouble())
         .toFloat()
         .coerceIn(0f, 1f)
 
@@ -1353,9 +1420,25 @@ internal fun galleryScrollbarPosition(
     fraction: Float,
     totalItems: Long,
     visibleItems: Int,
+    itemsPerRow: Int = 1,
+    visibleRows: Int = visibleItems,
 ): Long {
-    val lastPosition = (totalItems - visibleItems).coerceAtLeast(0L)
-    return (fraction.coerceIn(0f, 1f).toDouble() * lastPosition.toDouble()).toLong()
+    val columnCount = itemsPerRow.coerceAtLeast(1)
+    val totalRows = if (totalItems == 0L) {
+        0L
+    } else {
+        (totalItems - 1) / columnCount + 1
+    }
+    val lastRow = (totalRows - visibleRows.coerceAtLeast(0)).coerceAtLeast(0L)
+    val maximumPosition = (totalItems - 1).coerceAtLeast(0L)
+    val lastPosition = if (lastRow > maximumPosition / columnCount) {
+        maximumPosition
+    } else {
+        lastRow * columnCount
+    }
+    return (
+        fraction.coerceIn(0f, 1f).toDouble() * lastPosition.toDouble()
+        ).toLong()
 }
 
 @Composable
@@ -1418,11 +1501,13 @@ private fun GalleryTile(
     galleryThumbnail: @Composable (MediaId, Boolean, Boolean) -> Unit,
     isVisible: Boolean,
     highlighted: Boolean,
+    highlightRevision: Int,
     onClick: () -> Unit,
 ) {
     val blinkAlpha = remember { Animatable(0f) }
-    LaunchedEffect(highlighted) {
+    LaunchedEffect(highlighted, highlightRevision) {
         if (highlighted) {
+            blinkAlpha.snapTo(0f)
             repeat(2) {
                 blinkAlpha.animateTo(1f, tween(durationMillis = 180))
                 blinkAlpha.animateTo(0f, tween(durationMillis = 180))
@@ -1433,7 +1518,13 @@ private fun GalleryTile(
     }
     val shape = MaterialTheme.shapes.large
     Card(
-        modifier = modifier.animateContentSize(tween(220)),
+        modifier = modifier
+            .animateContentSize(tween(220))
+            .border(
+                width = 2.dp,
+                color = MaterialTheme.colorScheme.primary.copy(alpha = blinkAlpha.value),
+                shape = shape,
+            ),
         onClick = onClick,
         colors = CardDefaults.cardColors(
             containerColor = androidx.compose.ui.graphics.lerp(

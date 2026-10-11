@@ -157,7 +157,7 @@ class GalleryStateHolder(
     }
 
     fun jumpTo(position: Long) {
-        if (position < 1 || mutableState.value.loading) return
+        if (position < 1 || mutableState.value.loading || mutableState.value.searching) return
         val offset = position - 1
         val totalCount = mutableState.value.totalCount
         if (totalCount != null && offset >= totalCount) {

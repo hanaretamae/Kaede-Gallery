@@ -691,43 +691,7 @@ fun GalleryViewerScreen(
                                     modifier = Modifier.fillMaxWidth()
                                         .height(detailsPanelHeight)
                                         .zIndex(1f)
-                                        .pointerInput(
-                                            presentation.value.detailsVisible,
-                                            presentation.value.fullscreen,
-                                        ) {
-                                            if (
-                                                !presentation.value.detailsVisible ||
-                                                presentation.value.fullscreen
-                                            ) {
-                                                return@pointerInput
-                                            }
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent(
-                                                        PointerEventPass.Initial,
-                                                    )
-                                                    if (event.type != PointerEventType.Scroll) {
-                                                        continue
-                                                    }
-                                                    val change = event.changes.firstOrNull()
-                                                        ?: continue
-                                                    val deltaY = change.scrollDelta.y
-                                                    if (
-                                                        detailsScrollState.maxValue > 0 &&
-                                                        abs(deltaY) > abs(change.scrollDelta.x) &&
-                                                        (
-                                                            (deltaY > 0f &&
-                                                                detailsScrollState.canScrollForward) ||
-                                                                (deltaY < 0f &&
-                                                                    detailsScrollState.canScrollBackward)
-                                                            )
-                                                    ) {
-                                                        changeDetailsPanelExpansion(deltaY)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        .viewerDetailsVerticalDrag(
+                                        .viewerDetailsPanelExpansion(
                                             enabled = presentation.value.detailsVisible &&
                                                 !presentation.value.fullscreen,
                                             scrollState = detailsScrollState,
@@ -1152,43 +1116,7 @@ fun GalleryViewerScreen(
                                     modifier = Modifier.fillMaxWidth()
                                         .height(detailsPanelHeight)
                                         .zIndex(1f)
-                                        .pointerInput(
-                                            presentation.value.detailsVisible,
-                                            presentation.value.fullscreen,
-                                        ) {
-                                            if (
-                                                !presentation.value.detailsVisible ||
-                                                presentation.value.fullscreen
-                                            ) {
-                                                return@pointerInput
-                                            }
-                                            awaitPointerEventScope {
-                                                while (true) {
-                                                    val event = awaitPointerEvent(
-                                                        PointerEventPass.Initial,
-                                                    )
-                                                    if (event.type != PointerEventType.Scroll) {
-                                                        continue
-                                                    }
-                                                    val change = event.changes.firstOrNull()
-                                                        ?: continue
-                                                    val deltaY = change.scrollDelta.y
-                                                    if (
-                                                        detailsScrollState.maxValue > 0 &&
-                                                        abs(deltaY) > abs(change.scrollDelta.x) &&
-                                                        (
-                                                            (deltaY > 0f &&
-                                                                detailsScrollState.canScrollForward) ||
-                                                                (deltaY < 0f &&
-                                                                    detailsScrollState.canScrollBackward)
-                                                            )
-                                                    ) {
-                                                        changeDetailsPanelExpansion(deltaY)
-                                                    }
-                                                }
-                                            }
-                                        }
-                                        .viewerDetailsVerticalDrag(
+                                        .viewerDetailsPanelExpansion(
                                             enabled = presentation.value.detailsVisible &&
                                                 !presentation.value.fullscreen,
                                             scrollState = detailsScrollState,
@@ -1419,12 +1347,36 @@ internal fun galleryViewerCanForwardMediaVerticalScroll(
     imageZoomed: Boolean,
 ): Boolean = detailsVisible && !fullscreen && !isVideo && !imageZoomed
 
-private fun Modifier.viewerDetailsVerticalDrag(
+private fun Modifier.viewerDetailsPanelExpansion(
     enabled: Boolean,
     scrollState: ScrollState,
     panelExpansion: MutableFloatState,
     expandDistancePx: Float,
 ): Modifier = pointerInput(enabled, scrollState, panelExpansion, expandDistancePx) {
+    if (!enabled) return@pointerInput
+    awaitPointerEventScope {
+        while (true) {
+            val event = awaitPointerEvent(PointerEventPass.Initial)
+            if (event.type != PointerEventType.Scroll) continue
+            val change = event.changes.firstOrNull() ?: continue
+            val deltaY = change.scrollDelta.y
+            if (
+                scrollState.maxValue > 0 &&
+                abs(deltaY) > abs(change.scrollDelta.x) &&
+                (
+                    (deltaY > 0f && scrollState.canScrollForward) ||
+                        (deltaY < 0f && scrollState.canScrollBackward)
+                    )
+            ) {
+                panelExpansion.floatValue = galleryViewerPanelExpansion(
+                    currentExpansionPx = panelExpansion.floatValue,
+                    availableScrollPx = deltaY,
+                    maxExpansionPx = expandDistancePx,
+                )
+            }
+        }
+    }
+}.pointerInput(enabled, panelExpansion, expandDistancePx) {
     if (!enabled) return@pointerInput
     val touchSlop = viewConfiguration.touchSlop
     awaitEachGesture {
@@ -1449,11 +1401,11 @@ private fun Modifier.viewerDetailsVerticalDrag(
                 }
             }
             if (draggingVertically) {
-                val scrollDelta = -delta.y
-                scrollState.dispatchRawDelta(scrollDelta)
-                panelExpansion.floatValue =
-                    (panelExpansion.floatValue + scrollDelta).coerceIn(0f, expandDistancePx)
-                change.consume()
+                panelExpansion.floatValue = galleryViewerPanelExpansion(
+                    currentExpansionPx = panelExpansion.floatValue,
+                    availableScrollPx = -delta.y,
+                    maxExpansionPx = expandDistancePx,
+                )
             }
             pointerPressed = change.pressed
         }
@@ -1469,6 +1421,12 @@ internal fun galleryViewerDetailsPanelFraction(
     val expansion = (scrollOffsetPx / expandDistancePx).coerceIn(0f, 1f)
     return baseFraction + (maximumFraction - baseFraction) * expansion
 }
+
+internal fun galleryViewerPanelExpansion(
+    currentExpansionPx: Float,
+    availableScrollPx: Float,
+    maxExpansionPx: Float,
+): Float = (currentExpansionPx + availableScrollPx).coerceIn(0f, maxExpansionPx)
 
 internal data class GalleryViewerPresentationState(
     val detailsVisible: Boolean = false,

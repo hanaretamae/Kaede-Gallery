@@ -45,7 +45,6 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Repeat
 import androidx.compose.material.icons.filled.Fullscreen
 import androidx.compose.material.icons.filled.FullscreenExit
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.FilledTonalIconToggleButton
@@ -121,6 +120,7 @@ import com.hanaretamae.kaede.ui.gallery.GalleryLoadingScreen
 
 import java.awt.Desktop
 import java.awt.Dimension
+import java.awt.EventQueue
 import java.awt.FileDialog
 import java.awt.event.ComponentAdapter
 import java.awt.event.ComponentEvent
@@ -346,7 +346,6 @@ private fun DesktopApplication(
     var initialScanRequired by remember { mutableStateOf(false) }
     var openingVaultName by remember { mutableStateOf<String?>(null) }
     var startupAppearance by remember { mutableStateOf(AppearanceSettings()) }
-    var showWelcomeSettings by remember { mutableStateOf(false) }
     var showWelcomeExample by remember { mutableStateOf(false) }
 
     suspend fun openVault(path: String, performScan: Boolean = true) {
@@ -471,7 +470,7 @@ private fun DesktopApplication(
                 rootSettingsState.settings?.appearance ?: startupAppearance,
                 portalAppearance,
             )
-        } else if (showWelcomeSettings || showWelcomeExample) {
+        } else if (showWelcomeExample) {
             val appearance = rootSettingsState.settings?.appearance ?: startupAppearance
             val darkTheme = when (appearance.theme) {
                 com.hanaretamae.kaede.core.settings.ThemePreference.SYSTEM ->
@@ -502,8 +501,8 @@ private fun DesktopApplication(
                     loadOnEnter = false,
                     disposeStateHolderOnExit = false,
                     loadLicenseText = ::loadDesktopLicenseText,
-                    openExampleOnStart = showWelcomeExample,
-                    exampleOnly = showWelcomeExample,
+                    openExampleOnStart = true,
+                    exampleOnly = true,
                 )
             }
         } else {
@@ -512,7 +511,6 @@ private fun DesktopApplication(
                 error = error,
                 systemAppearance = portalAppearance,
                 appearance = rootSettingsState.settings?.appearance ?: startupAppearance,
-                onOpenSettings = { showWelcomeSettings = true },
                 onOpenExample = { showWelcomeExample = true },
                 onChooseVault = {
                     scope.launch {
@@ -679,7 +677,13 @@ private fun DesktopApplication(
             },
             onChangeVault = {
                 scope.launch {
-                    chooseVaultDirectory()?.let { openVault(it) }
+                    try {
+                        chooseVaultDirectory()?.let { openVault(it) }
+                    } catch (cancelled: CancellationException) {
+                        throw cancelled
+                    } catch (_: Exception) {
+                        showVaultDirectoryPickerError()
+                    }
                 }
             },
             onForgetVault = {
@@ -950,7 +954,6 @@ private fun DesktopWelcome(
     error: String?,
     systemAppearance: DesktopSystemAppearance,
     appearance: AppearanceSettings,
-    onOpenSettings: () -> Unit,
     onChooseVault: () -> Unit,
     onOpenExample: () -> Unit,
 ) {
@@ -1036,17 +1039,6 @@ private fun DesktopWelcome(
                             }
                         }
                     }
-                }
-            }
-            KaedeTooltip(if (japanese) "設定" else "Settings") {
-                IconButton(
-                    modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-                    onClick = onOpenSettings,
-                ) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = if (japanese) "設定" else "Settings",
-                    )
                 }
             }
         }
@@ -1579,18 +1571,40 @@ private suspend fun chooseVaultDirectory(): String? {
     return chooseVaultDirectoryWithSwing()
 }
 
-private fun chooseVaultDirectoryWithSwing(
+private suspend fun chooseVaultDirectoryWithSwing(
     dialogTitle: String = "Select an existing Vault",
-): String? {
-    val chooser = JFileChooser(FileSystemView.getFileSystemView().homeDirectory).apply {
-        this.dialogTitle = dialogTitle
-        fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
-        isAcceptAllFileFilterUsed = false
+): String? = withContext(Dispatchers.IO) {
+    runOnAwtEventThread {
+        val chooser = JFileChooser(FileSystemView.getFileSystemView().homeDirectory).apply {
+            this.dialogTitle = dialogTitle
+            fileSelectionMode = JFileChooser.DIRECTORIES_ONLY
+            isAcceptAllFileFilterUsed = false
+        }
+        if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
+            chooser.selectedFile?.path
+        } else {
+            null
+        }
     }
-    return if (chooser.showOpenDialog(null) == JFileChooser.APPROVE_OPTION) {
-        chooser.selectedFile?.path
-    } else {
-        null
+}
+
+internal fun <T> runOnAwtEventThread(action: () -> T): T {
+    if (EventQueue.isDispatchThread()) return action()
+    val result = AtomicReference<Result<T>?>(null)
+    EventQueue.invokeAndWait { result.set(runCatching(action)) }
+    return requireNotNull(result.get()).getOrThrow()
+}
+
+private suspend fun showVaultDirectoryPickerError() {
+    withContext(Dispatchers.IO) {
+        runOnAwtEventThread {
+            JOptionPane.showMessageDialog(
+                null,
+                "The folder picker could not be opened.",
+                "Kaede Gallery",
+                JOptionPane.ERROR_MESSAGE,
+            )
+        }
     }
 }
 

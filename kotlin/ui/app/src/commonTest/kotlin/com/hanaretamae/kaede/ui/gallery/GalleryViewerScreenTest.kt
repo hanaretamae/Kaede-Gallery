@@ -266,6 +266,24 @@ class GalleryViewerScreenTest {
     }
 
     @Test
+    fun panelExpansionConsumesOnlyAvailableScrollAndClampsAtItsBounds() {
+        assertEquals(70f, galleryViewerPanelExpansion(40f, 30f, 100f))
+        assertEquals(0f, galleryViewerPanelExpansion(20f, -40f, 100f))
+        assertEquals(100f, galleryViewerPanelExpansion(90f, 40f, 100f))
+    }
+
+    @Test
+    fun scrollbarFractionIncludesSmoothWithinRowProgress() {
+        assertEquals(
+            0.103f,
+            galleryScrollbarFraction(100L, 1_000L, 0.5f, 6),
+            0.0001f,
+        )
+        assertEquals(1f, galleryScrollbarFraction(4L, 4L, 0f, 4))
+        assertEquals(4L, galleryScrollbarPosition(1f, 10L, 2, 4, 2))
+    }
+
+    @Test
     fun viewerStartsWithMediaOnlyAndMediaTapTogglesDetails() {
         val initial = GalleryViewerPresentationState()
 

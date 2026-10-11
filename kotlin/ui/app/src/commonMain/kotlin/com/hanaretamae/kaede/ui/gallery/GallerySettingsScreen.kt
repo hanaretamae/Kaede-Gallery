@@ -408,7 +408,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     updatedKeys = "Updated keys",
     coverKeys = "Cover keys",
     linkResolution = "Internal link resolution",
-    markdownLink = "Markdown Link",
+    markdownLink = "MarkdownLink",
     wikiLink = "WikiLink",
     shortestPath = "Shortest path",
     relativePath = "Relative path",
@@ -568,7 +568,7 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     updatedKeys = "更新日キー",
     coverKeys = "カバーキー",
     linkResolution = "内部リンクの解決",
-    markdownLink = "Markdown Link",
+    markdownLink = "MarkdownLink",
     wikiLink = "WikiLink",
     shortestPath = "最短パス",
     relativePath = "相対パス",
@@ -1748,6 +1748,7 @@ fun GallerySettingsScreen(
                                 Text(
                                     "${strings.markdownLink} / ${strings.wikiLink}",
                                     style = MaterialTheme.typography.titleSmall,
+                                    color = MaterialTheme.colorScheme.primary,
                                 )
                                 ConnectedChoiceGroup(
                                     options = GalleryLinkResolution.entries,

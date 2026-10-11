@@ -62,7 +62,7 @@ jobs:
             Get-ChildItem -LiteralPath $distributionRoot -Recurse | Select-Object -ExpandProperty FullName
             throw "Expected one Compose Desktop launcher in the Windows distribution; found $($launchers.Count)"
           }
-          $bundle = $launchers[0].Directory.Parent.FullName
+          $bundle = $launchers[0].Directory.FullName
           Copy-Item -LiteralPath LICENSE, THIRD_PARTY_NOTICES.md -Destination $bundle
           $licenseSource = 'kotlin/shared-assets/licenses'
           $licenseDestination = Join-Path $bundle 'licenses'
@@ -75,6 +75,18 @@ jobs:
           }
           $zip = "kaede-gallery-$version-windows-x64.zip"
           Compress-Archive -Path (Join-Path $bundle '*') -DestinationPath $zip
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+          try {
+            $rootLauncher = $archive.Entries | Where-Object {
+              $_.FullName -eq $launchers[0].Name
+            }
+            if (-not $rootLauncher) {
+              throw "The Windows launcher must be in the ZIP root."
+            }
+          } finally {
+            $archive.Dispose()
+          }
           "ZIP_NAME=$zip" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
 
       - uses: actions/upload-artifact@v4

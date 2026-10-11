@@ -396,6 +396,35 @@ class GalleryStateHolderTest {
     }
 
     @Test
+    fun doesNotJumpUsingStaleCountsWhileSearchIsPending() = runTest {
+        val repository = FakeGalleryRepository { query ->
+            RepositoryResult.Success(
+                GalleryPage((1L..8L).map(::note), totalCount = 8, offset = query.offset),
+            )
+        }
+        val holder = testGalleryStateHolder(repository)
+        holder.start()
+        advanceUntilIdle()
+        val entriesBeforeSearch = holder.state.value.entries
+        val queriesBeforeSearch = repository.queries.size
+
+        holder.setQuery(
+            holder.state.value.query.copy(searchText = "fictional"),
+            debounceSearch = true,
+        )
+        holder.jumpTo(7)
+
+        assertEquals(entriesBeforeSearch, holder.state.value.entries)
+        assertEquals(queriesBeforeSearch, repository.queries.size)
+        assertTrue(holder.state.value.searching)
+
+        advanceTimeBy(250)
+        advanceUntilIdle()
+        assertEquals("fictional", repository.queries.last().searchText)
+        assertFalse(holder.state.value.searching)
+    }
+
+    @Test
     fun coalescesRapidTagChangesIntoOneRepositoryRefresh() = runTest {
         val repository = FakeGalleryRepository { query ->
             RepositoryResult.Success(

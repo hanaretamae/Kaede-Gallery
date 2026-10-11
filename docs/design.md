@@ -873,8 +873,9 @@ validated add/edit/remove segmented lists instead of multiline bulk editors.
 Tapping a tag-color rule row opens its editor; the row retains dedicated remove
 and edit actions.
 The internal-link-resolution choices sit below the note-detail order list on a
-separate settings panel. Its list surface has a plain-text `Markdown Link /
-WikiLink` heading above the shared resolution choices.
+separate settings panel. Its list surface has a `MarkdownLink / WikiLink`
+heading using the same expressive primary-colored heading style as other
+settings panels, above the shared resolution choices.
 Tag settings and appearance settings can be exported together as JSON.
 Flutter's private `tag-settings.json` contains configurable gallery-target tag
 prefixes, Markdown heading aliases for memo, related items, and the end of post
@@ -935,8 +936,10 @@ tiles, appears while scrolling or dragging, and fades away after inactivity.
 Hovering its track also reveals the pill. Dragging it shows the target
 one-based item position and result count without a count suffix in a tonal
 Material 3 Expressive popup to the left of the track, sized to its content.
-Scrollbar position calculations use 64-bit result counts, and reaching a
-loaded jump target animates to the target item. Gallery item placement is not
+Scrollbar position calculations use 64-bit result counts and interpolate
+within the visible grid row, keeping the thumb smooth even when only a few
+rows remain. Reaching a loaded jump target animates to the target item.
+Gallery item placement is not
 animated during page prepends/appends, avoiding isolated thumbnail movement
 while scrolling after a long press.
 Pull-to-refresh is disabled; use the explicit rescan action.
@@ -1034,8 +1037,11 @@ error.
 The viewer uses an animated transition between media and details. Opening
 details resets image zoom. Dates, post text, memo, and related content use
 grouped Material 3 surface containers; section headings such as Related sit
-outside their tonal content surfaces, like the tag heading. Detail-panel expansion responds to vertical scrolling in its content as well
-as unzoomed vertical drags over media. Inner details scrolling stops at its
+outside their tonal content surfaces, like the tag heading. The shared details
+panel observes vertical input without manually dispatching raw scroll deltas,
+so Android touch flings and desktop wheel/trackpad scrolling retain their
+native scroll behavior; wheel-driven expansion is limited to content that
+actually overflows, alongside unzoomed vertical drags over media. Inner details scrolling stops at its
 content bounds, including when the content does not overflow; a details panel
 with no scrollable overflow cannot resize itself through wheel scrolling.
 A post
