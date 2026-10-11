@@ -40,7 +40,7 @@ jobs:
 
       - uses: actions/setup-java@v5
         with:
-          distribution: temurin
+          distribution: ${{ matrix.java_distribution }}
           java-version: "17"
           cache: gradle
 
