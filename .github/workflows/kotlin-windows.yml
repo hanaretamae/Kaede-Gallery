@@ -40,6 +40,13 @@ jobs:
           :ui:app:jvmTest
           :desktopApp:test
           :desktopApp:createDistributable
+      - name: Show native test failures
+        if: failure()
+        working-directory: kotlin/core/rust/build
+        shell: bash
+        run: |
+          grep -h -A6 "UnsatisfiedLinkError" test-results/jvmTest/*.xml | head -40 || true
+          find . -name "*.dll" | head
       - uses: actions/upload-artifact@v4
         with:
           name: kaede-gallery-kotlin-windows-${{ matrix.arch }}
