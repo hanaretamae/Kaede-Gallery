@@ -20,7 +20,7 @@ jobs:
       matrix:
         include:
           - arch: x64
-            java_distribution: ${{ matrix.java_distribution }}
+            java_distribution: temurin
             runner: windows-latest
             media_arch: x86_64
             mpv_sha256: 769a9bb120b35aad20c25ae502c44ed8f59b4e607fcbc7f6cdde61f98dceabaf
