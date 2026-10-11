@@ -98,7 +98,9 @@ android {
     }
 
     tasks.configureEach {
-        if (name.startsWith("merge") && name.endsWith("Assets")) {
+        if ((name.startsWith("merge") && name.endsWith("Assets")) ||
+            name.contains("lintVital", ignoreCase = true)
+        ) {
             dependsOn(rootProject.tasks.named("prepareDistributionNotices"))
             dependsOn(copyComposeResourcesForAndroid)
         }
