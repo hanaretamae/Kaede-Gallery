@@ -1058,6 +1058,9 @@
    "module": "sha256-SIuDN/x01Ia/X5RM3C+zzxzAzzw4poOZprHlaaLUoJI=",
    "pom": "sha256-3CVkL+CZ7K0rppOBjwf2jCAwmnLFgUC4XKnFUS6W8L8="
   },
+  "org/jetbrains/compose/desktop#desktop-jvm-linux-arm64/1.13.0-alpha02": {
+   "pom": "sha256-5AsMNNRXqcWIqxTl8yDKQ7dmJ60iw3Ghgcu49LJrAik="
+  },
   "org/jetbrains/compose/desktop#desktop-jvm-linux-x64/1.13.0-alpha02": {
    "pom": "sha256-rB9KqRBxHsYT4xkSFLnbQ2YJhVBG/1nwhrKyA1eLar0="
   },
