@@ -24,6 +24,17 @@ require(releaseVersionCodeLong in 1L..2_100_000_000L) {
     "VERSION produces an Android versionCode outside the supported range."
 }
 private val releaseVersionCode = releaseVersionCodeLong.toInt()
+private val composeResourceAssets = layout.buildDirectory.dir("generated/compose-resource-assets")
+private val copyComposeResourcesForAndroid = tasks.register<Copy>("copyComposeResourcesForAndroid") {
+    val uiApp = project(":ui:app")
+    dependsOn(uiApp.tasks.named("generateGalleryBranding"))
+    from(uiApp.layout.buildDirectory.dir("generated/brandingResources"))
+    into(
+        composeResourceAssets.map {
+            it.dir("composeResources/com.hanaretamae.kaede.ui.gallery.resources")
+        },
+    )
+}
 
 android {
     namespace = "com.hanaretamae.kaede.android"
@@ -76,6 +87,9 @@ android {
 
     sourceSets.getByName("main").assets.directories.add(rootProject.file("shared-assets").path)
     sourceSets.getByName("main").assets.directories.add(
+        composeResourceAssets.get().asFile.path,
+    )
+    sourceSets.getByName("main").assets.directories.add(
         rootProject.layout.buildDirectory.dir("generated/distribution-assets").get().asFile.path,
     )
 
@@ -86,6 +100,7 @@ android {
     tasks.configureEach {
         if (name.startsWith("merge") && name.endsWith("Assets")) {
             dependsOn(rootProject.tasks.named("prepareDistributionNotices"))
+            dependsOn(copyComposeResourcesForAndroid)
         }
     }
 }

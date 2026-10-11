@@ -145,7 +145,11 @@ object SettingsTransferCodec {
                 "en" -> LanguagePreference.ENGLISH
                 else -> LanguagePreference.SYSTEM
             }
-            val useSystemColor = optionalBoolean(appearance, "useSystemColor", false)
+            val useSystemColor = optionalBoolean(
+                appearance,
+                "useSystemColor",
+                AppearanceSettings().useSystemColor,
+            )
                 ?: return null
             val pureBlack = appearance["pureBlack"]?.jsonPrimitive?.booleanOrNull ?: return null
             val font = when (

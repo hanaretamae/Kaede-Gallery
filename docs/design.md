@@ -584,6 +584,9 @@ button, an elapsed/total time pill, a speed pill with selectable choices
 (0.25x, 0.5x, 0.75x, 1x, 1.25x, 1.5x, 1.75x, and 2x), tonal loop and mute
 toggles, and a fullscreen toggle. Seeking or
 pressing play after playback ends permits replay without maximizing the player.
+On Android, the viewer measures the control row inside its central media area
+and fits the video into the remaining space so controls remain visible across
+video aspect ratios.
 Desktop speed choices expand inline in the player scene, avoiding a native
 popup above embedded video. Controls wrap at narrow widths. Maximized
 video controls initially appear, then animate out after inactivity during playback;

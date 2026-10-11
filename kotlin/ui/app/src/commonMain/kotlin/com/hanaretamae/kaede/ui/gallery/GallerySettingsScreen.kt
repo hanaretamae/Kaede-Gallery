@@ -106,10 +106,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -678,6 +682,8 @@ fun GallerySettingsScreen(
     onForgetVault: (suspend () -> RepositoryResult<*>)? = null,
     openExampleOnStart: Boolean = false,
     exampleOnly: Boolean = false,
+    backGestureProgress: Float = 0f,
+    onBackHandlerChanged: (((() -> Unit)?) -> Unit)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val scope = rememberCoroutineScope()
@@ -687,6 +693,22 @@ fun GallerySettingsScreen(
         )
     }
     var selectedLicense by remember(stateHolder) { mutableStateOf<GalleryLicenseDocument?>(null) }
+    val latestActivePage = rememberUpdatedState(activePage)
+    val latestSelectedLicense = rememberUpdatedState(selectedLicense)
+    val settingsBackHandler = remember {
+        {
+            if (latestSelectedLicense.value != null) {
+                selectedLicense = null
+            } else if (latestActivePage.value != GallerySettingsPage.HOME) {
+                activePage = GallerySettingsPage.HOME
+            }
+        }
+    }
+    val canHandleSettingsBack = selectedLicense != null ||
+        (!exampleOnly && activePage != GallerySettingsPage.HOME)
+    SideEffect {
+        onBackHandlerChanged?.invoke(settingsBackHandler.takeIf { canHandleSettingsBack })
+    }
     var confirmForgetVault by remember { mutableStateOf(false) }
     var showScanWarningDetails by remember { mutableStateOf(false) }
     var rescanInProgress by remember(stateHolder) { mutableStateOf(false) }
@@ -724,7 +746,13 @@ fun GallerySettingsScreen(
     }
     val settingsScrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     Scaffold(
-        modifier = modifier.fillMaxSize().nestedScroll(settingsScrollBehavior.nestedScrollConnection),
+        modifier = modifier.fillMaxSize()
+            .nestedScroll(settingsScrollBehavior.nestedScrollConnection)
+            .graphicsLayer {
+                val progress = backGestureProgress.coerceIn(-1f, 1f)
+                translationX = size.width * progress
+                alpha = 1f - kotlin.math.abs(progress) * 0.08f
+            },
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             TopAppBar(
@@ -748,7 +776,7 @@ fun GallerySettingsScreen(
                                 selectedLicense != null -> selectedLicense = null
                                 exampleOnly -> onClose()
                                 activePage == GallerySettingsPage.HOME -> onClose()
-                                else -> activePage = GallerySettingsPage.HOME
+                                else -> settingsBackHandler()
                             }
                         },
                     ) {
@@ -1792,9 +1820,30 @@ fun GallerySettingsScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp),
                             horizontalAlignment = Alignment.CenterHorizontally,
                         ) {
-                            Image(painterResource(Res.drawable.kaede_gallery_icon), null, Modifier.size(120.dp))
+                            Box(
+                                modifier = Modifier.size(144.dp).testTag("AboutLogoFrame"),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Image(
+                                    painterResource(Res.drawable.kaede_gallery_icon),
+                                    contentDescription = null,
+                                    modifier = Modifier.fillMaxSize().padding(16.dp)
+                                        .testTag("AboutLogo"),
+                                )
+                            }
                             Text("Kaede Gallery", style = MaterialTheme.typography.headlineLarge)
-                            Text(GalleryAppVersion, style = MaterialTheme.typography.titleMedium)
+                            Surface(
+                                modifier = Modifier.testTag("AboutVersionBadge"),
+                                shape = CircleShape,
+                                color = MaterialTheme.colorScheme.primaryFixed,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryFixed,
+                            ) {
+                                Text(
+                                    GalleryAppVersion,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                                )
+                            }
                             Text(
                                 strings.aboutDescription,
                                 style = MaterialTheme.typography.bodyLarge,

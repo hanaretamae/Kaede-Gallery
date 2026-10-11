@@ -4,6 +4,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.performTouchInput
@@ -97,7 +99,9 @@ class DesktopVideoSeekingTest {
         compose.waitUntil(5_000) {
             compose.onAllNodesWithText("Open media").fetchSemanticsNodes().isNotEmpty()
         }
-        compose.onNodeWithText("Open media").assertIsDisplayed().performClick()
+        compose.onNode(hasText("Open media") and hasClickAction())
+            .assertIsDisplayed()
+            .performClick()
         compose.runOnIdle { assertEquals(listOf(MediaId(1)), openedMedia) }
     }
 

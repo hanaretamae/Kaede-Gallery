@@ -41,7 +41,10 @@ class GalleryViewerGestureTest {
     @get:Rule
     val compose = createComposeRule()
 
-    private fun showViewer(onHolderCreated: (GalleryViewerStateHolder) -> Unit = {}) {
+    private fun showViewer(
+        onHolderCreated: (GalleryViewerStateHolder) -> Unit = {},
+        onPlaybackOverlayVisibilityChanged: (((Boolean) -> Unit) -> Unit) = {},
+    ) {
         val media = (1L..2L).map {
             MediaSummary(MediaId(it), NoteId(1), "fictional.md", false, true, 2, 0, 0)
         }
@@ -68,7 +71,9 @@ class GalleryViewerGestureTest {
             KaedeGalleryTheme(AppearanceSettings()) {
                 GalleryViewerScreen(
                     stateHolder = holder, onClose = {}, onExternalLink = {},
-                    mediaContent = {
+                    mediaContent = { mediaState ->
+                        mediaState.onPlaybackOverlayVisibilityChanged
+                            ?.let(onPlaybackOverlayVisibilityChanged)
                         Box(
                             Modifier.fillMaxSize().testTag("media-area"),
                             contentAlignment = Alignment.Center,
@@ -98,9 +103,33 @@ class GalleryViewerGestureTest {
     }
 
     @Test
+    fun playbackSpeedChoicesTemporarilyMoveNoteDetailsOutOfTheWay() {
+        lateinit var setPlaybackOverlayVisible: (Boolean) -> Unit
+        showViewer(
+            onPlaybackOverlayVisibilityChanged = { callback ->
+                setPlaybackOverlayVisible = callback
+            },
+        )
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-note-details")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val panel = compose.onNodeWithTag("viewer-note-details")
+        val initialTop = panel.fetchSemanticsNode().boundsInRoot.top
+
+        compose.runOnIdle { setPlaybackOverlayVisible(true) }
+        val shiftedTop = panel.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(shiftedTop < initialTop, "The note details should move up for playback choices.")
+
+        compose.runOnIdle { setPlaybackOverlayVisible(false) }
+        val restoredTop = panel.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(restoredTop >= initialTop - 1f, "The note details should return after dismissal.")
+    }
+
+    @Test
     fun switchingImagesKeepsBothFramesComposedDuringTheTransition() {
         var holder: GalleryViewerStateHolder? = null
-        showViewer { holder = it }
+        showViewer(onHolderCreated = { holder = it })
         compose.mainClock.autoAdvance = false
         compose.runOnIdle { requireNotNull(holder).showNextMedia() }
 

@@ -140,18 +140,21 @@ class GalleryFilterSheetTest {
         assertEquals(windowWidth, expandedBounds.width, 1f)
         assertEquals(0f, expandedBounds.left, 1f)
         val sortSurface = compose.onNodeWithTag("GalleryFilterSortSurface").fetchSemanticsNode().boundsInRoot
-        assertEquals(0f, sortSurface.left, 1f)
-        assertEquals(windowWidth, sortSurface.right, 1f)
+        assertTrue(sortSurface.left > 0f)
+        assertTrue(sortSurface.right < windowWidth)
         val searchField = compose.onNodeWithText(strings.searchNotes).fetchSemanticsNode().boundsInRoot
-        assertEquals(0f, searchField.left, 1f)
+        assertTrue(searchField.left > 0f)
         val tagSearchField = compose.onNodeWithText(strings.filterSearch).fetchSemanticsNode().boundsInRoot
-        assertEquals(0f, tagSearchField.left, 1f)
-        assertEquals(windowWidth, tagSearchField.right, 1f)
-        val categoryLabel = compose.onNodeWithText("Source").fetchSemanticsNode().boundsInRoot
-        assertEquals(0f, categoryLabel.left, 1f)
+        assertTrue(tagSearchField.left > 0f)
+        assertTrue(tagSearchField.right < windowWidth)
+        val categorySurface = compose.onNodeWithTag("GalleryFilterCategorySurface")
+            .fetchSemanticsNode().boundsInRoot
+        val categoryLabel = compose.onNodeWithText("Source", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(categoryLabel.left - categorySurface.left >= 8f)
         val searchAction = compose.onNodeWithContentDescription(strings.applySearch).fetchSemanticsNode().boundsInRoot
         val clearAction = compose.onNodeWithContentDescription(strings.clearAllSearchAndFilters).fetchSemanticsNode().boundsInRoot
-        assertEquals(windowWidth, clearAction.right, 1f)
+        assertTrue(clearAction.right < windowWidth)
         assertTrue(searchAction.top < searchField.bottom)
         assertTrue(clearAction.left > searchAction.left)
         compose.onNodeWithText(strings.filters).performTouchInput {
