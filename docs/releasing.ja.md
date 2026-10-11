@@ -42,7 +42,7 @@ export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
 tools/release.sh 2.0.0b4
 ```
 
-既定のKeePassXCエントリ名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。スクリプトは鍵を一時的に取り出し、universal／arm64-v8a／x86_64 APKの署名と検証、Rust/Kotlinテスト、x86_64/AArch64 Linux bundleの作成、チェックサム計算を行い、バージョンだけをタイトルにしたprereleaseを公開します。Rustup 1.98.1と、事前導入済みの `aarch64-linux-android`／`x86_64-linux-android` targets が必要です。Linux bundle は x86_64 Linux builder で作成します。AArch64 向け Rust FFI をクロスコンパイルし、target runtime を組み立てるため、QEMU/binfmt、AArch64 native builder、remote builder は不要です。`XDG_RUNTIME_DIR` は現在のユーザー所有でmode `700` のprivate directoryでなければなりません。
+既定のKeePassXCエントリ名は `Kaede Gallery Android signing`、添付ファイル名は `release.jks` です。スクリプトは鍵を一時的に取り出し、universal／arm64-v8a／x86_64 APKの署名と検証、Rust/Kotlinテスト、x86_64/AArch64 Linux bundleの作成、チェックサム計算を行い、バージョンだけをタイトルにしたprereleaseを公開します。Rustup 1.98.1と、事前導入済みの `aarch64-linux-android`／`x86_64-linux-android` targets が必要です。Linux bundle は x86_64 Linux builder で作成します。AArch64 向け Rust FFI をクロスコンパイルし、target runtime を組み立てるため、QEMU/binfmt、AArch64 native builder、remote builder は不要です。`XDG_RUNTIME_DIR` は現在のユーザー所有でmode `700` のprivate directoryでなければならず、署名素材はこの中に一時保存します。大容量のrelease一時artifactは、容量の小さいruntime tmpfsを使い切らないよう、`TMPDIR`（既定値 `/tmp`）配下のprivate directoryに保存します。
 
 prereleaseの作成後、Windows ZIPを手動workflowで作成・添付します。
 

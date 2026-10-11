@@ -173,7 +173,7 @@ for triple in aarch64 x86_64; do
   export "CARGO_TARGET_${upper}_LINUX_ANDROID_LINKER=$ndk_bin/${triple}-linux-android23-clang"
 done
 
-dist_dir=$(mktemp -d "$XDG_RUNTIME_DIR/kaede-gallery-dist.XXXXXXXX") ||
+dist_dir=$(mktemp -d "${TMPDIR:-/tmp}/kaede-gallery-dist.XXXXXXXX") ||
   fail "could not create a release output directory"
 dist_cleanup=$dist_dir
 version=$tag
