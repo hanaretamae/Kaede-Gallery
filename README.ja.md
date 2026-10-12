@@ -34,26 +34,39 @@
 
 ## 特徴
 
-| 分野       | 内容                                                                                                                                    |
-| ---------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| 閲覧       | ノート単位／全メディアの表示切替。タイルに通し番号・複数画像数・覚書数・関連数を表示可能                                                |
-| ページング | 1ページの件数を設定可能。「総件数 件中 先頭 - 末尾 件」を表示し、任意の位置へジャンプ。スクロールに合わせて前後を追加読み込み           |
-| 検索       | ノート名・パスのあいまい検索。`#タグ`（OR）、`+#タグ`（AND）、`-#タグ`（除外）、タグ名のあいまい検索。`&#タグ` も AND として利用可能 |
-| 絞り込み   | 階層タグを +／−／AND／無選択で絞り込み。同カテゴリ内は OR、カテゴリ間は AND。作成日・公開日の昇順／降順（初期値は作成日降順）も選択可能 |
-| ビューアー | 黒背景でメディアを最大表示。タップで投稿者・投稿文・覚書・関連などの詳細を表示。複数メディアはスワイプ／左右キー／トラックパッドで切替  |
-| 関連リンク | Markdown リンクと Wikilink（`![[…]]`・`![](…)` を含む）の指す先がノートなら、アプリ内の詳細ビューで開く                                 |
-| 動画       | mpv による再生。再生速度・1本ループ・ミュート。サムネイルは FFmpeg ベース                                                               |
-| 表示       | Material 3 Expressive を意識した配色・形状・動き、Material You（動的カラー）、システム／ライト／ダーク／ピュアブラック、システム／Google Sans Flex フォント |
-| ノート構造 | ブロック順序（投稿者・メディア・投稿文・投稿文の終端・関連・覚書）、見出し名・レベル・箇条書きの有無、Frontmatter キーを設定可能        |
+- **閲覧**: ノート単位と全メディア表示を切り替えられます。タイルには通し番号や、
+  画像・覚書・関連項目の件数を表示できます。
+- **ページング**: 1ページの件数を設定し、任意の位置へ移動できます。
+  スクロールに合わせて前後のページを読み込みます。
+- **検索**: ノート名とパスをあいまい検索できます。
+  `#タグ`（OR）、`+#タグ`（AND）、`-#タグ`（除外）でタグも検索できます。
+  `&#タグ` も AND として使えます。
+- **絞り込み**: 階層タグを使って絞り込みます。
+  同じカテゴリー内は OR、カテゴリー間は AND で判定します。
+  作成日・公開日と並び順も選べます。
+- **ビューアー**: メディアを大きく表示します。
+  タップすると投稿者・投稿文・覚書・関連項目を確認できます。
+  スワイプ・左右キー・トラックパッドでメディアを切り替えます。
+- **関連リンク**: Markdown リンクと Wikilink から、Vault 内のノートを開けます。
+- **動画**: mpv で再生し、速度・ループ・ミュートを操作できます。
+  サムネイルは FFmpeg で作成します。
+- **外観**: Material You の色を使い、システム・ライト・ダーク・ピュアブラックを選べます。
+  フォントはシステムまたは Google Sans Flex から選べます。
+- **言語**: 日本語と英語に対応しています。システム言語が日本語なら初期表示も日本語です。
+- **ノート構造**: 投稿者・メディア・投稿文・関連・覚書の順序や、
+  見出し名・Frontmatter のキーを設定できます。
 
 > [!NOTE]
-> 現在の UI は Kotlin Multiplatform / Compose です。Android と Linux Desktop のビルド手順があります。
-> Windows x64／ARM64 のテスト・パッケージ作成と手動 Release workflow も用意していますが、実機での実行は未確認です。
-> 安定版 `2.0.0` は 2026-10-12 に公開済みです（[Release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)）。
-> 安定版 `2.0.1` も 2026-10-12 に公開済みです（[Release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)）。
-> 各プラットフォームの最新の配布物は Release ページで確認してください。Windows 実機での動作は未確認です。
-> production 署名付き Release にはローカルの release script と認証情報が必要です。
-> 検証済みのビルド経路と残るリリース要件は[リリース手順](docs/releasing.ja.md)を参照してください。
+> Kotlin Multiplatform / Compose と Rust で開発しています。
+> Android と Linux Desktop 向けにビルドできます。
+> Windows x64／ARM64 の配布物もありますが、Windows 実機での動作は未確認です。
+>
+> [最新のリリースをダウンロード](https://github.com/hanaretamae/Kaede-Gallery/releases)
+>
+> 公開中の 2.0.1 AppImage はシステムフォント対応前のビルドです。
+> このソースから作成する AppImage は、システムの Fontconfig 設定と
+> インストール済みフォントを参照します。
+> ビルド・リリースの詳細は[リリース手順](docs/releasing.ja.md)を参照してください。
 
 ## アプリを使う
 
@@ -103,11 +116,19 @@ cover: media/sample.png
 Linux の設定インポート／エクスポートはシステムのファイル選択ポータルを使います。
 Android では Storage Access Framework を使います。
 
-フィルターのカテゴリー（人数・アートスタイル・性別・メタ・レーティング・ソース・タイプ・作品・その他）は、パスの完全一致（`source/art`）や配下すべて（`source/count/*`）で編集できます。カテゴリーごとに、3階層目以降のタグを親タグ別に分けるかを選べます（初期はオフ）。
+フィルターのカテゴリー（人数・アートスタイル・性別・メタ・レーティング・ソース・タイプ・作品・その他）は、
+パスの完全一致（`source/art`）や配下すべて（`source/count/*`）で編集できます。
+3階層目以降のタグを親タグ別に分けるかもカテゴリーごとに設定できます（初期値はオフ）。
 
-フロントマター別名はノート構造の先頭で編集し、タグ設定は追加・編集・削除できるリストで管理します。
-ノート構造の一番下に、設定を反映した架空のノート例を別のカードで表示し、Markdown をコピーできます。Vault 選択画面ではデフォルトの例を表示します（Vault には書き込みません）。
-構造を変更すると再走査して反映します。タグ設定は表示のみを制御し、Vault と索引内容は変更しません。
+フロントマターの別名は「ノート構造」の先頭で編集できます。
+タグ設定は追加・編集・削除できるリストで管理します。
+
+設定画面の最後には、現在の設定を反映した架空のノート例を表示します。
+Markdown をコピーできます。Vault 選択画面には初期設定の例を表示します。
+どちらも Vault には書き込みません。
+
+ノート構造を変更すると再走査して反映します。
+タグ設定は表示だけに適用され、Vault や索引の内容は変わりません。
 
 ### ノート構造とパーサー
 
@@ -176,9 +197,27 @@ nix build --system x86_64-linux --no-link .#packages.x86_64-linux.aarch64Cross
 nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#packages.x86_64-linux.aarch64Cross
 ```
 
-この cross package は x86_64 上で Rust FFI を AArch64 向けにコンパイルし、AArch64 用 Compose native runtime、JRE、launcher、Linux library を組み立てます。従来の native `aarch64-linux` package も AArch64 host で利用できます。`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` は native KMP package を選びます。後述する任意の手動 Actions workflow も AArch64 bundle を cross-build して upload します。
+この package は x86_64 上で Rust FFI を AArch64 向けにコンパイルし、
+AArch64 用 Compose runtime、JRE、launcher、Linux library を組み立てます。
+AArch64 host では従来の native `aarch64-linux` package も利用できます。
+`packages.<system>.default`、`nixosModules.default`、
+`homeManagerModules.default` は native KMP package を選びます。
+手動 Actions workflow でも AArch64 bundle を cross-build できます。
 
-Nix flake の package は固定した `mpv` と `ffmpeg` を使います。公開済みの安定版 `2.0.0` の Linux `.tar.zst` と `.AppImage` は `PATH` 上のシステム実行ファイルを使うため、動画再生とサムネイル生成には両方をインストールしてください。安定版 `2.0.1` の Linux bundle には固定した実行ファイルと実行時依存を同梱しています。最新の配布物は[2.0.1 Release ページ](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)で確認してください。
+Nix package では、バージョンを固定した `mpv` と `ffmpeg` を使います。
+バージョン 2.0.0 の Linux 配布物では、動画再生とサムネイル生成に
+`PATH` 上の `mpv` と `ffmpeg` が必要です。
+
+バージョン 2.0.1 の Linux 配布物には、これらの実行ファイルと実行時ライブラリを同梱しています。
+公開中の 2.0.1 AppImage には、ここで説明するシステムフォント対応はまだ含まれていません。
+
+このソースから作成する AppImage は、`FONTCONFIG_FILE` が未設定で
+`/etc/fonts/fonts.conf` がある場合、システムの Fontconfig 設定を使います。
+システムにインストールした日本語フォントなどを参照できます。
+`FONTCONFIG_FILE` を明示している場合は、その設定を優先します。
+Google Sans Flex はアプリ内に同梱しており、外観設定から選べます。
+
+配布物は[最新のリリース](https://github.com/hanaretamae/Kaede-Gallery/releases)からダウンロードできます。
 
 <details>
 <summary>索引データベースの場所</summary>
@@ -204,18 +243,34 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-Nix シェルには JDK 17、Android SDK（API 35–37.1）、Build Tools 37、NDK 28.2、CMake 3.22.1 が含まれます。Android は通常ローカルでビルドします。Rust Android targets を用意し、NDK cross-compiler を設定してから `kotlin/` で `:androidApp:assembleDebug` を実行してください。APK は `kotlin/androidApp/build/outputs/apk/debug/` に作成され、debug 用 application ID は `com.hanaretamae.kaede.kmpdebug` です。詳しい設定コマンドは [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。production 用の署名済み release build とは異なります。
-release build の対応 Android バージョンは Android 7.0（API 24）以降です。
+Nix シェルには JDK 17、Android SDK（API 35–37.1）、Build Tools 37、
+NDK 28.2、CMake 3.22.1 が含まれます。
 
-KMP Android の production application ID は `com.hanaretamae.kaede`、以前の Flutter Android ID は
-`com.hanaretamae.vault_gallery` です。Android では別アプリとして扱われ、KMP を入れても Flutter 版は
-更新されず、Flutter の非公開設定・索引キャッシュ・SAF の永続権限も引き継がれません。KMP で Vault を
-選び直し、必要なら旧アプリで設定をエクスポートして、設定画面から互換性のある JSON を手動で
-インポートしてください。索引・キャッシュは Vault 外で再作成され、Vault 自体はコピー・変更しません。
+Android は通常ローカルでビルドします。Rust Android targets を用意し、
+NDK cross-compiler を設定してから `kotlin/` で
+`:androidApp:assembleDebug` を実行してください。
+APK は `kotlin/androidApp/build/outputs/apk/debug/` に作成されます。
+debug 用 application ID は `com.hanaretamae.kaede.kmpdebug` です。
+詳しい設定は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。
+これは production 用の署名済み release build ではありません。
 
-Android は引き続きローカルビルドを基本とします。必要時は Actions タブから
-`.github/workflows/optional-arm-builds.yml` を手動起動し、`android-debug`、`linux-aarch64`、`both` を選べます。
-Workflow が GitHub 上で利用可能になった後は、認証済み GitHub CLI を使って `nix develop` からも起動できます。
+release build は Android 7.0（API 24）以降に対応します。
+
+KMP 版は、以前の Flutter 版とは別の Android アプリとしてインストールされます。
+旧アプリの設定・索引キャッシュ・Vault へのアクセス権限は引き継がれません。
+KMP 版で Vault を選び直してください。
+
+旧アプリを引き続き使える場合は、先に設定をエクスポートし、
+KMP 版の設定画面から JSON をインポートできます。
+索引とキャッシュは Vault の外に再作成します。Vault をコピーしたり変更したりすることはありません。
+
+Android はローカルビルドを基本とします。
+必要に応じて Actions タブから
+`.github/workflows/optional-arm-builds.yml` を手動起動してください。
+`android-debug`、`linux-aarch64`、`both` を選べます。
+
+Workflow が GitHub 上で利用可能になれば、認証済み GitHub CLI を使い、
+`nix develop` からも起動できます。
 
 ```sh
 tools/run-optional-builds.sh android-debug
@@ -227,7 +282,9 @@ push / pull request では起動せず、ビルド artifact のみを保存し�
 手動起動する `.github/workflows/windows.yml` はバージョン付き Windows ZIP を作り、tag を指定すれば既存 Release に添付します。
 `tools/release.sh` は Linux から署名済み Android APK と Linux bundle を作成するリリース入口です。
 Rustup 1.98.1 の Android targets が事前にインストール済みである必要があり、署名鍵は KeePassXC から取得します。
-Windows 実機での動作と実際の鍵を使った Android release はここでは未検証です。ローカル・任意Actionsでの手順と、Actions-only releaseの制約は[リリース手順](docs/releasing.ja.md)を参照してください。
+Windows 実機での動作は未検証です。
+ローカルビルド・任意 Actions・リリースの制約は
+[リリース手順](docs/releasing.ja.md)を参照してください。
 
 ## 開発者向け情報
 
@@ -242,7 +299,7 @@ tools/benchmark.sh 7806
 ```
 
 `tools/benchmark.sh` はリリースビルドと走査時間（初回・再走査）を計測します。
-リポジトリ内の `testdata/dummy-vault` は架空のデータです。
+リポジトリ内の `testdata/dummy-vault` には架空のデータを置いています。
 
 ### リポジトリ構成
 
@@ -260,4 +317,11 @@ kotlin/
 docs/design.md      設計の基準
 ```
 
-このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。[日本語参考訳](LICENSE.ja.md) もあります。同梱コンポーネントのライセンスは [THIRD_PARTY_NOTICES.ja.md](THIRD_PARTY_NOTICES.ja.md) と各配布物に含まれる notices を確認してください。公開済みリリースと検証状況は[リリース一覧](https://github.com/hanaretamae/Kaede-Gallery/releases)で確認してください。
+このリポジトリは配布用です。外部からの Issue・Pull Request は受け付けていません。
+開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。
+
+ライセンスは [MIT License](LICENSE) です。
+[日本語参考訳](LICENSE.ja.md) もあります。
+同梱コンポーネントのライセンスは
+[第三者ライセンス一覧](THIRD_PARTY_NOTICES.ja.md)と配布物内の notices を確認してください。
+リリースと配布物は[リリース一覧](https://github.com/hanaretamae/Kaede-Gallery/releases)で確認できます。

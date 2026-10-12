@@ -12,7 +12,7 @@
 
 ## 現在のリリース状況
 
-2026-10-12にGitHub上の公開状態を確認しました。安定版 `2.0.1` は公開済みです（[Releaseページ](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)）。universal／arm64-v8a／x86_64 Android APK、Linux x86_64／AArch64 の `.tar.zst` と `.AppImage`、`SHA256SUMS`、ライセンス資料が登録されています。確認時点では Windows x64／ARM64 の Release workflow [38239334210](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38239334210) が実行中だったため、Windows archive は Release ページへの添付を確認できていません。Windows 配布物の有無を記載するときは Release ページを再確認してください。安定版 `2.0.0` も Android、Linux x86_64／AArch64、Windows x64／ARM64 の配布物とともに公開済みです（[Releaseページ](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)）。
+安定版 `2.0.1` は公開済みです（[Releaseページ](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)）。universal／arm64-v8a／x86_64 Android APK、Linux x86_64／AArch64 の `.tar.zst` と `.AppImage`、Windows x64／ARM64 ZIP、`SHA256SUMS`、ライセンス資料が登録されています。Windows package の作成・添付 workflow [38239334210](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38239334210) は成功しました。Windows 実機での動作は未確認です。安定版 `2.0.0` も Android、Linux x86_64／AArch64、Windows x64／ARM64 の配布物とともに公開済みです（[Releaseページ](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)）。
 
 以前の `2.0.0b4` prerelease にはWindows ZIPがありません。Windows workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) は `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris` で失敗し、archive作成とuploadはskipされました。その後、Release owner は安定版の配布物と成功したWindows workflow run [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594) を根拠にPhase 14を完了扱いとしました。b4固有の欠落は明示的に免除された歴史的項目であり、ZIPをアップロード済みとは記録しません。過去のtagを移動・作り直ししないでください。
 
@@ -20,7 +20,22 @@ Android version codeではbetaをb1〜b898、release candidateをrc1〜rc100、�
 
 ## 公開済み 2.0.1 Release
 
-安定版 `2.0.1` は2026-10-12にprereleaseではないGitHub Releaseとして公開されました。Releaseページには3種類のAndroid APK、Linux x86_64／AArch64 の `.tar.zst` と AppImage、チェックサム、ライセンス資料があります。2.0.1以降のLinux bundleには固定した `mpv`／`ffmpeg` と実行時依存を同梱するため、2.0.0のLinux配布物と異なりホストの `PATH` にこれらを用意する必要はありません。Windows x64／ARM64 archive は別workflowで作成されます。公開済みと記載する前にReleaseページ上の添付を確認してください。Windows実機や未検証のhardware/providerの動作は未確認のままです。
+安定版 `2.0.1` は prerelease ではない GitHub Release として公開済みです。
+Release ページには3種類の Android APK、Linux x86_64／AArch64 の `.tar.zst` と AppImage、
+Windows x64／ARM64 ZIP、チェックサム、ライセンス資料があります。
+
+2.0.1 以降の Linux bundle には固定した `mpv`／`ffmpeg` と実行時依存を同梱します。
+2.0.0 の Linux 配布物と異なり、ホストの `PATH` にこれらを用意する必要はありません。
+
+公開中の 2.0.1 AppImage には、システムフォント対応の変更はまだ含まれていません。
+このソースから作成する AppImage は、`FONTCONFIG_FILE` が未設定で
+`/etc/fonts/fonts.conf` が読み取り可能な場合、システムの Fontconfig 設定を使います。
+これにより、システムにインストールされたフォントを参照できます。
+`FONTCONFIG_PATH` も未設定なら `/etc/fonts` を参照します。
+Fontconfig の環境変数を明示している場合は、その値を優先します。
+
+Windows x64／ARM64 archive は別 workflow で作成し、Release に添付します。
+Windows 実機や未検証の hardware／provider の動作は未確認のままです。
 
 ## ローカルLinuxで完全なリリースを作成
 

@@ -12,7 +12,7 @@
 
 ## Current release status
 
-The public GitHub release state was verified on 2026-10-12. Stable `2.0.1` is published ([release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)) with universal, arm64-v8a, and x86_64 Android APKs; x86_64 and AArch64 Linux `.tar.zst` and `.AppImage` bundles; `SHA256SUMS`; and license materials. At the last check, the Windows x64/ARM64 release workflow [38239334210](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38239334210) was still running, so Windows archives were not yet confirmed on the release page. Refresh the release page before stating which Windows assets are available. Stable `2.0.0` is also published with Android, Linux x86_64/AArch64, and Windows x64/ARM64 assets ([release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)).
+Stable `2.0.1` is published ([release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)) with universal, arm64-v8a, and x86_64 Android APKs; x86_64 and AArch64 Linux `.tar.zst` and `.AppImage` bundles; x64 and ARM64 Windows ZIPs; `SHA256SUMS`; and license materials. The Windows packaging and upload workflow [38239334210](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38239334210) completed successfully. Physical Windows runtime behavior remains unverified. Stable `2.0.0` is also published with Android, Linux x86_64/AArch64, and Windows x64/ARM64 assets ([release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)).
 
 The older `2.0.0b4` prerelease has no Windows ZIP: workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`, so its archive and upload steps were skipped. Phase 14 was subsequently closed by explicit owner approval using the stable release assets and successful Windows workflow run [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594); the missing b4 artifact remains a waived historical omission, not a passed upload. Do not move or recreate historical tags.
 
@@ -20,7 +20,22 @@ Android version codes reserve suffixes b1-b898 for beta builds, rc1-rc100 for re
 
 ## 2.0.1 published release
 
-Stable `2.0.1` was published on 2026-10-12 as a non-prerelease GitHub Release. The release page contains the three Android APK variants, Linux x86_64/AArch64 `.tar.zst` and AppImage bundles, checksums, and license materials. Starting with 2.0.1, Linux bundles include pinned `mpv` and `ffmpeg` executables with their runtime closure; unlike the 2.0.0 Linux downloads, they do not require those executables from the host `PATH`. The Windows x64/ARM64 archives are produced by the separate workflow and must be verified on the public page before claiming they are attached. Physical Windows runtime behavior and untested hardware/provider combinations remain unverified.
+Stable `2.0.1` is published as a non-prerelease GitHub Release. Its release
+page contains the three Android APK variants, Linux x86_64/AArch64 `.tar.zst`
+and AppImage bundles, Windows x64/ARM64 ZIPs, checksums, and license materials.
+
+Starting with 2.0.1, Linux bundles include pinned `mpv` and `ffmpeg`
+executables with their runtime closure; unlike the 2.0.0 Linux downloads, they
+do not require those executables from the host `PATH`.
+
+The 2.0.1 AppImages predate the system-font launcher change. AppImages built
+from this source use `/etc/fonts/fonts.conf` when it is readable and
+`FONTCONFIG_FILE` is unset. If `FONTCONFIG_PATH` is unset, the launcher sets
+it to `/etc/fonts`. Explicit Fontconfig environment settings are preserved.
+
+The Windows x64/ARM64 archives are built and uploaded by the separate workflow.
+Physical Windows runtime behavior and untested hardware/provider combinations
+remain unverified.
 
 ## Full release from a local Linux host
 

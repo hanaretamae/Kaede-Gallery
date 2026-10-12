@@ -333,8 +333,13 @@ The Nix package launcher prepends its pinned `mpv` and `ffmpeg` binaries to
 executables whose closure includes those pinned tools and their runtime
 libraries; they do not depend on host `mpv` or `ffmpeg`. The release script
 checks both tools are in each target package closure and includes the
-third-party notices and license texts with the archive and AppImage. Desktop
-video thumbnails limit ffmpeg to local file input, one frame, 512-pixel bounds, a
+third-party notices and license texts with the archive and AppImage. The
+launcher uses `/etc/fonts/fonts.conf` when `FONTCONFIG_FILE` is unset and
+readable, so Fontconfig can find host-installed fonts. If
+`FONTCONFIG_PATH` is unset, it also sets it to `/etc/fonts`. Explicit
+`FONTCONFIG_FILE` and `FONTCONFIG_PATH` values are preserved. Desktop video
+thumbnails limit ffmpeg to local file input, one
+frame, 512-pixel bounds, a
 4 MiB output cap, a 10-second timeout, and two concurrent extraction
 processes. Desktop playback controls are rendered by Compose rather than
 mpv's on-screen display. A private

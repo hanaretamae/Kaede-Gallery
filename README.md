@@ -35,27 +35,42 @@
 
 ## Features
 
-| Area           | Details                                                                                                                                                                |
-| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Browsing       | Switch between per-note and all-media views. Tiles can show a running number and counts of images, memos and related links                                             |
-| Paging         | Configurable page size, "N–M of Total" indicator, jump to any position, and automatic loading of neighbouring pages while scrolling                                    |
-| Search         | Fuzzy note names/paths; `#tag` (OR), `+#tag` (AND), `-#tag` (exclude), and fuzzy tag-name search; `&#tag` remains an AND alias                                      |
-| Filtering      | Hierarchical tags with include / exclude / AND / none. OR within a category, AND across categories. Sort by created or published date (default: created, newest first) |
-| Viewer         | Full-size media on a black background. Tap to show the author, post text, memos and related links. Swipe, arrow keys or trackpad to switch media                       |
-| Related links  | Markdown links and wikilinks (including `![[…]]` and `![](…)`) that point to a note open in the in-app detail view                                                     |
-| Video          | Playback with mpv: speed, single-item loop, mute. Thumbnails use FFmpeg                                                                                                |
-| Display        | Material 3 Expressive-inspired colours, shapes and motion; Material You dynamic colour; system / light / dark / pure black; system or Google Sans Flex font            |
-| Language       | English and Japanese. English is the default unless the system language is Japanese; switch it in Settings → Display                                                   |
-| Note structure | Configurable block order (author, media, post text, post-text end, related, memo), heading names/levels/bullets and frontmatter keys                                   |
+- **Browse:** Switch between per-note and all-media views. Tiles can show a
+  running number and counts of images, memos, and related links.
+- **Page through results:** Set the page size, jump to any position, and load
+  neighbouring pages automatically while scrolling.
+- **Search:** Find note names and paths with fuzzy matching. Search tags with
+  `#tag` (OR), `+#tag` (AND), or `-#tag` (exclude); `&#tag` is also accepted
+  as an AND alias.
+- **Filter:** Combine hierarchical tag filters with OR within a category and
+  AND across categories. Sort by creation or publication date.
+- **View notes:** Open media full-screen, then tap to see the author, post text,
+  memos, and related links. Swipe, use the arrow keys, or scroll horizontally
+  to switch media.
+- **Follow related links:** Open linked notes in the in-app detail view.
+  Markdown links and wikilinks are supported.
+- **Play video:** Control mpv playback speed, looping, and mute. FFmpeg
+  generates thumbnails.
+- **Choose how the app looks:** Use Material You colours and choose system,
+  light, dark, or pure-black themes. Select the system font or Google Sans Flex.
+- **Choose a language:** Use English or Japanese. The app defaults to Japanese
+  when the system language is Japanese.
+- **Customize note structure:** Change the order of author, media, post text,
+  related links, and memos. Configure headings and frontmatter keys.
 
 > [!NOTE]
-> The active UI is Kotlin Multiplatform / Compose. Android and Linux Desktop build paths are available.
-> Windows x64 and ARM64 tests, packaging, and a manual release workflow are configured; physical Windows runtime behavior has not
-> been verified. Stable `2.0.0` was published on 2026-10-12 ([release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)).
-> Stable `2.0.1` was published on 2026-10-12 ([release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)).
-> Check the release page for its current platform assets; Windows runtime behavior remains unverified.
-> Production-signed releases use the local release script and require release credentials.
-> See [the release guide](docs/releasing.md) for verified build paths and remaining release prerequisites.
+> The app is built with Kotlin Multiplatform / Compose and Rust.
+> Android and Linux Desktop are supported build targets.
+> Windows x64 and ARM64 packages are available, but Windows runtime behavior
+> has not been verified.
+>
+> [Download the latest release](https://github.com/hanaretamae/Kaede-Gallery/releases).
+>
+> The current 2.0.1 AppImages predate the system-font fix. AppImages built
+> from this source use the host's Fontconfig configuration and installed fonts
+> when available.
+>
+> See [the release guide](docs/releasing.md) for build and release details.
 
 ## Using the app
 
@@ -105,7 +120,9 @@ The post text goes here.
 
 ### Settings
 
-1. **Appearance** — separate theme, language, and font lists at the top of Settings. Pure black changes only the background; other colours retain Material You. Paging, gallery-list controls, and the unavailable-media icon are in a separate page
+1. **Appearance** — change the theme, language, and font. Pure black changes
+   only the background; other colours retain Material You. Paging, gallery-list
+   controls, and the unavailable-media icon have a separate settings page.
 2. **Vault** — choose the Vault, rescan
 3. **Notes** — note structure and display (block order, headings, frontmatter) and tag settings
    (gallery tags, filter categories, hidden tags, tag colours). Each page has "Reset to defaults"
@@ -114,14 +131,20 @@ The post text goes here.
 On Linux, settings import and export use the system file chooser portal; Android uses the system
 Storage Access Framework.
 
-Filter categories (count, art style, gender, meta, rating, source, type, work, other) can be edited by exact
-path (`source/art`) or whole subtree (`source/count/*`). Per category you can choose whether tags at the third
-level and deeper are split by parent tag (off by default).
+Filter categories (count, art style, gender, meta, rating, source, type, work,
+other) can be edited by exact path (`source/art`) or whole subtree
+(`source/count/*`). For each category, you can choose whether tags at the third
+level and deeper are split by parent tag. This is off by default.
 
-Frontmatter aliases are edited at the top of Note structure. Tag rules use add/edit/remove lists.
-A separate card at the bottom shows a copyable fictional sample reflecting your settings; the Vault picker
-shows the default sample instead (nothing is written to the Vault). Changing the structure triggers a rescan. Tag settings only affect display; the Vault and
-the index contents are unchanged.
+Edit frontmatter aliases at the top of **Note structure**. Tag rules use
+add/edit/remove lists.
+
+A separate card at the bottom shows a fictional sample that reflects your
+settings and can be copied. The Vault picker shows the default sample instead.
+Neither sample is written to the Vault.
+
+Changing the note structure triggers a rescan. Tag settings affect display
+only; they do not change the Vault or index contents.
 
 ### Notes and the parser
 
@@ -161,7 +184,17 @@ Videos, external pages and Obsidian URIs open only when you press the correspond
 
 ## Install and run
 
-The active build and release paths use Kotlin Multiplatform / Compose and Rust. Linux Desktop packaging, Android debug APK assembly, and Windows x64 CI packaging are available. The manual Windows workflow can attach a Windows ZIP to an existing GitHub Release. `tools/release.sh` builds and publishes signed Android and Linux artifacts after local checks and secure signing-key retrieval; that privileged release procedure is not run as part of CI. Licences of bundled components are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+The active application uses Kotlin Multiplatform / Compose and Rust.
+Linux Desktop packages and Android debug APKs can be built locally.
+Windows x64 and ARM64 packages are built through GitHub Actions.
+
+The manual Windows workflow attaches a ZIP to an existing GitHub Release.
+`tools/release.sh` builds and publishes signed Android and Linux downloads after
+local checks and secure signing-key retrieval. This privileged release process
+does not run in CI.
+
+Licences for bundled components are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
 
 ### Rust CLI quick start
 
@@ -210,9 +243,26 @@ nix build --system x86_64-linux --no-link .#packages.x86_64-linux.aarch64Cross
 nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#packages.x86_64-linux.aarch64Cross
 ```
 
-The cross package compiles the Rust FFI for AArch64 and assembles the AArch64 Compose native runtime, JRE, launcher, and Linux libraries on the x86_64 host. The earlier native `aarch64-linux` package remains available when building on an AArch64 host. `packages.<system>.default`, `nixosModules.default`, and `homeManagerModules.default` select the native KMP package. The optional manual Actions workflow also cross-builds and uploads an AArch64 bundle.
+The cross package compiles the Rust FFI for AArch64 and assembles the AArch64
+Compose runtime, JRE, launcher, and Linux libraries on an x86_64 host. A native
+`aarch64-linux` package is also available when building on an AArch64 host.
+`packages.<system>.default`, `nixosModules.default`, and
+`homeManagerModules.default` select the native KMP package. The optional
+Actions workflow can also cross-build an AArch64 bundle.
 
-The Nix flake package supplies pinned `mpv` and `ffmpeg`. The published stable `2.0.0` Linux `.tar.zst` and `.AppImage` downloads use system executables from `PATH`, so install both for video playback and thumbnails. Stable `2.0.1` Linux bundles include pinned executables and their runtime closure. Check the [2.0.1 release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1) for the current downloads.
+The Nix package uses pinned `mpv` and `ffmpeg`.
+Linux downloads for version 2.0.0 use the system executables from `PATH`;
+install both for video playback and thumbnails.
+
+Version 2.0.1 Linux bundles include these tools and their runtime libraries.
+The published 2.0.1 AppImages predate the system-font change described here.
+AppImages built from this source use your system Fontconfig configuration and
+installed fonts when `/etc/fonts/fonts.conf` is available. Your own
+`FONTCONFIG_FILE` setting takes precedence. Google Sans Flex remains available
+as an app appearance option.
+
+See the [latest release](https://github.com/hanaretamae/Kaede-Gallery/releases)
+for downloads.
 
 ### Run and package the KMP app
 
@@ -225,34 +275,52 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-The Nix shell provides JDK 17, the Android SDK (API 35–37.1), Build Tools 37, NDK 28.2 and CMake 3.22.1. Android
-builds normally run locally: install/check the Rust Android targets, configure the NDK compiler variables, then run
-`:androidApp:assembleDebug` from `kotlin/`. The APK is written under
-`kotlin/androidApp/build/outputs/apk/debug/` and uses the debug application ID `com.hanaretamae.kaede.kmpdebug`.
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the exact setup commands. This is a debug build, not the signed production
-release. Production Android builds require Android 7.0 (API 24) or later.
+The Nix shell provides JDK 17, Android SDK (API 35–37.1), Build Tools 37,
+NDK 28.2, and CMake 3.22.1.
 
-The production KMP Android application ID is `com.hanaretamae.kaede`, while the previous Flutter Android ID is
-`com.hanaretamae.vault_gallery`. Android treats these as separate apps: installing KMP does not update or inherit
-Flutter's private settings, cached index, or persisted SAF permission. Select the Vault again in KMP and, if needed,
-export settings from the old app and import the compatible JSON through the settings screen. The index/cache is
-recreated outside the Vault; the Vault itself is never copied or modified.
+Build Android locally: install the Rust Android targets, configure the NDK
+compiler variables, then run `:androidApp:assembleDebug` from `kotlin/`.
+The APK is written to `kotlin/androidApp/build/outputs/apk/debug/` and uses
+the debug application ID `com.hanaretamae.kaede.kmpdebug`.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup commands.
+This is a debug build, not a signed production release.
+Production Android builds require Android 7.0 (API 24) or later.
 
-Local Android builds remain the normal path. For an optional hosted build, manually run
-`.github/workflows/optional-arm-builds.yml` from the Actions tab and choose `android-debug`, `linux-aarch64`, or `both`.
-After that workflow is on GitHub, you can also dispatch it from `nix develop` using the authenticated GitHub CLI:
+The KMP app installs separately from the retired Flutter app. Android does not
+transfer the old app's settings, cached index, or Vault access permission.
+Select your Vault again in KMP. If you still use the old app, export its
+settings before removing it, then import the compatible JSON in KMP.
+
+The index and caches are recreated outside the Vault. The Vault itself is never
+copied or modified.
+
+Local Android builds remain the normal path.
+For an optional hosted build, manually run
+`.github/workflows/optional-arm-builds.yml` from the Actions tab.
+Choose `android-debug`, `linux-aarch64`, or `both`.
+After the workflow is available on GitHub, you can also start it from
+`nix develop` using the authenticated GitHub CLI:
 
 ```sh
 tools/run-optional-builds.sh android-debug
 # Choose linux-aarch64 or both instead; an optional second argument selects the ref.
 ```
 
-It is not triggered by pushes or pull requests, uploads build artifacts only, and never signs a production APK or
-publishes a release. `.github/workflows/kotlin-windows.yml` continues Windows x64 tests and packaging on push and pull
-request. The manual `.github/workflows/windows.yml` workflow builds a versioned Windows ZIP and attaches it to an
-existing release when a tag is supplied. `tools/release.sh` remains the Linux-hosted release entry point for the
-signed Android APK and Linux bundles; it requires the Rustup 1.98.1 Android targets and retrieves the signing key from
-KeePassXC. Physical Windows runtime behavior and a real-key Android release have not been verified here. For complete local, optional Actions, and release limitations, see the [release guide](docs/releasing.md).
+It is not triggered by pushes or pull requests. It uploads build artifacts
+only; it does not sign production APKs or publish releases.
+
+`.github/workflows/kotlin-windows.yml` runs Windows x64 tests and packaging on
+push and pull request. The manual `.github/workflows/windows.yml` workflow
+builds a versioned Windows ZIP and attaches it to an existing release when a
+tag is supplied.
+
+`tools/release.sh` is the Linux release entry point for signed Android APKs and
+Linux bundles. It requires the Rustup 1.98.1 Android targets and retrieves the
+signing key from KeePassXC.
+
+Physical Windows runtime behavior has not been verified.
+See the [release guide](docs/releasing.md) for local build instructions,
+optional Actions builds, and release limitations.
 
 ## Developer information
 
@@ -266,8 +334,8 @@ cargo run --release -p gallery-cli --bin generate-dummy-vault -- /tmp/vault-2000
 tools/benchmark.sh 7806
 ```
 
-`tools/benchmark.sh` measures the release build and scan times (initial and rescan). `testdata/dummy-vault` in
-the repository is fictional data.
+`tools/benchmark.sh` measures release-build and scan times (initial scan and
+rescan). The repository's `testdata/dummy-vault` contains fictional data.
 
 ### Repository layout
 
@@ -285,6 +353,9 @@ kotlin/
 docs/design.md      source of truth for the design
 ```
 
-This repository exists for distribution only and does not accept external issues or pull requests. See
-[CONTRIBUTING.md](CONTRIBUTING.md) for developer procedures. Licensed under [LICENSE](LICENSE) (MIT). See
-[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) for bundled components such as mpv and FFmpeg.
+This repository is for distribution and does not accept external issues or
+pull requests. Developer procedures are in [CONTRIBUTING.md](CONTRIBUTING.md).
+
+Kaede Gallery is licensed under the [MIT License](LICENSE). Licences for
+bundled components such as mpv and FFmpeg are listed in
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
