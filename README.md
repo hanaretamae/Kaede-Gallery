@@ -49,9 +49,9 @@
 
 > [!NOTE]
 > The active UI is Kotlin Multiplatform / Compose. Android and Linux Desktop build paths are available.
-> Windows x64 tests, packaging, and a manual release workflow are configured; physical Windows runtime behavior has not
-> been verified. The latest published KMP prerelease is `2.0.0b3`; `2.0.0b4` is tagged in the repository but has no
-> published Release yet. Production-signed releases use the local release script and require release credentials.
+> Windows x64 and ARM64 tests, packaging, and a manual release workflow are configured; physical Windows runtime behavior has not
+> been verified. The latest published KMP prerelease is `2.0.0rc2`; stable `2.0.0` has not been published.
+> Production-signed releases use the local release script and require release credentials.
 > See [the release guide](docs/releasing.md) for verified build paths and remaining release prerequisites.
 
 ## Using the app

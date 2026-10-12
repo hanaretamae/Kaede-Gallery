@@ -48,8 +48,8 @@
 
 > [!NOTE]
 > 現在の UI は Kotlin Multiplatform / Compose です。Android と Linux Desktop のビルド手順があります。
-> Windows x64 のテスト・パッケージ作成と手動 Release workflow も用意していますが、実機での実行は未確認です。
-> 公開済みの最新 KMP prerelease は `2.0.0b3` です。リポジトリには `2.0.0b4` tag がありますが、Release はまだ公開されていません。
+> Windows x64／ARM64 のテスト・パッケージ作成と手動 Release workflow も用意していますが、実機での実行は未確認です。
+> 公開済みの最新 KMP prerelease は `2.0.0rc2` です。安定版 `2.0.0` はまだ公開されていません。
 > production 署名付き Release にはローカルの release script と認証情報が必要です。
 > 検証済みのビルド経路と残るリリース要件は[リリース手順](docs/releasing.ja.md)を参照してください。
 

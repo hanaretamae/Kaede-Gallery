@@ -48,18 +48,14 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 - Updated fallback palettes to the MaterialKolor Expressive 2025 palette and consolidated system/fallback/pure-black scheme selection.
 - Refined the filter and Vault-selection surfaces around Material 3 Expressive components.
 
-## [2.0.0] - Draft (changes since 1.6.2; not released)
-
-This is a consolidated draft of the 2.0.0 changes from 1.6.2 onward. Review and
-update it against the final release commit and verified target results before
-publishing.
+## [2.0.0] - 2026-10-12
 
 ### Added
 
 - Replaced the retired Flutter app and bridge with Kotlin Multiplatform / Compose and the Rust parser, core, and FFI as the active application and release path.
 - Added the shared gallery, search, tag/date filters, paging, note viewer, Obsidian link handling, and configurable note structure across Android and Desktop.
 - Added Compose video controls for play/pause, seeking, playback speed (0.25×–2×), looping, and mute; Linux uses mpv for embedded video rendering.
-- Added Android universal, arm64-v8a, and x86_64 APK packaging, Linux x86_64 and AArch64 Desktop bundles, and a Windows x64 packaging workflow.
+- Added Android universal, arm64-v8a, and x86_64 APK packaging, Linux x86_64 and AArch64 Desktop bundles, and Windows x64 and ARM64 packaging workflows.
 - Added Linux XDG Desktop Portal system color-scheme and accent-color support, responsive/fixed gallery columns, English/Japanese UI, and import/export for settings.
 - Added offline third-party license notices to application distributions.
 
@@ -68,12 +64,15 @@ publishing.
 - Improved Android SAF media handling with provider previews, bounded thumbnail decoding, private caching, and additional video-frame fallbacks.
 - Fixed Windows media opening, file-manager selection, Obsidian links, video thumbnails, system accent refresh, and Desktop archive launcher discovery.
 - Fixed Android and Desktop video looping/restart behavior, viewer navigation and Back handling, gallery/detail toolbar layout, and bounded cache/path handling.
+- Preserved a minimum video area while expanding viewer details and made reverse scrolling collapse the panel after note content reaches its top.
+- Disabled mpv's on-screen controller and default input bindings so video interaction stays in the app's Compose controls.
 - Preserved Material You tinting in pure-black mode and improved video seek/control presentation.
 
 ### Changed
 
 - Reworked the gallery and settings navigation, filters, note details, themes, and controls around Material 3 Expressive components and responsive layouts.
 - Moved Vault selection, settings, indexes, and caches to read-only Vault access with app-private persistence; the application does not write into the Vault.
+- Linux `.tar.zst` bundles and `.AppImage` files use `mpv` for playback and `ffmpeg` for thumbnails from `PATH`; these executables are not bundled.
 - Raised Android's minimum supported version to API 24 for the current Material 3 Expressive dependencies and standardized release versioning through `VERSION`.
 
 ## [2.0.0b4] - 2026-10-11 (Beta)

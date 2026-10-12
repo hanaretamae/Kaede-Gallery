@@ -12,15 +12,13 @@
 
 ## 現在のリリース状況
 
-2026-10-12にGitHub上の公開状態を確認しました。`2.0.0b5` prerelease は Android APK、Linux x86_64/AArch64 bundle、ライセンス通知、チェックサム、Windows ZIP とともに公開済みです。`2.0.0b4` には引き続きWindows ZIPがありません。Windows workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) は `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris` で失敗し、package作成とuploadがskipされました。このためPhase 14 acceptance gateは未完了です。
-
-`2.0.0rc1` prerelease は2026-10-12に公開状態を確認し、Android・Linux・Windows x64 artifactとチェックサムが添付されています。changelogは草案のままです。次の候補版 `2.0.0rc2` を準備中です。こちらのchangelogも草案のため、`tools/release.sh` で公開する前にrelease noteを確認してください。過去のtagを移動・作り直ししないでください。
+2026-10-12にGitHub上の公開状態を確認しました。`2.0.0rc2` prerelease は Android APK、Linux x86_64/AArch64 bundle、Windows x64／ARM64 ZIP、ライセンス通知、チェックサムとともに公開済みです。`2.0.0b4` には引き続きWindows ZIPがありません。Windows workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) は `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris` で失敗し、package作成とuploadがskipされました。このb4固有のPhase 14 acceptance項目は未完了です。Release owner はその状態でも安定版 `2.0.0` を進めることを明示的に承認しましたが、Phase 14 acceptance完了を意味しません。最新の安定版Releaseは引き続き `v1.6.2` で、安定版 `2.0.0` は未公開です。`2.0.0` の版数とchangelogはローカルで準備済みですが、未commit・未公開です。過去のtagを移動・作り直ししないでください。
 
 Android version codeではbetaをb1〜b898、release candidateをrc1〜rc100、安定版を999として予約します。タグ作成後に許されるのは、`CHANGELOG.md` 以外のMarkdownドキュメント変更だけです。リリーススクリプトは現在のコミットと `origin/main` が一致することも検査します。リリースノートとドキュメント以外のリリースコードはタグ時点のままにしてください。
 
 ## 安定版2.0.0の準備
 
-準備中のcandidate versionは `2.0.0rc2` です。`docs/design.md` のPhase 14 acceptance gate（prereleaseとWindows archiveを含む）が満たされるまで、安定版Releaseを開始しないでください。その後、`CHANGELOG.md` の草案をrelease commitと検証結果に合わせてレビュー・確定し、`VERSION` を `2.0.0` に更新したうえで、両方をレビュー済みRelease commitに含めます。そのcommitをpushしてから一致する `2.0.0` tagを作成・pushし、下記の完全なローカルRelease手順を `tools/release.sh 2.0.0` で実行します。`2.0.0` はprereleaseではなく安定版として公開されます。
+Release targetは `2.0.0` です。Release owner はPhase 14のb4固有Windows archive gateが未完了でも、安定版 `2.0.0` を進める例外を明示的に承認しました。この例外はPhase 14 acceptance完了を意味しません。`CHANGELOG.md` と `CHANGELOG.ja.md` をrelease commitに合わせてレビュー・確定し、`VERSION` を `2.0.0` にしたうえで、レビュー済みRelease commitに含めます。そのcommitをpushしてから一致する `2.0.0` tagを作成・pushし、下記の完全なローカルRelease手順を `tools/release.sh 2.0.0` で実行します。`2.0.0` はprereleaseではなく安定版として公開されます。
 
 公開前に、Android APKの署名とpackage permissions、Linux x86_64/AArch64 bundle、生成されたlicense notices、チェックサム、Kotlin/Rust test結果を確認してください。Windows archiveは安定版GitHub Release作成後に添付します。実行が完了したtarget testだけを記録し、Windows実機や未検証のhardware/providerの動作は未確認のままとしてください。公開後はReleaseページ上の実ファイルとチェックサムも確認してください。
 

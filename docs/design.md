@@ -108,7 +108,11 @@ integrations.
     `2.0.0b4` archive is still absent, as verified on 2026-10-12; keep that
     Phase 14 acceptance gate open until the archive is attached. The earlier
     Windows workflow failure in `LinuxPortalDirectoryPickerTest` and the
-    aarch64 cache timeout are historical evidence.
+    aarch64 cache timeout are historical evidence. The public `2.0.0rc2`
+    prerelease was published on 2026-10-12 with Android, Linux, Windows x64 and
+    ARM64 archives, and checksums. The release owner explicitly directed
+    proceeding with stable `2.0.0` despite the b4-specific gate; this release
+    waiver does not mark Phase 14 acceptance complete.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
@@ -250,6 +254,12 @@ verified the declared AArch64 Linux Desktop build on 2026-10-09 with
 Android and Windows GitHub Actions workflows passed on `7a6cd83` (runs
 [37761351814](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814)
 and [37761351884](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)); those runs are historical. Windows builds remain automatic, while Android debug and Linux AArch64 builds can be dispatched manually as artifact-only jobs; local verification remains the default. Real-key Android signing and release publication have not happened because the local KeePassXC database/key-file configuration is not available in the release environment.
+
+**Owner-approved stable-release override (2026-10-12):** Proceed with stable
+`2.0.0` despite the still-open `2.0.0b4` Windows archive acceptance item. The
+published `2.0.0rc2` includes Windows x64 and ARM64 ZIPs, but this release
+override does not close Phase 14 or substitute for its remaining acceptance
+evidence.
 
 ### Current KMP implementation status
 
