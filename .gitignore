@@ -7,3 +7,4 @@ __pycache__/
 *.sqlite
 *.sqlite-shm
 *.sqlite-wal
+kotlin/core/rust/src/jvmMain/resources/win32-aarch64/

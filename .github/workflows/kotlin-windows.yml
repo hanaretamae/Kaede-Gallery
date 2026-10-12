@@ -19,6 +19,9 @@ jobs:
           - arch: x64
             java_distribution: temurin
             runner: windows-latest
+          - arch: arm64
+            java_distribution: microsoft
+            runner: windows-11-arm
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-java@v5
@@ -27,6 +30,10 @@ jobs:
           java-version: "17"
           cache: gradle
       - uses: dtolnay/rust-toolchain@1.98.1
+      - name: Build uniffi runtime for Windows ARM64
+        if: matrix.arch == 'arm64'
+        shell: bash
+        run: tools/build-uniffi-runtime-windows-arm64.sh
       - name: Test Kotlin modules and package Compose Desktop with Windows Rust ABI
         working-directory: kotlin
         shell: pwsh
