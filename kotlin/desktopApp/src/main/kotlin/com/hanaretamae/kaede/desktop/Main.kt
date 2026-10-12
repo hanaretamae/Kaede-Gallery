@@ -366,7 +366,14 @@ private fun DesktopApplication(
     suspend fun openVault(path: String, performScan: Boolean = true, force: Boolean = false) {
         if (!force && path == vaultPath && session != null) return
         loading = true
-        openingVaultName = Path.of(path).fileName?.toString()
+        openingVaultName = try {
+            desktopVaultName(path)
+        } catch (_: InvalidPathException) {
+            loading = false
+            error = errorText(RepositoryError.INVALID_VAULT)
+            vaultSelectionResolved = true
+            return
+        }
         error = null
         val previousPath = when (val previous = vaultRepository.loadSelected(privateData)) {
             is RepositoryResult.Failure -> {
@@ -552,7 +559,7 @@ private fun DesktopApplication(
             )
         }
     } else {
-        val selectedVaultPath = vaultPath
+        val selectedVaultPath = requireNotNull(vaultPath)
         KaedeGalleryApp(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
@@ -567,7 +574,7 @@ private fun DesktopApplication(
                 desktopSystemColorScheme(portalAppearance.accentColor, darkTheme)
             },
             systemDarkTheme = portalAppearance.darkTheme,
-            vaultName = Path.of(vaultPath).fileName?.toString(),
+            vaultName = desktopVaultName(selectedVaultPath),
             scanWarningCount = activeSession.initialScan.warnings.coerceAtMost(Int.MAX_VALUE.toLong())
                 .toInt(),
             rescanOnStart = initialScanRequired,
@@ -1661,7 +1668,7 @@ private suspend fun exportSettingsFile(content: String, vaultPath: String?) {
             save = true,
             fileName = "kaede-gallery-settings.kgsettings",
         ) ?: return
-        val vault = vaultPath?.let(Path::of)
+        val vault = vaultPath?.let(::desktopPathOf)
             ?: throw IOException("No Vault is selected.")
         withContext(Dispatchers.IO) {
             DesktopSettingsTransfer.write(selected, content, vault)

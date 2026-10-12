@@ -4,6 +4,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class DesktopPathsTest {
     @Test
@@ -11,6 +12,18 @@ class DesktopPathsTest {
         assertEquals("C:\\Vault\\a.png", stripWindowsVerbatimPrefix("\\\\?\\C:\\Vault\\a.png"))
         assertEquals("\\\\host\\share\\a.png", stripWindowsVerbatimPrefix("\\\\?\\UNC\\host\\share\\a.png"))
         assertEquals("/home/a.png", stripWindowsVerbatimPrefix("/home/a.png"))
+    }
+
+    @Test
+    fun vaultNamesAcceptCanonicalWindowsPathsWithoutOpeningTheVault() {
+        if (isWindowsDesktop()) {
+            val drivePath = "\\\\?\\C:\\Fictional\\Fictional Gallery"
+            assertTrue(desktopPathOf(drivePath).isAbsolute)
+            assertEquals("Fictional Gallery", desktopVaultName(drivePath))
+            assertEquals("Fictional Gallery", desktopVaultName("\\\\?\\UNC\\fictional-host\\share\\Fictional Gallery"))
+        } else {
+            assertEquals("Fictional Gallery", desktopVaultName("/fictional/Fictional Gallery"))
+        }
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.hanaretamae.kaede.desktop
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotEquals
 import kotlin.test.assertTrue
 
 class MpvVideoCommandTest {
@@ -14,9 +15,9 @@ class MpvVideoCommandTest {
     }
 
     @Test
-    fun inAppPlaybackControlsAreEnabledOnlyWhereIpcIsAvailable() {
+    fun inAppPlaybackControlsAreEnabledOnSupportedDesktopPlatforms() {
         assertTrue(MpvVideoCommand.supportsInAppControls("Linux"))
-        assertFalse(MpvVideoCommand.supportsInAppControls("Windows 11"))
+        assertTrue(MpvVideoCommand.supportsInAppControls("Windows 11"))
         assertFalse(MpvVideoCommand.supportsInAppControls("Mac OS X"))
     }
 
@@ -48,6 +49,18 @@ class MpvVideoCommandTest {
     @Test
     fun windowsUsesNativeEmbeddedVideoOutput() {
         assertFalse("--vo=x11" in MpvVideoCommand.arguments(42, "video.mp4", "Windows"))
+    }
+
+    @Test
+    fun windowsDisablesNativeControlsWhenUsingPrivateNamedPipe() {
+        val endpoint = windowsMpvPipePath()
+        val arguments = MpvVideoCommand.arguments(42, "fictional.mp4", "Windows 11", endpoint)
+
+        assertTrue(endpoint.startsWith("\\\\.\\pipe\\kaede-mpv-"))
+        assertNotEquals(endpoint, windowsMpvPipePath())
+        assertTrue("--input-ipc-server=$endpoint" in arguments)
+        assertTrue("--osc=no" in arguments)
+        assertTrue("--input-default-bindings=no" in arguments)
     }
 
     @Test

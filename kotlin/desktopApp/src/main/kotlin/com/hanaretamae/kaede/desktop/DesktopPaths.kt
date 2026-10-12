@@ -13,6 +13,8 @@ internal fun stripWindowsVerbatimPrefix(location: String): String = when {
 
 internal fun desktopPathOf(location: String): Path = Path.of(stripWindowsVerbatimPrefix(location))
 
+internal fun desktopVaultName(location: String): String? = desktopPathOf(location).fileName?.toString()
+
 // Windows distributions put tools beside the jpackage launcher, not inside its runtime.
 internal fun desktopToolCommand(
     name: String,

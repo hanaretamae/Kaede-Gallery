@@ -94,7 +94,7 @@ internal fun chooseWindowsDirectory(title: String): String? {
     }
     return when (process.exitValue()) {
         0 -> String(output, StandardCharsets.UTF_8).trim().takeIf {
-            it.isNotEmpty() && runCatching { Path.of(it).isAbsolute }.getOrDefault(false)
+            it.isNotEmpty() && runCatching { desktopPathOf(it).isAbsolute }.getOrDefault(false)
         } ?: throw IOException("System folder picker returned an invalid path.")
         FOLDER_PICKER_EXIT_CANCELLED -> null
         else -> throw IOException("System folder picker failed.")

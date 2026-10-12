@@ -329,14 +329,18 @@ separate `mpv` process. Linux bundles do not ship `mpv` or `ffmpeg`, so they
 must be on `PATH`. Windows CI artifacts and release ZIPs include pinned GPL
 `mpv.exe`/`ffmpeg.exe` in `tools/` beside `Kaede-Gallery.exe`; these take
 precedence over `PATH`.
+Rust may return Windows extended-length Vault paths (`\\?\`); the desktop
+platform layer removes that prefix only for Java path parsing and display,
+while passing the original locator to the Rust filesystem repository.
 Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
 and automatic sidecar loading. Linux playback forces mpv's X11 video output so
 its `--wid` targets the Swing canvas under XWayland instead of creating a
 separate Wayland window. Desktop video thumbnails limit ffmpeg to local
 file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
-timeout, and two concurrent extraction processes. Linux playback controls are
-rendered by Compose rather than mpv's on-screen display; a private Unix-domain
-IPC connection controls play/pause, seeking, speed, looping, and mute while
+timeout, and two concurrent extraction processes. Desktop playback controls
+are rendered by Compose rather than mpv's on-screen display. A private
+Unix-domain socket on Linux or a randomized local named
+pipe on Windows controls play/pause, seeking, speed, looping, and mute while
 mpv supplies embedded video rendering. A basic localized About section now
 links to the project and license. Windows x64 CI passed for the
 current migration branch at commit `076436a`

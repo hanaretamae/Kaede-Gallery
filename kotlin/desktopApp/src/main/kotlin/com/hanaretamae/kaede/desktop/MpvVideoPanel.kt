@@ -22,9 +22,11 @@ import java.awt.Color
 import java.awt.Graphics
 import java.io.BufferedReader
 import java.io.BufferedWriter
+import java.io.Closeable
 import java.io.IOException
 import java.io.InputStreamReader
 import java.io.InputStream
+import java.io.OutputStream
 import java.io.OutputStreamWriter
 import java.net.UnixDomainSocketAddress
 import java.nio.channels.Channels
@@ -45,6 +47,11 @@ import javax.swing.JPanel
 import javax.swing.SwingConstants
 import javax.swing.SwingUtilities
 
+internal interface MpvIpcConnection : Closeable {
+    val input: InputStream
+    val output: OutputStream
+}
+
 internal object MpvVideoCommand {
     fun supportsEmbeddedPlayback(osName: String): Boolean {
         val normalizedName = osName.lowercase()
@@ -52,7 +59,7 @@ internal object MpvVideoCommand {
     }
 
     fun supportsInAppControls(osName: String = System.getProperty("os.name")): Boolean =
-        osName.lowercase().contains("linux")
+        supportsEmbeddedPlayback(osName)
 
     fun arguments(
         windowId: Long,
@@ -148,7 +155,7 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     private var player: Process? = null
     private var activePath: String? = null
     private var ipcWriter: BufferedWriter? = null
-    private var ipcChannel: SocketChannel? = null
+    private var ipcConnection: MpvIpcConnection? = null
     private var ipcSocketDirectory: Path? = null
     private var lastUnmutedVolume = 100f
     private val ipcLock = Any()
@@ -215,9 +222,9 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
             return
         }
         val isLinux = System.getProperty("os.name").lowercase().contains("linux")
-        val ipcSocketPath = if (isLinux) {
+        val ipcEndpoint = if (isLinux) {
             try {
-                createPrivateIpcSocketPath().also { ipcSocketDirectory = it.parent }
+                createPrivateIpcSocketPath().also { ipcSocketDirectory = it.parent }.toString()
             } catch (_: IOException) {
                 setPlaybackError("In-app video controls could not be initialized.")
                 return
@@ -228,13 +235,11 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
                 setPlaybackError("In-app video controls could not be initialized.")
                 return
             }
-        } else {
-            null
-        }
+        } else windowsMpvPipePath()
         var process: Process? = null
         try {
             val startedProcess = ProcessBuilder(
-                MpvVideoCommand.arguments(windowId, path.toString(), ipcSocketPath = ipcSocketPath?.toString()),
+                MpvVideoCommand.arguments(windowId, path.toString(), ipcSocketPath = ipcEndpoint),
             )
                 .redirectInput(ProcessBuilder.Redirect.PIPE)
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
@@ -245,17 +250,19 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
             player = startedProcess
             status.text = ""
             state.value = DesktopVideoPlaybackState()
-            if (ipcSocketPath != null) startIpcReader(startedProcess, ipcSocketPath)
+            startIpcReader(startedProcess, ipcEndpoint, !isLinux)
             Thread({
                 val exitCode = startedProcess.waitFor()
                 SwingUtilities.invokeLater {
                     if (player === startedProcess) {
                         player = null
+                        val playbackError = state.value.errorMessage
+                            ?: if (exitCode == 0) null else "Video playback failed."
                         state.value = state.value.copy(
                             connected = false,
-                            errorMessage = if (exitCode == 0) null else "Video playback failed.",
+                            errorMessage = playbackError,
                         )
-                        status.text = if (exitCode == 0) "" else "Video playback failed."
+                        status.text = playbackError ?: ""
                         cleanupIpc()
                         if (exitCode != 0) {
                             repaint()
@@ -348,35 +355,42 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
         ).resolve("control.sock")
     }
 
-    private fun startIpcReader(process: Process, socketPath: Path) {
+    private fun startIpcReader(process: Process, endpoint: String, windows: Boolean) {
         Thread({
-            val channel = connectToIpc(process, socketPath)
-            if (channel == null) {
+            val connection = try {
+                connectToIpc(process, endpoint, windows)
+            } catch (_: LinkageError) {
+                null
+            }
+            if (connection == null) {
                 SwingUtilities.invokeLater {
                     if (player === process) {
                         state.value = state.value.copy(
                             errorMessage = "In-app video controls could not connect to the player.",
                         )
+                        status.text = "In-app video controls could not connect to the player."
                     }
                 }
                 process.destroy()
                 return@Thread
             }
             val writer = BufferedWriter(
-                OutputStreamWriter(Channels.newOutputStream(channel), StandardCharsets.UTF_8),
+                OutputStreamWriter(connection.output, StandardCharsets.UTF_8),
             )
             val reader = BufferedReader(
-                InputStreamReader(mpvSocketInputStream(channel), StandardCharsets.UTF_8),
+                InputStreamReader(connection.input, StandardCharsets.UTF_8),
             )
-            synchronized(ipcLock) {
-                if (player !== process) {
-                    channel.close()
-                    return@synchronized
+            val active = synchronized(ipcLock) {
+                if (player !== process) false else {
+                    ipcConnection = connection
+                    ipcWriter = writer
+                    true
                 }
-                ipcChannel = channel
-                ipcWriter = writer
             }
-            if (!channel.isOpen) return@Thread
+            if (!active) {
+                connection.close()
+                return@Thread
+            }
             state.value = state.value.copy(connected = true, errorMessage = null)
             listOf(
                 "pause",
@@ -403,13 +417,13 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
                 }
             } finally {
                 synchronized(ipcLock) {
-                    if (ipcChannel === channel) {
+                    if (ipcConnection === connection) {
                         ipcWriter = null
-                        ipcChannel = null
+                        ipcConnection = null
                     }
                 }
                 try {
-                    channel.close()
+                    connection.close()
                 } catch (_: IOException) {
                     Unit
                 }
@@ -421,17 +435,28 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
         }
     }
 
-    private fun connectToIpc(process: Process, socketPath: Path): SocketChannel? {
+    private fun connectToIpc(process: Process, endpoint: String, windows: Boolean): MpvIpcConnection? {
         val deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5)
         while (process.isAlive && System.nanoTime() < deadline) {
-            val channel = try {
-                SocketChannel.open(StandardProtocolFamily.UNIX).also {
-                    it.connect(UnixDomainSocketAddress.of(socketPath))
+            val connection = try {
+                if (windows) WindowsMpvPipe.open(endpoint) else {
+                    val channel = SocketChannel.open(StandardProtocolFamily.UNIX)
+                    try {
+                        channel.connect(UnixDomainSocketAddress.of(Path.of(endpoint)))
+                    } catch (failure: IOException) {
+                        channel.close()
+                        throw failure
+                    }
+                    object : MpvIpcConnection {
+                        override val input = mpvSocketInputStream(channel)
+                        override val output = Channels.newOutputStream(channel)
+                        override fun close() = channel.close()
+                    }
                 }
             } catch (_: IOException) {
                 null
             }
-            if (channel != null) return channel
+            if (connection != null) return connection
             try {
                 Thread.sleep(50)
             } catch (_: InterruptedException) {
@@ -520,12 +545,12 @@ internal class MpvVideoPanel : JPanel(BorderLayout()) {
     }
 
     private fun cleanupIpc() {
-        val channel = synchronized(ipcLock) {
+        val connection = synchronized(ipcLock) {
             ipcWriter = null
-            ipcChannel.also { ipcChannel = null }
+            ipcConnection.also { ipcConnection = null }
         }
         try {
-            channel?.close()
+            connection?.close()
         } catch (_: IOException) {
             Unit
         }

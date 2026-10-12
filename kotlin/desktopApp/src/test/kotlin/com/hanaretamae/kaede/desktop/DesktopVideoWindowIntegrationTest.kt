@@ -17,6 +17,7 @@ import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.ui.gallery.GalleryViewerMediaState
 import com.hanaretamae.kaede.ui.gallery.KaedeGalleryTheme
+import com.hanaretamae.kaede.ui.gallery.EnglishGalleryPlaybackStrings
 import java.awt.Component
 import java.awt.Container
 import java.awt.Frame
@@ -139,7 +140,7 @@ class DesktopVideoWindowIntegrationTest {
             await("Speed selection reaches native playback") { active.playbackState.value.playbackSpeed == 2f }
             clickLabel("Mute video")
             await("Mute remains operable after speed selection") { active.playbackState.value.muted }
-            clickLabel("Restore application window")
+            clickLabel(EnglishGalleryPlaybackStrings.exitFullScreen)
             await("Restore remains operable after speed selection") { !maximized.value }
             SwingUtilities.invokeAndWait {
                 assertEquals(androidx.compose.ui.window.WindowPlacement.Floating, window.placement)
