@@ -12,7 +12,7 @@
 
 ## 現在のリリース状況
 
-2026-10-12にGitHub上の公開状態を確認しました。`2.0.0rc2` prerelease は Android APK、Linux x86_64/AArch64 bundle、Windows x64／ARM64 ZIP、ライセンス通知、チェックサムとともに公開済みです。`2.0.0b4` には引き続きWindows ZIPがありません。Windows workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) は `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris` で失敗し、package作成とuploadがskipされました。このb4固有のPhase 14 acceptance項目は未完了です。Release owner はその状態でも安定版 `2.0.0` を進めることを明示的に承認しましたが、Phase 14 acceptance完了を意味しません。最新の安定版Releaseは引き続き `v1.6.2` で、安定版 `2.0.0` は未公開です。`2.0.0` の版数とchangelogはローカルで準備済みですが、未commit・未公開です。過去のtagを移動・作り直ししないでください。
+2026-10-12にGitHub上の公開状態を確認しました。`2.0.0rc2` prerelease は Android APK、Linux x86_64/AArch64 bundle、Windows x64／ARM64 ZIP、ライセンス通知、チェックサムとともに公開済みです。`2.0.0b4` には引き続きWindows ZIPがありません。Windows workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) は `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris` で失敗し、package作成とuploadがskipされました。このb4固有のPhase 14 acceptance項目は未完了です。Release owner はその状態でも安定版 `2.0.0` を進めることを明示的に承認しましたが、Phase 14 acceptance完了を意味しません。最新の安定版Releaseは引き続き `v1.6.2` で、安定版 `2.0.0` は未公開です。`2.0.0` の版数とchangelogは `e3abe0f` で `main` にcommit済みですが、安定版Releaseは未公開です。過去のtagを移動・作り直ししないでください。
 
 Android version codeではbetaをb1〜b898、release candidateをrc1〜rc100、安定版を999として予約します。タグ作成後に許されるのは、`CHANGELOG.md` 以外のMarkdownドキュメント変更だけです。リリーススクリプトは現在のコミットと `origin/main` が一致することも検査します。リリースノートとドキュメント以外のリリースコードはタグ時点のままにしてください。
 
