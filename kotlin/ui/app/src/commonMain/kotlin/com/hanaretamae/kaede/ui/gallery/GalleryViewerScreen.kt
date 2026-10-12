@@ -257,6 +257,7 @@ fun GalleryViewerScreen(
     mediaContent: @Composable (GalleryViewerMediaState) -> Unit,
     onExternalLink: (String) -> Unit,
     onOpenNote: (NoteId) -> Unit = {},
+    onTagClick: (String) -> Unit = {},
     onBackHandlerChanged: (((() -> Unit)?) -> Unit)? = null,
     tagColorRules: List<GalleryTagColorRule> = GalleryTagColorCodec.DEFAULT_RULES,
     hiddenTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_HIDDEN,
@@ -732,6 +733,7 @@ fun GalleryViewerScreen(
                                             tagColorRules,
                                             hiddenTagPrefixes,
                                             noteStructure,
+                                            onTagClick,
                                         )
                                     }
                                 }
@@ -1167,6 +1169,7 @@ fun GalleryViewerScreen(
                                             tagColorRules,
                                             hiddenTagPrefixes,
                                             noteStructure,
+                                            onTagClick,
                                         )
                                     }
                                 }
@@ -1468,6 +1471,7 @@ private fun NoteDetails(
     tagColorRules: List<GalleryTagColorRule>,
     hiddenTagPrefixes: List<String>,
     noteStructure: GalleryNoteStructureSettings,
+    onTagClick: (String) -> Unit,
 ) {
     Text(note.title, style = MaterialTheme.typography.titleLarge)
     val profileUrl = galleryViewerAuthorProfileUrl(note.authorUrl, note.url)
@@ -1553,6 +1557,8 @@ private fun NoteDetails(
         ) {
             visibleTags.forEach { tag ->
                 Surface(
+                    onClick = { onTagClick(tag) },
+                    modifier = Modifier.testTag("viewer-tag:$tag"),
                     shape = MaterialTheme.shapes.small,
                     color = Color(
                         GalleryTagColorCodec.colorFor(tag, tagColorRules),

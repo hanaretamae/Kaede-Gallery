@@ -1,11 +1,13 @@
 package com.hanaretamae.kaede.desktop
 
+import com.hanaretamae.kaede.core.model.GalleryQuery
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
 import com.hanaretamae.kaede.core.settings.GallerySettings
 import com.hanaretamae.kaede.core.settings.FontPreference
 import com.hanaretamae.kaede.core.settings.LanguagePreference
+import com.hanaretamae.kaede.core.settings.SavedGallerySearch
 import com.hanaretamae.kaede.core.settings.SettingsTransferCodec
 import com.hanaretamae.kaede.core.settings.ThemePreference
 import java.nio.file.Files
@@ -76,6 +78,15 @@ class DesktopSettingsRepositoryTest {
                 showCounts = false,
                 flutterTagSettingsJson =
                     """{"includedPrefixes":["source"],"hiddenPrefixes":["private"],"colors":[]}""",
+                savedSearches = listOf(
+                    SavedGallerySearch.fromQuery(
+                        "Fictional art",
+                        GalleryQuery(
+                            searchText = "fictional",
+                            includeTags = setOf("source/art"),
+                        ),
+                    ),
+                ),
             )
 
             assertIs<RepositoryResult.Success<Unit>>(repository.save(expected))

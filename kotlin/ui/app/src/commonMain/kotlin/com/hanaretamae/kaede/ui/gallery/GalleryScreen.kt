@@ -64,6 +64,8 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -78,8 +80,10 @@ import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Collections
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Block
+import androidx.compose.material.icons.filled.Bookmark
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
@@ -137,6 +141,7 @@ import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.GalleryTagDisplayPrefixesCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagColorCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagColorRule
+import com.hanaretamae.kaede.core.settings.SavedGallerySearch
 import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
@@ -193,6 +198,12 @@ data class GalleryStrings(
     val clearSearchText: String,
     val applySearch: String,
     val clearAllSearchAndFilters: String,
+    val savedSearches: String,
+    val saveSearch: String,
+    val saveSearchTitle: String,
+    val searchName: String,
+    val noSavedSearches: String,
+    val deleteSavedSearch: String,
     val filterSearch: String,
     val fuzzySearch: String,
     val fuzzySearchTerm: String,
@@ -250,6 +261,12 @@ val EnglishGalleryStrings = GalleryStrings(
     clearSearchText = "Clear search text",
     applySearch = "Search",
     clearAllSearchAndFilters = "Clear all",
+    savedSearches = "Saved searches",
+    saveSearch = "Save current search",
+    saveSearchTitle = "Save search",
+    searchName = "Search name",
+    noSavedSearches = "No saved searches",
+    deleteSavedSearch = "Delete saved search",
     filterSearch = "Filter tags",
     fuzzySearch = "Fuzzy search",
     fuzzySearchTerm = "Fuzzy (~word)",
@@ -309,6 +326,12 @@ val JapaneseGalleryStrings = GalleryStrings(
     clearSearchText = "検索文字列を消去",
     applySearch = "検索",
     clearAllSearchAndFilters = "検索とフィルターを解除",
+    savedSearches = "保存した検索",
+    saveSearch = "現在の検索を保存",
+    saveSearchTitle = "検索を保存",
+    searchName = "検索名",
+    noSavedSearches = "保存した検索はありません",
+    deleteSavedSearch = "保存した検索を削除",
     filterSearch = "タグを検索",
     fuzzySearch = "あいまい検索",
     fuzzySearchTerm = "あいまい (~word)",
@@ -358,6 +381,9 @@ fun GalleryScreen(
     galleryThumbnail: @Composable (MediaId, Boolean, Boolean) -> Unit = { _, _, _ -> },
     onRescan: (suspend () -> RepositoryResult<*>)? = null,
     rescanOnStart: Boolean = false,
+    savedSearches: List<SavedGallerySearch> = emptyList(),
+    onSaveSearch: (suspend (SavedGallerySearch) -> RepositoryResult<Unit>)? = null,
+    onDeleteSavedSearch: (suspend (String) -> RepositoryResult<Unit>)? = null,
 ) {
     val state by stateHolder.state.collectAsState()
     val visibleGridIndices by remember(gridState) {
@@ -376,6 +402,11 @@ fun GalleryScreen(
         ),
     )
     var contentMenuExpanded by remember(stateHolder) { mutableStateOf(false) }
+    var savedSearchMenuExpanded by remember(stateHolder) { mutableStateOf(false) }
+    var showSaveSearchDialog by remember(stateHolder) { mutableStateOf(false) }
+    var savedSearchNameDraft by remember(stateHolder) { mutableStateOf("") }
+    var savedSearchError by remember(stateHolder) { mutableStateOf<RepositoryError?>(null) }
+    var savingSearch by remember(stateHolder) { mutableStateOf(false) }
     var tagFilterSearch by remember(stateHolder) { mutableStateOf("") }
     var expandedCategories by remember(stateHolder) { mutableStateOf(emptySet<String>()) }
     var expandedBeforeTagSearch by remember(stateHolder) { mutableStateOf<Set<String>?>(null) }
@@ -1093,6 +1124,112 @@ fun GalleryScreen(
                             onClick = { applyNoteSearch() },
                         ) { Icon(Icons.Filled.Search, strings.applySearch, Modifier.size(28.dp)) }
                     }
+                    Box {
+                        KaedeTooltip(strings.savedSearches) {
+                            FilledTonalIconButton(
+                                modifier = Modifier.size(56.dp),
+                                shapes = IconButtonDefaults.shapes(),
+                                onClick = { savedSearchMenuExpanded = true },
+                            ) {
+                                Icon(Icons.Filled.Bookmark, strings.savedSearches, Modifier.size(24.dp))
+                            }
+                        }
+                        DropdownMenu(
+                            expanded = savedSearchMenuExpanded,
+                            onDismissRequest = { savedSearchMenuExpanded = false },
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(strings.saveSearch) },
+                                leadingIcon = {
+                                    Icon(Icons.Filled.Add, contentDescription = null)
+                                },
+                                enabled = onSaveSearch != null,
+                                onClick = {
+                                    savedSearchMenuExpanded = false
+                                    savedSearchNameDraft = ""
+                                    savedSearchError = null
+                                    showSaveSearchDialog = true
+                                },
+                            )
+                            if (savedSearches.isEmpty()) {
+                                DropdownMenuItem(
+                                    text = { Text(strings.noSavedSearches) },
+                                    enabled = false,
+                                    onClick = {},
+                                )
+                            } else {
+                                savedSearches.forEach { savedSearch ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                savedSearch.name,
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                Icons.Filled.Bookmark,
+                                                contentDescription = null,
+                                            )
+                                        },
+                                        trailingIcon = {
+                                            IconButton(
+                                                enabled = onDeleteSavedSearch != null,
+                                                onClick = {
+                                                    val deleteSearch = onDeleteSavedSearch
+                                                    if (deleteSearch != null) {
+                                                        galleryCoroutineScope.launch {
+                                                            when (
+                                                                val result =
+                                                                    deleteSearch(savedSearch.name)
+                                                            ) {
+                                                                is RepositoryResult.Success -> {
+                                                                    savedSearchError = null
+                                                                }
+                                                                is RepositoryResult.Failure -> {
+                                                                    savedSearchError = result.error
+                                                                }
+                                                            }
+                                                        }
+                                                    }
+                                                },
+                                            ) {
+                                                Icon(
+                                                    Icons.Filled.Delete,
+                                                    "${strings.deleteSavedSearch}: ${savedSearch.name}",
+                                                )
+                                            }
+                                        },
+                                        onClick = {
+                                            savedSearchMenuExpanded = false
+                                            noteSearchDraft = savedSearch.searchText
+                                            tagFilterSearch = ""
+                                            stateHolder.setQuery(
+                                                savedSearch.toQuery(state.query.pageSize),
+                                            )
+                                            galleryCoroutineScope.launch {
+                                                filterSheetState.hide()
+                                                showFilters = false
+                                            }
+                                        },
+                                    )
+                                }
+                            }
+                            savedSearchError?.let { error ->
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            strings.error(error),
+                                            color = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
+                                    enabled = false,
+                                    onClick = {},
+                                )
+                            }
+                        }
+                    }
                     KaedeTooltip(strings.clearAllSearchAndFilters) {
                         FilledTonalIconButton(
                             modifier = Modifier.size(56.dp),
@@ -1320,6 +1457,77 @@ fun GalleryScreen(
                 }
             }
         }
+    }
+    if (showSaveSearchDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showSaveSearchDialog = false
+                savedSearchError = null
+            },
+            title = { Text(strings.saveSearchTitle) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextField(
+                        value = savedSearchNameDraft,
+                        onValueChange = { savedSearchNameDraft = it.take(64) },
+                        label = { Text(strings.searchName) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("saved-search-name"),
+                    )
+                    savedSearchError?.let { error ->
+                        Text(
+                            strings.error(error),
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    shapes = ButtonDefaults.shapes(),
+                    enabled = onSaveSearch != null &&
+                        savedSearchNameDraft.isNotBlank() &&
+                        !savingSearch,
+                    onClick = {
+                        val saveSearch = onSaveSearch
+                        if (saveSearch != null) {
+                            val query = state.query.copy(searchText = noteSearchDraft)
+                            val savedSearch = SavedGallerySearch.fromQuery(
+                                savedSearchNameDraft,
+                                query,
+                            )
+                            stateHolder.setQuery(query)
+                            savingSearch = true
+                            galleryCoroutineScope.launch {
+                                when (val result = saveSearch(savedSearch)) {
+                                    is RepositoryResult.Success -> {
+                                        savedSearchError = null
+                                        showSaveSearchDialog = false
+                                        galleryCoroutineScope.launch {
+                                            filterSheetState.hide()
+                                            showFilters = false
+                                        }
+                                    }
+                                    is RepositoryResult.Failure -> {
+                                        savedSearchError = result.error
+                                    }
+                                }
+                                savingSearch = false
+                            }
+                        }
+                    },
+                ) { Text(strings.saveSearch) }
+            },
+            dismissButton = {
+                TextButton(
+                    shapes = ButtonDefaults.shapes(),
+                    onClick = {
+                        showSaveSearchDialog = false
+                        savedSearchError = null
+                    },
+                ) { Text(strings.cancel) }
+            },
+        )
     }
     if (showJumpDialog) {
         AlertDialog(

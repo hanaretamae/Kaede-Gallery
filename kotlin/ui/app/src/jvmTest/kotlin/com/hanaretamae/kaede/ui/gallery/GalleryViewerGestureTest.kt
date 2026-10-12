@@ -51,6 +51,8 @@ class GalleryViewerGestureTest {
     private fun showViewer(
         withLongBody: Boolean = false,
         isVideo: Boolean = false,
+        tags: List<String> = emptyList(),
+        onTagClick: (String) -> Unit = {},
         onHolderCreated: (GalleryViewerStateHolder) -> Unit = {},
         onMediaStateChanged: (GalleryViewerMediaState) -> Unit = {},
         onMediaOnlyChanged: ((Boolean) -> Unit)? = null,
@@ -64,7 +66,7 @@ class GalleryViewerGestureTest {
         }
         val note = GalleryNoteDetail(
             NoteId(1), "fictional.md", "Fictional note", null, null, null,
-            null, null, null, emptyList(),
+            null, null, null, tags,
             if (withLongBody) "Fictional paragraph. ".repeat(300) else "",
             emptyList(), emptyList(), media,
         )
@@ -88,6 +90,7 @@ class GalleryViewerGestureTest {
             KaedeGalleryTheme(AppearanceSettings()) {
                 GalleryViewerScreen(
                     stateHolder = holder, onClose = {}, onExternalLink = {},
+                    onTagClick = onTagClick,
                     onFullscreenChanged = onFullscreenChanged,
                     windowFullscreen = windowFullscreen.value,
                     onWindowFullscreenChanged = { fullscreen ->
@@ -122,6 +125,19 @@ class GalleryViewerGestureTest {
         compose.waitUntil(5_000) {
             compose.onAllNodesWithTag("viewer-details-toolbar")
                 .fetchSemanticsNodes().isNotEmpty()
+        }
+    }
+
+    @Test
+    fun clickingDetailTagInvokesGalleryFilterAction() {
+        var selectedTag: String? = null
+        showViewer(tags = listOf("fictional/art"), onTagClick = { selectedTag = it })
+        showDetails()
+
+        compose.onNodeWithTag("viewer-tag:fictional/art").performClick()
+
+        compose.runOnIdle {
+            assertEquals("fictional/art", selectedTag)
         }
     }
 

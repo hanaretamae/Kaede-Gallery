@@ -443,7 +443,7 @@ class GallerySettingsNavigationTest {
             val saved = assertNotNull(savedSettings)
             assertEquals(initialSettings.pageSize, saved.pageSize)
             assertEquals(
-                listOf("Journal"),
+                GalleryNoteStructureSettings().memoHeadings,
                 GalleryNoteStructureCodec.decodeSettings(
                     saved.flutterTagSettingsJson,
                     saved.galleryTagPrefixes,

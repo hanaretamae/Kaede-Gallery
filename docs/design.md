@@ -974,7 +974,11 @@ fields support bounded typo-tolerant matching; in note search `~word` forces
 fuzzy matching and `=word` matches only a complete word, regardless of the
 global fuzzy-search setting. A non-empty tag search
 expands the matching categories while preserving their prior expanded/collapsed
-state.
+state. Named saved searches retain the content mode, note-search text, fuzzy
+search setting, included/AND/excluded tags, virtual filters, and sort order;
+loading one uses the current page size and starts at the first result. Saved
+searches are stored in private application settings and included in settings
+transfers, never in the Vault.
 Filter categories are user-configurable rules (`tagCategories` in the private
 tag settings): a name plus an exact path (`source/art`) or a subtree path
 (`source/count/*`). The most specific matching rule wins, rules sharing a name
@@ -1091,6 +1095,9 @@ keep the platform-specific playback implementations separate.
 
 The tag-filter panel has separate tag-option and note-name/path search fields.
 A tag chip cycles through OR include, AND include, exclude, and inactive.
+Tapping a visible tag in note details exits the viewer and opens the gallery
+with that tag as the sole included tag; other tag selections are cleared while
+the note search, content mode, virtual filters, and sort order are retained.
 The filter sheet uses the Material 3 `ModalBottomSheet` maximum width
 (`BottomSheetDefaults.SheetMaxWidth`), so it fills compact windows and remains
 centered and width-constrained on larger windows. It supports partially

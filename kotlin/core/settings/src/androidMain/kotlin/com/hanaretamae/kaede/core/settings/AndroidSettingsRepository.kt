@@ -73,6 +73,15 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
             ) {
                 return@withContext RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
             }
+            val savedSearchesContent = preferences.getString(KEY_SAVED_SEARCHES, null)
+            val savedSearches = savedSearchesContent?.let(SavedGallerySearchCodec::decodeStorage)
+                ?: if (savedSearchesContent == null) {
+                    emptyList()
+                } else {
+                    return@withContext RepositoryResult.Failure(
+                        RepositoryError.OPERATION_FAILED,
+                    )
+                }
             RepositoryResult.Success(
                 GallerySettings(
                     appearance = AppearanceSettings(
@@ -95,6 +104,7 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                     showTilePosition = preferences.getBoolean(KEY_TILE_POSITION, false),
                     showCounts = preferences.getBoolean(KEY_SHOW_COUNTS, true),
                     flutterTagSettingsJson = flutterTagSettingsJson,
+                    savedSearches = savedSearches,
                 ),
             )
         } catch (_: ClassCastException) {
@@ -133,6 +143,10 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
                     .putBoolean(KEY_SHOW_RANGE, settings.showLoadedRange)
                     .putBoolean(KEY_TILE_POSITION, settings.showTilePosition)
                     .putBoolean(KEY_SHOW_COUNTS, settings.showCounts)
+                    .putString(
+                        KEY_SAVED_SEARCHES,
+                        SavedGallerySearchCodec.encodeStorage(settings.savedSearches),
+                    )
                     .also {
                         val tagSettings = settings.flutterTagSettingsJson
                         if (tagSettings == null) {
@@ -169,5 +183,6 @@ class AndroidSettingsRepository(context: Context) : SettingsRepository {
         const val KEY_TILE_POSITION = "show_tile_position"
         const val KEY_SHOW_COUNTS = "show_counts"
         const val KEY_FLUTTER_TAG_SETTINGS = "flutter_tag_settings_json"
+        const val KEY_SAVED_SEARCHES = "saved_searches"
     }
 }

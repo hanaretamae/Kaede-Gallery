@@ -103,6 +103,10 @@ object SettingsTransferCodec {
                         put("showLoadedRange", JsonPrimitive(settings.showLoadedRange))
                         put("showCounts", JsonPrimitive(settings.showCounts))
                         put("fixedColumnCount", JsonPrimitive(settings.fixedColumnCount))
+                        put(
+                            "savedSearches",
+                            SavedGallerySearchCodec.encodeJson(settings.savedSearches),
+                        )
                     },
                 )
             },
@@ -197,6 +201,8 @@ object SettingsTransferCodec {
                 return null
             }
             val kmp = root["kmp"]?.jsonObject ?: JsonObject(emptyMap())
+            val savedSearches = SavedGallerySearchCodec.decodeJson(kmp["savedSearches"])
+                ?: return null
             val legacyKmpExport =
                 kmp["showLoadedRange"] != null && kmp["showCounts"] == null
             val showLoadedRange = if (legacyKmpExport) {
@@ -252,6 +258,7 @@ object SettingsTransferCodec {
                     JsonElement.serializer(),
                     JsonObject(tags),
                 ),
+                savedSearches = savedSearches,
             )
         } catch (_: IllegalArgumentException) {
             null

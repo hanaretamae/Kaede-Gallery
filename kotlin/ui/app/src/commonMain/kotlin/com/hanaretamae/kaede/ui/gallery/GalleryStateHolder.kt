@@ -226,6 +226,16 @@ class GalleryStateHolder(
         setQuery(updated, debounceSearch = true)
     }
 
+    fun filterByTag(tag: String) {
+        setQuery(
+            mutableState.value.query.copy(
+                includeTags = setOf(tag),
+                andTags = emptySet(),
+                excludedTags = emptySet(),
+            ),
+        )
+    }
+
     fun setVirtualFilter(filter: VirtualFilter, enabled: Boolean) {
         val filters = mutableState.value.query.virtualFilters
         setQuery(

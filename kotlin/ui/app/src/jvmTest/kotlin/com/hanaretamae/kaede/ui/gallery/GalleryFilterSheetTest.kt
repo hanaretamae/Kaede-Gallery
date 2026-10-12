@@ -3,6 +3,8 @@ package com.hanaretamae.kaede.ui.gallery
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.test.assertIsDisplayed
@@ -22,6 +24,7 @@ import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import com.hanaretamae.kaede.core.model.GalleryCategory
 import com.hanaretamae.kaede.core.model.GalleryCategoryOption
+import com.hanaretamae.kaede.core.model.GalleryContent
 import com.hanaretamae.kaede.core.model.GalleryNoteDetail
 import com.hanaretamae.kaede.core.model.GalleryPage
 import com.hanaretamae.kaede.core.model.GalleryQuery
@@ -32,6 +35,7 @@ import com.hanaretamae.kaede.core.model.VirtualFilter
 import com.hanaretamae.kaede.core.repository.GalleryRepository
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
+import com.hanaretamae.kaede.core.settings.SavedGallerySearch
 import org.junit.Rule
 import org.junit.Test
 
@@ -192,5 +196,75 @@ class GalleryFilterSheetTest {
         compose.onNodeWithContentDescription(strings.applySearch).performClick()
         compose.onNodeWithTag("GalleryFilterSheet").assertDoesNotExist()
         compose.onNodeWithContentDescription(strings.filters).assertIsDisplayed()
+    }
+
+    @Test
+    fun savesAndRestoresNamedSearches() {
+        val repository = object : GalleryRepository {
+            override suspend fun queryPage(query: GalleryQuery) =
+                RepositoryResult.Success(GalleryPage(emptyList(), 0, query.offset))
+            override suspend fun categories(query: GalleryQuery) =
+                RepositoryResult.Success(emptyList<GalleryCategory>())
+            override suspend fun noteDetail(noteId: NoteId, safContent: ByteArray?) =
+                RepositoryResult.Success<GalleryNoteDetail?>(null)
+            override suspend fun notePath(noteId: NoteId) = RepositoryResult.Success<String?>(null)
+            override suspend fun mediaLocation(mediaId: MediaId) =
+                RepositoryResult.Success<String?>(null)
+            override suspend fun thumbnail(mediaId: MediaId, size: Int) =
+                RepositoryResult.Success<ByteArray?>(null)
+        }
+        val storedSearches = mutableStateOf(emptyList<SavedGallerySearch>())
+        var holder: GalleryStateHolder? = null
+        compose.setContent {
+            val scope = rememberCoroutineScope()
+            val stateHolder = remember {
+                GalleryStateHolder(
+                    repository,
+                    scope,
+                    GalleryQuery(
+                        content = GalleryContent.NOTES,
+                        searchText = "fictional",
+                        includeTags = setOf("fictional/art"),
+                        pageSize = 48,
+                    ),
+                )
+            }
+            SideEffect { holder = stateHolder }
+            KaedeGalleryTheme(AppearanceSettings()) {
+                GalleryScreen(
+                    stateHolder,
+                    onEntrySelected = {},
+                    onSettings = {},
+                    savedSearches = storedSearches.value,
+                    onSaveSearch = { savedSearch ->
+                        storedSearches.value = storedSearches.value + savedSearch
+                        RepositoryResult.Success(Unit)
+                    },
+                )
+            }
+        }
+        val strings = EnglishGalleryStrings
+        compose.onNodeWithContentDescription(strings.filters).performClick()
+        compose.onNodeWithContentDescription(strings.savedSearches).performClick()
+        compose.onNodeWithText(strings.saveSearch).performClick()
+        compose.onNodeWithTag("saved-search-name").performTextInput("Fictional art")
+        compose.onNodeWithText(strings.saveSearch).performClick()
+        compose.waitUntil(5_000) {
+            storedSearches.value.size == 1 && holder?.state?.value?.searching == false
+        }
+
+        compose.runOnIdle {
+            holder?.filterByTag("fictional/other")
+        }
+        compose.onNodeWithContentDescription(strings.filters).performClick()
+        compose.onNodeWithContentDescription(strings.savedSearches).performClick()
+        compose.onNodeWithText("Fictional art").performClick()
+        compose.waitUntil(5_000) {
+            holder?.state?.value?.query?.includeTags == setOf("fictional/art")
+        }
+        compose.runOnIdle {
+            assertEquals("fictional", holder?.state?.value?.query?.searchText)
+            assertEquals(48, holder?.state?.value?.query?.pageSize)
+        }
     }
 }

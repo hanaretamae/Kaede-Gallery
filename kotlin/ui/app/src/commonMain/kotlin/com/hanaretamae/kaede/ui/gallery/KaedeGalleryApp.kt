@@ -53,6 +53,7 @@ import com.hanaretamae.kaede.core.settings.SettingsStateHolder
 import com.hanaretamae.kaede.core.settings.resolve
 import com.hanaretamae.kaede.core.settings.ThemePreference
 import kotlin.math.abs
+import kotlinx.coroutines.launch
 
 private sealed interface GalleryDestination {
     data object Gallery : GalleryDestination
@@ -383,6 +384,12 @@ fun KaedeGalleryApp(
                         onOpenNote = { noteId ->
                             selectedEntries = selectedEntries + noteId.asNoteEntry()
                         },
+                        onTagClick = { tag ->
+                            galleryStateHolder.filterByTag(tag)
+                            selectedEntries = emptyList()
+                            viewerBackHandler = null
+                            scope.launch { galleryGridState.scrollToItem(0) }
+                        },
                         onBackHandlerChanged = { backHandler ->
                             viewerBackHandler = backHandler
                             onBackHandlerChanged?.invoke(
@@ -417,6 +424,9 @@ fun KaedeGalleryApp(
                         galleryThumbnail = galleryThumbnail,
                         onRescan = rescanWithSummary,
                         rescanOnStart = rescanOnStart,
+                        savedSearches = settings.savedSearches,
+                        onSaveSearch = activeSettingsStateHolder::saveSavedSearch,
+                        onDeleteSavedSearch = activeSettingsStateHolder::deleteSavedSearch,
                     )
                 }
             }

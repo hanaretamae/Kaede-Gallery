@@ -1,5 +1,6 @@
 package com.hanaretamae.kaede.core.settings
 
+import com.hanaretamae.kaede.core.model.GalleryQuery
 import com.hanaretamae.kaede.core.repository.RepositoryError
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -65,6 +66,30 @@ class SettingsStateHolderTest {
         assertEquals(2, repository.saved.size)
         assertEquals(60, repository.saved.last().pageSize)
         assertTrue(repository.saved.last().showTilePosition)
+    }
+
+    @Test
+    fun savesReplacesAndDeletesNamedGallerySearches() = runTest {
+        val repository = FakeSettingsRepository()
+        val holder = SettingsStateHolder(repository, this)
+        holder.load()
+        advanceUntilIdle()
+        val first = SavedGallerySearch.fromQuery(
+            "Fictional",
+            GalleryQuery(searchText = "first"),
+        )
+
+        assertTrue(holder.saveSavedSearch(first) is RepositoryResult.Success)
+        val replacement = SavedGallerySearch.fromQuery(
+            "fictional",
+            GalleryQuery(searchText = "second"),
+        )
+        assertTrue(holder.saveSavedSearch(replacement) is RepositoryResult.Success)
+        assertEquals(listOf(replacement), holder.state.value.settings?.savedSearches)
+
+        assertTrue(holder.deleteSavedSearch("FICTIONAL") is RepositoryResult.Success)
+        assertTrue(holder.state.value.settings?.savedSearches.isNullOrEmpty())
+        assertEquals(emptyList(), repository.saved.last().savedSearches)
     }
 
     @Test

@@ -49,6 +49,7 @@ data class GallerySettings(
     val showTilePosition: Boolean = false,
     val showCounts: Boolean = true,
     val flutterTagSettingsJson: String? = null,
+    val savedSearches: List<SavedGallerySearch> = emptyList(),
 ) {
     init {
         require(pageSize in MIN_PAGE_SIZE..MAX_PAGE_SIZE) { "pageSize is out of range" }
@@ -72,6 +73,9 @@ data class GallerySettings(
                 flutterTagSettingsJson.encodeToByteArray().size <=
                 SettingsTransferCodec.MAX_BYTES - 1024,
         ) { "flutterTagSettingsJson exceeds its size limit" }
+        require(SavedGallerySearchCodec.isValid(savedSearches)) {
+            "savedSearches are invalid"
+        }
     }
 
     companion object {

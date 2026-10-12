@@ -220,6 +220,38 @@ class SettingsStateHolder(
         }
     }
 
+    suspend fun saveSavedSearch(search: SavedGallerySearch): RepositoryResult<Unit> =
+        saveMutex.withLock {
+            val current = mutableState.value.settings
+                ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val searches = current.savedSearches.toMutableList()
+            val existingIndex = searches.indexOfFirst {
+                it.name.equals(search.name, ignoreCase = true)
+            }
+            if (existingIndex >= 0) {
+                searches[existingIndex] = search
+            } else {
+                searches += search
+            }
+            if (!SavedGallerySearchCodec.isValid(searches)) {
+                mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+                return@withLock RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+            }
+            persistLocked(current.copy(savedSearches = searches))
+        }
+
+    suspend fun deleteSavedSearch(name: String): RepositoryResult<Unit> = saveMutex.withLock {
+        val current = mutableState.value.settings
+            ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+        val searches = current.savedSearches.filterNot {
+            it.name.equals(name, ignoreCase = true)
+        }
+        if (searches.size == current.savedSearches.size) {
+            return@withLock RepositoryResult.Success(Unit)
+        }
+        persistLocked(current.copy(savedSearches = searches))
+    }
+
     suspend fun resetNoteStructureSettings(): RepositoryResult<Unit> =
         saveNoteStructureSettings(GalleryNoteStructureSettings())
 

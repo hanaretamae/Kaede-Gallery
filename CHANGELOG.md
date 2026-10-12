@@ -3,11 +3,13 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
-## [2.0.3] - Draft
+## [2.1.0] - Draft
 
 ### Added
 
 - Add page-scoped reset actions to Note structure and Tag settings.
+- Save named gallery searches and restore their search and filter criteria.
+- Open gallery results filtered by a tag selected in note details.
 
 ### Changed
 

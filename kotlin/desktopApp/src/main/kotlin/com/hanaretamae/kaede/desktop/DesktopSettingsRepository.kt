@@ -8,6 +8,7 @@ import com.hanaretamae.kaede.core.settings.GalleryTagDisplayPrefixesCodec
 import com.hanaretamae.kaede.core.settings.GalleryTagPrefixesCodec
 import com.hanaretamae.kaede.core.settings.FontPreference
 import com.hanaretamae.kaede.core.settings.LanguagePreference
+import com.hanaretamae.kaede.core.settings.SavedGallerySearchCodec
 import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.core.settings.SettingsTransferCodec
 import com.hanaretamae.kaede.core.settings.ThemePreference
@@ -174,6 +175,15 @@ class DesktopSettingsRepository(
                     ?: return@withContext RepositoryResult.Failure(
                         RepositoryError.OPERATION_FAILED,
                     )
+                val savedSearchesContent = properties.getProperty(KEY_SAVED_SEARCHES)
+                val savedSearches = savedSearchesContent?.let(SavedGallerySearchCodec::decodeStorage)
+                    ?: if (savedSearchesContent == null) {
+                        emptyList()
+                    } else {
+                        return@withContext RepositoryResult.Failure(
+                            RepositoryError.OPERATION_FAILED,
+                        )
+                    }
                 if (pageSize !in GallerySettings.MIN_PAGE_SIZE..GallerySettings.MAX_PAGE_SIZE) {
                     return@withContext RepositoryResult.Failure(
                         RepositoryError.OPERATION_FAILED,
@@ -198,6 +208,7 @@ class DesktopSettingsRepository(
                         showTilePosition = showTilePosition,
                         showCounts = showCounts,
                         flutterTagSettingsJson = flutterTagSettingsJson,
+                        savedSearches = savedSearches,
                     ),
                 )
             } catch (_: SecurityException) {
@@ -261,6 +272,10 @@ class DesktopSettingsRepository(
                             setProperty(KEY_SHOW_RANGE, settings.showLoadedRange.toString())
                             setProperty(KEY_TILE_POSITION, settings.showTilePosition.toString())
                             setProperty(KEY_SHOW_COUNTS, settings.showCounts.toString())
+                            setProperty(
+                                KEY_SAVED_SEARCHES,
+                                SavedGallerySearchCodec.encodeStorage(settings.savedSearches),
+                            )
                             settings.flutterTagSettingsJson?.let {
                                 setProperty(KEY_FLUTTER_TAG_SETTINGS, it)
                             }
@@ -337,6 +352,7 @@ class DesktopSettingsRepository(
         const val KEY_TILE_POSITION = "show_tile_position"
         const val KEY_SHOW_COUNTS = "show_counts"
         const val KEY_FLUTTER_TAG_SETTINGS = "flutter_tag_settings_json"
+        const val KEY_SAVED_SEARCHES = "saved_searches"
     }
 }
 
