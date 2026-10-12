@@ -102,6 +102,20 @@ class GalleryFilterSheetTest {
                 RepositoryResult.Success(
                     listOf(
                         GalleryCategory(
+                            path = "@content",
+                            displayName = "コンテンツ",
+                            options = listOf(
+                                GalleryCategoryOption(
+                                    name = "multiple media",
+                                    fullTag = "",
+                                    count = 1,
+                                    disabled = false,
+                                    virtualFilter = VirtualFilter.MULTIPLE_MEDIA,
+                                ),
+                            ),
+                            count = 4,
+                        ),
+                        GalleryCategory(
                             path = "source",
                             displayName = "Source",
                             options = listOf(
@@ -110,10 +124,24 @@ class GalleryFilterSheetTest {
                                     fullTag = "source/art",
                                     count = 1,
                                     disabled = false,
-                                    virtualFilter = VirtualFilter.MULTIPLE_MEDIA,
+                                    virtualFilter = null,
+                                ),
+                                GalleryCategoryOption(
+                                    name = "blue",
+                                    fullTag = "source/blue",
+                                    count = 1,
+                                    disabled = false,
+                                    virtualFilter = null,
+                                ),
+                                GalleryCategoryOption(
+                                    name = "draft",
+                                    fullTag = "source/draft",
+                                    count = 1,
+                                    disabled = false,
+                                    virtualFilter = null,
                                 ),
                             ),
-                            count = 1,
+                            count = 4,
                         ),
                     ),
                 )
@@ -125,7 +153,18 @@ class GalleryFilterSheetTest {
         }
         compose.setContent {
             val scope = rememberCoroutineScope()
-            val holder = remember { GalleryStateHolder(repository, scope) }
+            val holder = remember {
+                GalleryStateHolder(
+                    repository,
+                    scope,
+                    GalleryQuery(
+                        includeTags = setOf("source/art"),
+                        andTags = setOf("source/blue"),
+                        excludedTags = setOf("source/draft"),
+                        virtualFilters = setOf(VirtualFilter.MULTIPLE_MEDIA),
+                    ),
+                )
+            }
             KaedeGalleryTheme(AppearanceSettings()) {
                 GalleryScreen(holder, onEntrySelected = {}, onSettings = {})
             }
@@ -160,11 +199,19 @@ class GalleryFilterSheetTest {
         val tagSearchField = compose.onNodeWithText(strings.filterSearch).fetchSemanticsNode().boundsInRoot
         assertTrue(tagSearchField.left > 0f)
         assertTrue(tagSearchField.right < windowWidth)
-        val categorySurface = compose.onNodeWithTag("GalleryFilterCategorySurface")
+        val categorySurface = compose.onAllNodesWithTag("GalleryFilterCategorySurface").get(0)
             .fetchSemanticsNode().boundsInRoot
-        val categoryLabel = compose.onNodeWithText("Source", useUnmergedTree = true)
+        val categoryLabel = compose.onNodeWithText("コンテンツ", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        val selectedContentFilterCount = compose.onNodeWithText("1", useUnmergedTree = true)
             .fetchSemanticsNode().boundsInRoot
         assertTrue(categoryLabel.left - categorySurface.left >= 8f)
+        assertTrue(selectedContentFilterCount.right < categoryLabel.left)
+        val sourceLabel = compose.onNodeWithText("Source", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        val selectedSourceTagCount = compose.onNodeWithText("3", useUnmergedTree = true)
+            .fetchSemanticsNode().boundsInRoot
+        assertTrue(selectedSourceTagCount.right < sourceLabel.left)
         val searchAction = compose.onNodeWithContentDescription(strings.applySearch).fetchSemanticsNode().boundsInRoot
         val clearAction = compose.onNodeWithContentDescription(strings.clearAllSearchAndFilters).fetchSemanticsNode().boundsInRoot
         assertTrue(clearAction.right < windowWidth)
@@ -199,7 +246,7 @@ class GalleryFilterSheetTest {
     }
 
     @Test
-    fun savesAndRestoresNamedSearches() {
+    fun savesRestoresAndEditsNamedSearches() {
         val repository = object : GalleryRepository {
             override suspend fun queryPage(query: GalleryQuery) =
                 RepositoryResult.Success(GalleryPage(emptyList(), 0, query.offset))
@@ -237,7 +284,9 @@ class GalleryFilterSheetTest {
                     onSettings = {},
                     savedSearches = storedSearches.value,
                     onSaveSearch = { savedSearch ->
-                        storedSearches.value = storedSearches.value + savedSearch
+                        storedSearches.value = storedSearches.value
+                            .filterNot { it.name.equals(savedSearch.name, ignoreCase = true) } +
+                            savedSearch
                         RepositoryResult.Success(Unit)
                     },
                 )
@@ -258,9 +307,38 @@ class GalleryFilterSheetTest {
         }
         compose.onNodeWithContentDescription(strings.filters).performClick()
         compose.onNodeWithContentDescription(strings.savedSearches).performClick()
+        compose.onNodeWithContentDescription(
+            "${strings.viewSavedSearch}: Fictional art",
+        ).performClick()
+        compose.onNodeWithTag("saved-search-details").assertIsDisplayed()
+        compose.onNodeWithText("fictional/art").assertIsDisplayed()
+        compose.onNodeWithText(strings.editSavedSearch).performClick()
+        compose.waitUntil(5_000) {
+            holder?.state?.value?.query?.includeTags == setOf("fictional/art") &&
+                compose.onAllNodesWithTag("editing-saved-search")
+                    .fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.runOnIdle {
+            assertEquals("fictional", holder?.state?.value?.query?.searchText)
+            assertEquals(48, holder?.state?.value?.query?.pageSize)
+            holder?.filterByTag("fictional/other")
+        }
+        compose.onNodeWithContentDescription(strings.savedSearches).performClick()
+        compose.onNodeWithText(
+            "${strings.updateSavedSearch}: Fictional art",
+        ).performClick()
+        compose.waitUntil(5_000) {
+            storedSearches.value.singleOrNull()?.includeTags == setOf("fictional/other")
+        }
+
+        compose.runOnIdle {
+            holder?.filterByTag("fictional/art")
+        }
+        compose.onNodeWithContentDescription(strings.filters).performClick()
+        compose.onNodeWithContentDescription(strings.savedSearches).performClick()
         compose.onNodeWithText("Fictional art").performClick()
         compose.waitUntil(5_000) {
-            holder?.state?.value?.query?.includeTags == setOf("fictional/art")
+            holder?.state?.value?.query?.includeTags == setOf("fictional/other")
         }
         compose.runOnIdle {
             assertEquals("fictional", holder?.state?.value?.query?.searchText)

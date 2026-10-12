@@ -38,6 +38,12 @@ JNA JAR にも `META-INF/LICENSE` の通知とライセンス参照がありま�
 共有 UI に同梱します。ライセンス本文はオフラインビューアと
 `kotlin/shared-assets/licenses/GoogleSansFlex-OFL.txt` に収録します。
 
+Linux AppImage には、字形フォールバック用の Noto Sans CJK font も
+SIL Open Font License 1.1 に基づいて同梱します。ライセンス本文は
+`licenses/NotoSansCJK-OFL.txt` に収録します。ソース:
+<https://github.com/notofonts/noto-cjk>（固定 nixpkgs の
+`noto-fonts-cjk-sans` package）。
+
 ## 同梱ライセンスファイル
 
 KMP アプリは `kotlin/shared-assets/licenses/` の共有ライセンス資産を配布物へ同梱します。

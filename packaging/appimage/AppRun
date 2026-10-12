@@ -3,11 +3,16 @@ set -eu
 
 here="$(dirname "$(readlink -f "$0")")"
 
-if [ -z "${FONTCONFIG_FILE:-}" ] && [ -r /etc/fonts/fonts.conf ]; then
-  export FONTCONFIG_FILE=/etc/fonts/fonts.conf
-  if [ -z "${FONTCONFIG_PATH:-}" ] && [ -d /etc/fonts ]; then
-    export FONTCONFIG_PATH=/etc/fonts
+if [ -z "${FONTCONFIG_FILE:-}" ]; then
+  if [ -r "$here/usr/share/fontconfig/fonts.conf" ]; then
+    export FONTCONFIG_FILE="$here/usr/share/fontconfig/fonts.conf"
+  elif [ -r /etc/fonts/fonts.conf ]; then
+    export FONTCONFIG_FILE=/etc/fonts/fonts.conf
   fi
+fi
+
+if [ -z "${FONTCONFIG_PATH:-}" ] && [ -d /etc/fonts ]; then
+  export FONTCONFIG_PATH=/etc/fonts
 fi
 
 exec "$here/usr/bin/kaede-gallery" "$@"

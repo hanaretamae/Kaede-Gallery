@@ -327,11 +327,13 @@ The Nix package launcher prepends its pinned `mpv` and `ffmpeg` binaries to
 executables whose closure includes those pinned tools and their runtime
 libraries; they do not depend on host `mpv` or `ffmpeg`. The release script
 checks both tools are in each target package closure and includes the
-third-party notices and license texts with the archive and AppImage. The
-launcher uses `/etc/fonts/fonts.conf` when `FONTCONFIG_FILE` is unset and
-readable, so Fontconfig can find host-installed fonts. If
-`FONTCONFIG_PATH` is unset, it also sets it to `/etc/fonts`. Explicit
-`FONTCONFIG_FILE` and `FONTCONFIG_PATH` values are preserved. Desktop video
+third-party notices and license texts with the archive and AppImage. AppImages
+bundle Noto Sans CJK as a glyph fallback and use an app-specific Fontconfig
+configuration that also includes `/etc/fonts/fonts.conf` when available. The
+launcher selects that configuration unless `FONTCONFIG_FILE` is explicit. If
+`FONTCONFIG_PATH` is unset, it independently defaults it to `/etc/fonts` when
+available. Explicit `FONTCONFIG_FILE` and `FONTCONFIG_PATH` values are
+preserved. Desktop video
 thumbnails limit ffmpeg to local file input, one
 frame, 512-pixel bounds, a
 4 MiB output cap, a 10-second timeout, and two concurrent extraction
@@ -672,11 +674,13 @@ the handle is hidden and an animated circular close button appears to the left
 of the heading. The heading remains draggable using the standard sheet gestures;
 closing the sheet animates its dismissal.
 Tag filters use selectable chips with distinct selected-mode icons, and
-categories start collapsed. Expanded tags remain inside their category's
-tonal surface. Matching categories temporarily expand during tag search before
-restoring the prior expansion state. The filter legend shows executable
-note-search terms: `#tag` includes a matching tag (OR), `+#tag` requires the
-tag (AND), and `-#tag` excludes it; the older `&#tag` AND spelling remains
+categories start collapsed. A category with selected tags or virtual filters
+shows their count in a badge immediately before its name; included, required,
+excluded, and selected virtual filters count. Expanded tags remain inside their
+category's tonal surface. Matching categories temporarily expand during tag
+search before restoring the prior expansion state. The filter legend shows
+executable note-search terms: `#tag` includes a matching tag (OR), `+#tag`
+requires the tag (AND), and `-#tag` excludes it; the older `&#tag` AND spelling remains
 accepted. Fuzzy matching can be disabled from Filters; prefixing a word with
 `~` forces fuzzy matching for that word, while `=` requires a whole-word match.
 Unprefixed words follow the fuzzy-search setting. The setting is presented as a
@@ -978,7 +982,11 @@ state. Named saved searches retain the content mode, note-search text, fuzzy
 search setting, included/AND/excluded tags, virtual filters, and sort order;
 loading one uses the current page size and starts at the first result. Saved
 searches are stored in private application settings and included in settings
-transfers, never in the Vault.
+transfers, never in the Vault. The saved-search menu uses Material 3 Expressive
+grouped items. A details action shows every saved condition; editing loads the
+conditions into the filter panel and keeps the original name as the update
+target. Updating replaces that saved search, while canceling edit mode leaves
+the stored search unchanged.
 Filter categories are user-configurable rules (`tagCategories` in the private
 tag settings): a name plus an exact path (`source/art`) or a subtree path
 (`source/count/*`). The most specific matching rule wins, rules sharing a name

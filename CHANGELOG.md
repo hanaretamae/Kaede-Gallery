@@ -10,12 +10,19 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 - Add page-scoped reset actions to Note structure and Tag settings.
 - Save named gallery searches and restore their search and filter criteria.
 - Open gallery results filtered by a tag selected in note details.
+- Show selected tag and content-filter counts beside their filter categories.
+- View saved-search criteria and edit them to update the saved search.
 
 ### Changed
 
 - Remove the unavailable-media icon option from Paging and list settings.
 - Separate the Note structure reset action from its link-resolution controls.
 - Remove the Japanese reference translation of the MIT License from the repository and Windows packages.
+- Use a Material 3 Expressive menu for saved searches.
+
+### Fixed
+
+- Bundle Noto Sans CJK with AppImage packages so Japanese text can render when no matching host font is installed.
 
 ## [2.0.2] - Draft
 

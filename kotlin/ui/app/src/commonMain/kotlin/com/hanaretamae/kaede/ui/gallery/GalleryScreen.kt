@@ -21,10 +21,13 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,6 +52,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
@@ -64,7 +68,6 @@ import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -89,6 +92,7 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Link
@@ -204,6 +208,16 @@ data class GalleryStrings(
     val searchName: String,
     val noSavedSearches: String,
     val deleteSavedSearch: String,
+    val viewSavedSearch: String,
+    val savedSearchDetails: String,
+    val editSavedSearch: String,
+    val editingSavedSearch: String,
+    val updateSavedSearch: String,
+    val savedSearchContentMode: String,
+    val savedSearchVirtualFilters: String,
+    val savedSearchSort: String,
+    val enabled: String,
+    val disabled: String,
     val filterSearch: String,
     val fuzzySearch: String,
     val fuzzySearchTerm: String,
@@ -267,6 +281,16 @@ val EnglishGalleryStrings = GalleryStrings(
     searchName = "Search name",
     noSavedSearches = "No saved searches",
     deleteSavedSearch = "Delete saved search",
+    viewSavedSearch = "View saved search details",
+    savedSearchDetails = "Saved search details",
+    editSavedSearch = "Edit saved search",
+    editingSavedSearch = "Editing saved search",
+    updateSavedSearch = "Update saved search",
+    savedSearchContentMode = "Content mode",
+    savedSearchVirtualFilters = "Content filters",
+    savedSearchSort = "Sort order",
+    enabled = "On",
+    disabled = "Off",
     filterSearch = "Filter tags",
     fuzzySearch = "Fuzzy search",
     fuzzySearchTerm = "Fuzzy (~word)",
@@ -332,6 +356,16 @@ val JapaneseGalleryStrings = GalleryStrings(
     searchName = "検索名",
     noSavedSearches = "保存した検索はありません",
     deleteSavedSearch = "保存した検索を削除",
+    viewSavedSearch = "保存した検索の詳細を表示",
+    savedSearchDetails = "保存した検索の詳細",
+    editSavedSearch = "検索条件を編集",
+    editingSavedSearch = "編集中",
+    updateSavedSearch = "保存した検索を更新",
+    savedSearchContentMode = "表示対象",
+    savedSearchVirtualFilters = "コンテンツフィルター",
+    savedSearchSort = "並び順",
+    enabled = "オン",
+    disabled = "オフ",
     filterSearch = "タグを検索",
     fuzzySearch = "あいまい検索",
     fuzzySearchTerm = "あいまい (~word)",
@@ -404,6 +438,10 @@ fun GalleryScreen(
     var contentMenuExpanded by remember(stateHolder) { mutableStateOf(false) }
     var savedSearchMenuExpanded by remember(stateHolder) { mutableStateOf(false) }
     var showSaveSearchDialog by remember(stateHolder) { mutableStateOf(false) }
+    var savedSearchDetails by remember(stateHolder) {
+        mutableStateOf<SavedGallerySearch?>(null)
+    }
+    var editingSavedSearchName by remember(stateHolder) { mutableStateOf<String?>(null) }
     var savedSearchNameDraft by remember(stateHolder) { mutableStateOf("") }
     var savedSearchError by remember(stateHolder) { mutableStateOf<RepositoryError?>(null) }
     var savingSearch by remember(stateHolder) { mutableStateOf(false) }
@@ -1010,7 +1048,27 @@ fun GalleryScreen(
                         .padding(horizontal = 20.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    Text(strings.filters, style = MaterialTheme.typography.titleLarge)
+                    Column(
+                        modifier = Modifier.weight(1f),
+                        verticalArrangement = Arrangement.spacedBy(2.dp),
+                    ) {
+                        Text(strings.filters, style = MaterialTheme.typography.titleLarge)
+                        editingSavedSearchName?.let { name ->
+                            Text(
+                                "${strings.editingSavedSearch}: $name",
+                                modifier = Modifier.testTag("editing-saved-search"),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    if (editingSavedSearchName != null) {
+                        IconButton(onClick = { editingSavedSearchName = null }) {
+                            Icon(Icons.Filled.Close, strings.cancel)
+                        }
+                    }
                 }
                 Surface(
                     modifier = Modifier.fillMaxWidth()
@@ -1134,31 +1192,85 @@ fun GalleryScreen(
                                 Icon(Icons.Filled.Bookmark, strings.savedSearches, Modifier.size(24.dp))
                             }
                         }
-                        DropdownMenu(
+                        val savedSearchMenuItemCount =
+                            1 + maxOf(1, savedSearches.size) +
+                                if (savedSearchError != null) 1 else 0
+                        KaedeMenu(
                             expanded = savedSearchMenuExpanded,
                             onDismissRequest = { savedSearchMenuExpanded = false },
                         ) {
                             DropdownMenuItem(
-                                text = { Text(strings.saveSearch) },
-                                leadingIcon = {
-                                    Icon(Icons.Filled.Add, contentDescription = null)
+                                text = {
+                                    Text(
+                                        editingSavedSearchName?.let {
+                                            "${strings.updateSavedSearch}: $it"
+                                        } ?: strings.saveSearch,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
                                 },
-                                enabled = onSaveSearch != null,
+                                shape = MenuDefaults.itemShape(
+                                    0,
+                                    savedSearchMenuItemCount,
+                                ).shape,
+                                leadingIcon = {
+                                    Icon(
+                                        if (editingSavedSearchName == null) {
+                                            Icons.Filled.Add
+                                        } else {
+                                            Icons.Filled.Bookmark
+                                        },
+                                        contentDescription = null,
+                                    )
+                                },
+                                enabled = onSaveSearch != null && !savingSearch,
                                 onClick = {
                                     savedSearchMenuExpanded = false
-                                    savedSearchNameDraft = ""
-                                    savedSearchError = null
-                                    showSaveSearchDialog = true
+                                    val updateName = editingSavedSearchName
+                                    val saveSearch = onSaveSearch
+                                    if (updateName != null && saveSearch != null) {
+                                        val query = state.query.copy(searchText = noteSearchDraft)
+                                        val updatedSearch = SavedGallerySearch.fromQuery(
+                                            updateName,
+                                            query,
+                                        )
+                                        stateHolder.setQuery(query)
+                                        savingSearch = true
+                                        galleryCoroutineScope.launch {
+                                            when (val result = saveSearch(updatedSearch)) {
+                                                is RepositoryResult.Success -> {
+                                                    savedSearchError = null
+                                                    editingSavedSearchName = null
+                                                    galleryCoroutineScope.launch {
+                                                        filterSheetState.hide()
+                                                        showFilters = false
+                                                    }
+                                                }
+                                                is RepositoryResult.Failure -> {
+                                                    savedSearchError = result.error
+                                                }
+                                            }
+                                            savingSearch = false
+                                        }
+                                    } else {
+                                        savedSearchNameDraft = ""
+                                        savedSearchError = null
+                                        showSaveSearchDialog = true
+                                    }
                                 },
                             )
                             if (savedSearches.isEmpty()) {
                                 DropdownMenuItem(
                                     text = { Text(strings.noSavedSearches) },
+                                    shape = MenuDefaults.itemShape(
+                                        1,
+                                        savedSearchMenuItemCount,
+                                    ).shape,
                                     enabled = false,
                                     onClick = {},
                                 )
                             } else {
-                                savedSearches.forEach { savedSearch ->
+                                savedSearches.forEachIndexed { index, savedSearch ->
                                     DropdownMenuItem(
                                         text = {
                                             Text(
@@ -1167,42 +1279,73 @@ fun GalleryScreen(
                                                 overflow = TextOverflow.Ellipsis,
                                             )
                                         },
+                                        shape = MenuDefaults.itemShape(
+                                            index + 1,
+                                            savedSearchMenuItemCount,
+                                        ).shape,
                                         leadingIcon = {
                                             Icon(
                                                 Icons.Filled.Bookmark,
                                                 contentDescription = null,
                                             )
                                         },
-                                        trailingIcon = {
-                                            IconButton(
-                                                enabled = onDeleteSavedSearch != null,
-                                                onClick = {
-                                                    val deleteSearch = onDeleteSavedSearch
-                                                    if (deleteSearch != null) {
-                                                        galleryCoroutineScope.launch {
-                                                            when (
-                                                                val result =
-                                                                    deleteSearch(savedSearch.name)
-                                                            ) {
-                                                                is RepositoryResult.Success -> {
-                                                                    savedSearchError = null
-                                                                }
-                                                                is RepositoryResult.Failure -> {
-                                                                    savedSearchError = result.error
+                                        trailingContent = {
+                                            Row(
+                                                verticalAlignment = Alignment.CenterVertically,
+                                            ) {
+                                                IconButton(
+                                                    onClick = {
+                                                        savedSearchMenuExpanded = false
+                                                        savedSearchDetails = savedSearch
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Info,
+                                                        "${strings.viewSavedSearch}: ${savedSearch.name}",
+                                                    )
+                                                }
+                                                IconButton(
+                                                    enabled = onDeleteSavedSearch != null,
+                                                    onClick = {
+                                                        val deleteSearch = onDeleteSavedSearch
+                                                        if (deleteSearch != null) {
+                                                            galleryCoroutineScope.launch {
+                                                                when (
+                                                                    val result =
+                                                                        deleteSearch(savedSearch.name)
+                                                                ) {
+                                                                    is RepositoryResult.Success -> {
+                                                                        savedSearchError = null
+                                                                        if (
+                                                                            editingSavedSearchName
+                                                                                ?.equals(
+                                                                                    savedSearch.name,
+                                                                                    ignoreCase = true,
+                                                                                ) == true
+                                                                        ) {
+                                                                            editingSavedSearchName =
+                                                                                null
+                                                                        }
+                                                                    }
+                                                                    is RepositoryResult.Failure -> {
+                                                                        savedSearchError =
+                                                                            result.error
+                                                                    }
                                                                 }
                                                             }
                                                         }
-                                                    }
-                                                },
-                                            ) {
-                                                Icon(
-                                                    Icons.Filled.Delete,
-                                                    "${strings.deleteSavedSearch}: ${savedSearch.name}",
-                                                )
+                                                    },
+                                                ) {
+                                                    Icon(
+                                                        Icons.Filled.Delete,
+                                                        "${strings.deleteSavedSearch}: ${savedSearch.name}",
+                                                    )
+                                                }
                                             }
                                         },
                                         onClick = {
                                             savedSearchMenuExpanded = false
+                                            editingSavedSearchName = null
                                             noteSearchDraft = savedSearch.searchText
                                             tagFilterSearch = ""
                                             stateHolder.setQuery(
@@ -1218,6 +1361,10 @@ fun GalleryScreen(
                             }
                             savedSearchError?.let { error ->
                                 DropdownMenuItem(
+                                    shape = MenuDefaults.itemShape(
+                                        savedSearchMenuItemCount - 1,
+                                        savedSearchMenuItemCount,
+                                    ).shape,
                                     text = {
                                         Text(
                                             strings.error(error),
@@ -1326,6 +1473,14 @@ fun GalleryScreen(
                         contentPadding = PaddingValues(bottom = 24.dp),
                     ) {
                         state.categories.forEach { category ->
+                            val selectedFilterCount = category.options.count { option ->
+                                option.virtualFilter?.let { it in state.query.virtualFilters }
+                                    ?: (
+                                        option.fullTag in state.query.includeTags ||
+                                            option.fullTag in state.query.andTags ||
+                                            option.fullTag in state.query.excludedTags
+                                        )
+                            }
                             val options = category.options.filter { option ->
                                 val visible = option.virtualFilter != null ||
                                     isGalleryTagDisplayed(
@@ -1391,10 +1546,18 @@ fun GalleryScreen(
                                                     }
                                                 },
                                             ) {
-                                                Text(
-                                                    category.displayName,
+                                                Row(
                                                     modifier = Modifier.padding(start = 16.dp),
-                                                )
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                                ) {
+                                                    if (selectedFilterCount > 0) {
+                                                        FilterCountBadge(
+                                                            strings.optionCount(selectedFilterCount.toLong()),
+                                                        )
+                                                    }
+                                                    Text(category.displayName)
+                                                }
                                             }
                                             if (expanded) {
                                                 FlowRow(
@@ -1457,6 +1620,93 @@ fun GalleryScreen(
                 }
             }
         }
+    }
+    savedSearchDetails?.let { savedSearch ->
+        AlertDialog(
+            modifier = Modifier.testTag("saved-search-details"),
+            onDismissRequest = { savedSearchDetails = null },
+            title = {
+                Text("${strings.savedSearchDetails}: ${savedSearch.name}")
+            },
+            text = {
+                val emptyValue = "—"
+                Column(
+                    modifier = Modifier.fillMaxWidth()
+                        .heightIn(max = 400.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    SavedSearchDetailRow(
+                        strings.savedSearchContentMode,
+                        if (savedSearch.content == GalleryContent.NOTES) {
+                            strings.notes
+                        } else {
+                            strings.media
+                        },
+                    )
+                    SavedSearchDetailRow(
+                        strings.searchNotes,
+                        savedSearch.searchText.ifBlank { emptyValue },
+                    )
+                    SavedSearchDetailRow(
+                        strings.fuzzySearch,
+                        if (savedSearch.fuzzySearchEnabled) strings.enabled else strings.disabled,
+                    )
+                    SavedSearchDetailRow(
+                        strings.includeAny,
+                        savedSearch.includeTags.sorted().joinToString(", ").ifEmpty { emptyValue },
+                    )
+                    SavedSearchDetailRow(
+                        strings.includeAll,
+                        savedSearch.andTags.sorted().joinToString(", ").ifEmpty { emptyValue },
+                    )
+                    SavedSearchDetailRow(
+                        strings.exclude,
+                        savedSearch.excludedTags.sorted().joinToString(", ").ifEmpty {
+                            emptyValue
+                        },
+                    )
+                    SavedSearchDetailRow(
+                        strings.savedSearchVirtualFilters,
+                        savedSearch.virtualFilters.sortedBy { it.ordinal }
+                            .joinToString(", ") { strings.virtualLabel(it) }
+                            .ifEmpty { emptyValue },
+                    )
+                    SavedSearchDetailRow(
+                        strings.savedSearchSort,
+                        "${if (savedSearch.sortField == GallerySortField.CREATED) {
+                            strings.created
+                        } else {
+                            strings.published
+                        }} · ${if (savedSearch.sortDirection == SortDirection.DESCENDING) {
+                            strings.descending
+                        } else {
+                            strings.ascending
+                        }}",
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    shapes = ButtonDefaults.shapes(),
+                    enabled = onSaveSearch != null && !savingSearch,
+                    onClick = {
+                        stateHolder.setQuery(savedSearch.toQuery(state.query.pageSize))
+                        noteSearchDraft = savedSearch.searchText
+                        tagFilterSearch = ""
+                        editingSavedSearchName = savedSearch.name
+                        savedSearchError = null
+                        savedSearchDetails = null
+                    },
+                ) { Text(strings.editSavedSearch) }
+            },
+            dismissButton = {
+                TextButton(
+                    shapes = ButtonDefaults.shapes(),
+                    onClick = { savedSearchDetails = null },
+                ) { Text(strings.cancel) }
+            },
+        )
     }
     if (showSaveSearchDialog) {
         AlertDialog(
@@ -1686,6 +1936,18 @@ private fun FilterOption(
 @Composable
 private fun FilterCountBadge(count: String) {
     GalleryNumberBadge { Text(count) }
+}
+
+@Composable
+private fun SavedSearchDetailRow(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(value, style = MaterialTheme.typography.bodyMedium)
+    }
 }
 
 @Composable

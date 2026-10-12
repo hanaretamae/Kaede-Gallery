@@ -413,6 +413,7 @@
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           aarch64Cross = aarch64CrossDesktop;
           appimagetool = appimagetool pkgs;
+          appimageNotoFonts = pkgs.noto-fonts-cjk-sans.override { static = true; };
           appimageRuntimeX86_64 = appimageRuntimes.x86_64 pkgs;
           appimageRuntimeAarch64 = appimageRuntimes.aarch64 pkgs;
         }
