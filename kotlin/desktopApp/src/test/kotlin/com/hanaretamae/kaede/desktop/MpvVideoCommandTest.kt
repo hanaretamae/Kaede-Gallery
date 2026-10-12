@@ -30,6 +30,8 @@ class MpvVideoCommandTest {
                 "mpv",
                 "--no-config",
                 "--no-load-scripts",
+                "--osc=no",
+                "--input-default-bindings=no",
                 "--no-ytdl",
                 "--autoload-files=no",
                 "--sub-auto=no",

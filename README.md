@@ -209,6 +209,8 @@ nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#package
 
 The cross package compiles the Rust FFI for AArch64 and assembles the AArch64 Compose native runtime, JRE, launcher, and Linux libraries on the x86_64 host. The earlier native `aarch64-linux` package remains available when building on an AArch64 host. `packages.<system>.default`, `nixosModules.default`, and `homeManagerModules.default` select the native KMP package. The optional manual Actions workflow also cross-builds and uploads an AArch64 bundle.
 
+Linux video playback requires `mpv`, and gallery video thumbnails require `ffmpeg`; both executables are launched from `PATH`. Linux `.tar.zst` bundles and `.AppImage` files do not include them, so install them on the system to use video features.
+
 ### Run and package the KMP app
 
 For Linux Desktop development and a local distributable, use the `kotlin` Gradle project:

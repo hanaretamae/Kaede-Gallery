@@ -294,6 +294,54 @@ class GalleryViewerGestureTest {
     }
 
     @Test
+    fun videoDetailsKeepMediaVisibleAndReverseScrollCollapsesThePanel() {
+        var latestMediaState: GalleryViewerMediaState? = null
+        showViewer(
+            withLongBody = true,
+            isVideo = true,
+            onMediaStateChanged = { latestMediaState = it },
+        )
+        compose.waitUntil(5_000) { latestMediaState != null }
+        compose.runOnIdle {
+            requireNotNull(latestMediaState).onToggleFullscreen?.invoke()
+        }
+        compose.waitUntil(5_000) {
+            compose.onAllNodesWithTag("viewer-note-details")
+                .fetchSemanticsNodes().isNotEmpty()
+        }
+        val details = compose.onNodeWithTag("viewer-note-details")
+        val mediaArea = compose.onNodeWithTag("media-area", useUnmergedTree = true)
+        val initialTop = details.fetchSemanticsNode().boundsInRoot.top
+        val minimumVideoHeight = with(compose.density) {
+            GALLERY_VIEWER_MIN_VIDEO_MEDIA_HEIGHT_DP.dp.toPx()
+        }
+
+        details.performMouseInput {
+            enter(center)
+            scroll(500f, ScrollWheel.Vertical)
+        }
+        compose.waitUntil(5_000) {
+            details.fetchSemanticsNode().boundsInRoot.top < initialTop
+        }
+        val expandedTop = details.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(
+            mediaArea.fetchSemanticsNode().boundsInRoot.height >= minimumVideoHeight,
+            "Expanding video details must preserve the minimum player area.",
+        )
+
+        details.performMouseInput {
+            scroll(-2_000f, ScrollWheel.Vertical)
+        }
+        compose.waitUntil(5_000) {
+            details.fetchSemanticsNode().boundsInRoot.top > expandedTop
+        }
+        assertTrue(
+            abs(details.fetchSemanticsNode().boundsInRoot.top - initialTop) < 1f,
+            "A reverse scroll must return the details panel after scrolling its content to the top.",
+        )
+    }
+
+    @Test
     fun touchScrollingNoteDetailsUsesTheMediaExpansionGesture() {
         showViewer(withLongBody = true)
         showDetails()

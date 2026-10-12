@@ -70,6 +70,8 @@ internal object MpvVideoCommand {
         add(desktopToolCommand("mpv", osName))
         add("--no-config")
         add("--no-load-scripts")
+        add("--osc=no")
+        add("--input-default-bindings=no")
         add("--no-ytdl")
         add("--autoload-files=no")
         add("--sub-auto=no")
@@ -79,8 +81,6 @@ internal object MpvVideoCommand {
         add("--force-window=yes")
         if (osName.lowercase().contains("linux")) add("--vo=x11")
         if (ipcSocketPath != null) {
-            add("--osc=no")
-            add("--input-default-bindings=no")
             add("--input-ipc-server=$ipcSocketPath")
         }
         add("--wid=$windowId")

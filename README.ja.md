@@ -176,6 +176,8 @@ nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#package
 
 この cross package は x86_64 上で Rust FFI を AArch64 向けにコンパイルし、AArch64 用 Compose native runtime、JRE、launcher、Linux library を組み立てます。従来の native `aarch64-linux` package も AArch64 host で利用できます。`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` は native KMP package を選びます。後述する任意の手動 Actions workflow も AArch64 bundle を cross-build して upload します。
 
+Linux の動画再生には `mpv`、ギャラリーの動画サムネイル生成には `ffmpeg` が必要で、どちらも `PATH` から起動します。Linux の `.tar.zst` と `.AppImage` には同梱されないため、動画機能を使う場合はシステムにインストールしてください。
+
 <details>
 <summary>索引データベースの場所</summary>
 

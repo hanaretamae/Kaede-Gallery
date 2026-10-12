@@ -333,15 +333,19 @@ Rust may return Windows extended-length Vault paths (`\\?\`); the desktop
 platform layer removes that prefix only for Java path parsing and display,
 while passing the original locator to the Rust filesystem repository.
 Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
-and automatic sidecar loading. Linux playback forces mpv's X11 video output so
-its `--wid` targets the Swing canvas under XWayland instead of creating a
-separate Wayland window. Desktop video thumbnails limit ffmpeg to local
-file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
-timeout, and two concurrent extraction processes. Desktop playback controls
-are rendered by Compose rather than mpv's on-screen display. A private
+mpv's OSC and default input bindings, and automatic sidecar loading. Linux
+playback forces mpv's X11 video output so its `--wid` targets the Swing canvas
+under XWayland instead of creating a separate Wayland window. Desktop video
+thumbnails limit ffmpeg to local file input, one frame, 512-pixel bounds, a
+4 MiB output cap, a 10-second timeout, and two concurrent extraction
+processes. Desktop playback controls are rendered by Compose rather than
+mpv's on-screen display. A private
 Unix-domain socket on Linux or a randomized local named
 pipe on Windows controls play/pause, seeking, speed, looping, and mute while
-mpv supplies embedded video rendering. A basic localized About section now
+mpv supplies embedded video rendering. When video details are expanded, the
+viewer preserves at least 240dp for the video surface and controls. Reverse
+scrolling returns note content to its top before using any remaining scroll
+delta to collapse the details panel. A basic localized About section now
 links to the project and license. Windows x64 CI passed for the
 current migration branch at commit `076436a`
 ([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37559570910)).

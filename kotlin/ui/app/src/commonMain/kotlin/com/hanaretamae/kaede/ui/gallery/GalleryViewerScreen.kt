@@ -137,6 +137,7 @@ import com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings
 private const val TRACKPAD_GESTURE_IDLE_MILLIS = 600L
 private const val TRACKPAD_SWIPE_THRESHOLD = 48f
 private const val PLAYBACK_OVERLAY_DETAILS_SHIFT = 0.5f
+internal const val GALLERY_VIEWER_MIN_VIDEO_MEDIA_HEIGHT_DP = 240f
 
 data class GalleryViewerStrings(
     val close: String,
@@ -749,12 +750,20 @@ fun GalleryViewerScreen(
                     var trackpadGestureConsumed by remember(stateHolder) {
                         mutableStateOf(false)
                     }
-                    val detailsPanelHeight = (
+                    val unboundedDetailsPanelHeight = (
                         maxHeight * galleryViewerDetailsPanelFraction(
                             scrollOffsetPx = detailsPanelExpansionPx.floatValue.roundToInt(),
                             expandDistancePx = detailsExpansionDistancePx,
                         ) - with(density) { playbackOverlayShiftPx.toDp() }
                         ).coerceAtLeast((maxHeight * 0.2f).coerceAtMost(120.dp))
+                    val detailsPanelHeight = if (media.isVideo) {
+                        unboundedDetailsPanelHeight.coerceAtMost(
+                            (maxHeight - GALLERY_VIEWER_MIN_VIDEO_MEDIA_HEIGHT_DP.dp)
+                                .coerceAtLeast(0.dp),
+                        )
+                    } else {
+                        unboundedDetailsPanelHeight
+                    }
                     Column(
                         modifier = Modifier.fillMaxSize(),
                         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1373,6 +1382,29 @@ private fun Modifier.viewerDetailsPanelExpansion(
                     return Offset.Zero
                 }
                 if (!expanding && scrollState.canScrollBackward) return Offset.Zero
+                val previous = panelExpansion.floatValue
+                val next = galleryViewerPanelExpansion(
+                    currentExpansionPx = previous,
+                    availableScrollPx = -available.y,
+                    maxExpansionPx = expandDistancePx,
+                )
+                panelExpansion.floatValue = next
+                return Offset(0f, previous - next)
+            }
+
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset {
+                if (
+                    !enabled ||
+                    abs(available.y) <= abs(available.x) ||
+                    available.y <= 0f ||
+                    scrollState.canScrollBackward
+                ) {
+                    return Offset.Zero
+                }
                 val previous = panelExpansion.floatValue
                 val next = galleryViewerPanelExpansion(
                     currentExpansionPx = previous,
