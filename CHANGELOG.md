@@ -3,6 +3,13 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.2] - Draft
+
+### Fixed
+
+- Make AppImages use the host's Fontconfig configuration by default, so
+  installed system fonts, including Japanese fonts, can be found.
+
 ## [2.0.1] - Draft
 
 ### Fixed
