@@ -330,6 +330,37 @@ class GallerySettingsNavigationTest {
     }
 
     @Test
+    fun noteStructureResetActionIsSeparatedFromLinkResolutionControls() {
+        showSettings()
+        val strings = EnglishGallerySettingsStrings
+        compose.onNode(hasText(strings.noteStructure) and hasClickAction())
+            .performScrollTo().performClick()
+
+        val reset = compose.onNode(hasText(strings.reset) and hasClickAction())
+            .performScrollTo().fetchSemanticsNode().boundsInRoot
+        val choices = compose.onNodeWithText(strings.shortestPath)
+            .fetchSemanticsNode().boundsInRoot
+
+        val minimumGap = with(compose.density) { 8.dp.toPx() }
+        compose.runOnIdle {
+            assertTrue(
+                reset.top - choices.bottom >= minimumGap,
+                "the reset action must have a visible gap below the resolution choices",
+            )
+        }
+    }
+
+    @Test
+    fun listDisplayPageDoesNotOfferUnavailableMediaIconToggle() {
+        showSettings()
+        val strings = EnglishGallerySettingsStrings
+        compose.onNode(hasText(strings.listDisplay) and hasClickAction())
+            .performScrollTo().performClick()
+
+        compose.onNodeWithText("Show an icon when media is unavailable").assertDoesNotExist()
+    }
+
+    @Test
     fun settingsPagesCanScrollToTheirLastSectionsAfterNavigation() {
         showSettings()
         val strings = EnglishGallerySettingsStrings

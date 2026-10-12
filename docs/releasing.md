@@ -81,7 +81,7 @@ gh workflow run windows.yml \
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
-The workflow verifies the tag and version, packages Windows x64, and uploads the ZIP and updated checksums to the existing release. It cannot create the release itself. Both Windows workflows package `Kaede-Gallery.exe` with `LICENSE`, its Japanese reference translation, English and Japanese READMEs, and English and Japanese third-party notices beside the launcher; verify these files in the artifact before distribution.
+The workflow verifies the tag and version, packages Windows x64, and uploads the ZIP and updated checksums to the existing release. It cannot create the release itself. Both Windows workflows package `Kaede-Gallery.exe` with `LICENSE`, English and Japanese READMEs, and English and Japanese third-party notices beside the launcher; verify these files in the artifact before distribution.
 
 ## Optional remote builds
 

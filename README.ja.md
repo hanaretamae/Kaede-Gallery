@@ -21,8 +21,11 @@
 </p>
 
 > [!IMPORTANT]
-> Vault には**一切書き込みません**。索引・サムネイル・設定はすべて Vault の外のアプリ専用データに保存します。
-> アプリは自動でネットワーク通信を行わず、テレメトリやアナリティクスも送信しません。外部URLは明示的な操作時だけブラウザーに渡します。
+> Kaede Gallery は読み取り専用で、Vault には書き込みません。
+> 索引・サムネイル・設定は Vault 外のアプリ専用データに保存します。
+>
+> 自動でネットワーク通信を行わず、テレメトリやアナリティクスも送信しません。
+> 外部 URL は、開く操作をした場合にのみブラウザーへ渡します。
 
 ## 目次
 
@@ -311,7 +314,6 @@ docs/design.md      設計の基準
 開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。
 
 ライセンスは [MIT License](LICENSE) です。
-[日本語参考訳](LICENSE.ja.md) もあります。
 同梱コンポーネントのライセンスは
 [第三者ライセンス一覧](THIRD_PARTY_NOTICES.ja.md)と配布物内の notices を確認してください。
 リリースと配布物は[リリース一覧](https://github.com/hanaretamae/Kaede-Gallery/releases)で確認できます。

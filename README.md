@@ -21,9 +21,12 @@
 </p>
 
 > [!IMPORTANT]
-> Kaede Gallery **never writes to your Vault**. The index, thumbnails and settings are stored in
-> private app data outside the Vault. The app makes no automatic network requests and sends no telemetry
-> or analytics. External URLs are handed to your browser only after an explicit action.
+> Kaede Gallery is **read-only** and never writes to your Vault. The index,
+> thumbnails, and settings are stored in private app data outside the Vault.
+>
+> The app makes no automatic network requests and sends no telemetry or
+> analytics. External URLs are handed to your browser only after you choose
+> to open them.
 
 ## Contents
 

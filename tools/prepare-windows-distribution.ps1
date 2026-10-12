@@ -16,7 +16,7 @@ if (-not (Test-Path -LiteralPath $launcher -PathType Leaf) -or
 # The launcher looks for a configuration file with the same base name.
 Rename-Item -LiteralPath $launcher -NewName 'Kaede-Gallery.exe'
 Rename-Item -LiteralPath $configuration -NewName 'Kaede-Gallery.cfg'
-foreach ($name in @('LICENSE', 'LICENSE.ja.md', 'README.md', 'README.ja.md',
+foreach ($name in @('LICENSE', 'README.md', 'README.ja.md',
                     'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.ja.md')) {
   Copy-Item -LiteralPath (Join-Path $sourceRoot $name) -Destination $bundlePath
 }

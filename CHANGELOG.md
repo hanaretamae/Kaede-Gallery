@@ -3,6 +3,18 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.3] - Draft
+
+### Added
+
+- Add page-scoped reset actions to Note structure and Tag settings.
+
+### Changed
+
+- Remove the unavailable-media icon option from Paging and list settings.
+- Separate the Note structure reset action from its link-resolution controls.
+- Remove the Japanese reference translation of the MIT License from the repository and Windows packages.
+
 ## [2.0.2] - Draft
 
 ### Fixed

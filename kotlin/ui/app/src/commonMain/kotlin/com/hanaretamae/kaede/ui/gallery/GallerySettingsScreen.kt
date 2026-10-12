@@ -282,7 +282,6 @@ data class GallerySettingsStrings(
     val showLoadedRange: String,
     val showTilePosition: String,
     val showCounts: String,
-    val showMissingMediaIcon: String,
     val reset: String,
     val resetTitle: String,
     val resetMessage: String,
@@ -410,7 +409,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     updatedKeys = "Updated keys",
     coverKeys = "Cover keys",
     linkResolution = "Internal link resolution",
-    markdownLink = "MarkdownLink",
+    markdownLink = "Markdown Link",
     wikiLink = "WikiLink",
     shortestPath = "Shortest path",
     relativePath = "Relative path",
@@ -445,7 +444,6 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     showLoadedRange = "Show loaded range and total",
     showTilePosition = "Show tile position number",
     showCounts = "Show media, memo, and related counts",
-    showMissingMediaIcon = "Show an icon when media is unavailable",
     reset = "Reset to defaults",
     resetTitle = "Reset settings?",
     resetMessage = "Restore display, tag, note-structure, and list settings to their defaults?",
@@ -572,7 +570,7 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     updatedKeys = "更新日キー",
     coverKeys = "カバーキー",
     linkResolution = "内部リンクの解決",
-    markdownLink = "MarkdownLink",
+    markdownLink = "Markdown Link",
     wikiLink = "WikiLink",
     shortestPath = "最短パス",
     relativePath = "相対パス",
@@ -607,7 +605,6 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     showLoadedRange = "読み込み済み件数と総数を表示",
     showTilePosition = "タイルの位置番号を表示",
     showCounts = "メディア・メモ・関連リンク数を表示",
-    showMissingMediaIcon = "メディアを表示できないときにアイコンを表示",
     reset = "既定値に戻す",
     resetTitle = "設定をリセットしますか？",
     resetMessage = "表示、タグ、ノート構造、一覧の設定を既定値に戻しますか？",
@@ -998,7 +995,7 @@ fun GallerySettingsScreen(
                             saveScope = scope,
                             enabled = !state.saving,
                             index = 0,
-                            count = 6,
+                            count = 5,
                         )
                         SettingsNumberItem(
                             label = strings.fixedColumns,
@@ -1008,7 +1005,7 @@ fun GallerySettingsScreen(
                             saveScope = scope,
                             enabled = !state.saving,
                             index = 1,
-                            count = 6,
+                            count = 5,
                         )
                         listOf(
                             Triple(strings.showLoadedRange, settings.showLoadedRange, stateHolder::setShowLoadedRange),
@@ -1020,16 +1017,9 @@ fun GallerySettingsScreen(
                                 checked = checked,
                                 onCheckedChange = onChange,
                                 index = offset + 2,
-                                count = 6,
+                                count = 5,
                             )
                         }
-                        SegmentedSettingsSwitch(
-                            label = strings.showMissingMediaIcon,
-                            checked = settings.showMissingMediaIcon,
-                            onCheckedChange = stateHolder::setShowMissingMediaIcon,
-                            index = 5,
-                            count = 6,
-                        )
                     }
                     }
                 }
@@ -1751,37 +1741,39 @@ fun GallerySettingsScreen(
                         )
                     }
                     }
-                SettingsPanel(strings.linkResolution) {
-                    SettingsGroup {
-                        SegmentedListItem(
-                            shapes = ListItemDefaults.segmentedShapes(0, 1),
-                            colors = settingsItemColors(),
-                            supportingContent = {
-                                ConnectedChoiceGroup(
-                                    options = GalleryLinkResolution.entries,
-                                    selected = noteStructureDraft.linkResolution,
-                                    label = { resolution ->
-                                        when (resolution) {
-                                            GalleryLinkResolution.SHORTEST_PATH -> strings.shortestPath
-                                            GalleryLinkResolution.RELATIVE_PATH -> strings.relativePath
-                                            GalleryLinkResolution.ABSOLUTE_PATH -> strings.absolutePath
-                                        }
-                                    },
-                                    iconFor = { resolution ->
-                                        when (resolution) {
-                                            GalleryLinkResolution.SHORTEST_PATH -> Icons.Filled.LocationSearching
-                                            GalleryLinkResolution.RELATIVE_PATH -> Icons.Filled.Link
-                                            GalleryLinkResolution.ABSOLUTE_PATH -> Icons.Filled.FolderOpen
-                                        }
-                                    },
-                                    onSelect = { resolution ->
-                                        noteStructureDraft = noteStructureDraft.copy(linkResolution = resolution)
-                                    },
-                                )
-                            },
-                        ) { Text("${strings.markdownLink} / ${strings.wikiLink}") }
+                    SettingsPanel(strings.linkResolution) {
+                        SettingsGroup {
+                            SegmentedListItem(
+                                shapes = ListItemDefaults.segmentedShapes(0, 1),
+                                colors = settingsItemColors(),
+                                supportingContent = {
+                                    ConnectedChoiceGroup(
+                                        options = GalleryLinkResolution.entries,
+                                        selected = noteStructureDraft.linkResolution,
+                                        label = { resolution ->
+                                            when (resolution) {
+                                                GalleryLinkResolution.SHORTEST_PATH -> strings.shortestPath
+                                                GalleryLinkResolution.RELATIVE_PATH -> strings.relativePath
+                                                GalleryLinkResolution.ABSOLUTE_PATH -> strings.absolutePath
+                                            }
+                                        },
+                                        iconFor = { resolution ->
+                                            when (resolution) {
+                                                GalleryLinkResolution.SHORTEST_PATH -> Icons.Filled.LocationSearching
+                                                GalleryLinkResolution.RELATIVE_PATH -> Icons.Filled.Link
+                                                GalleryLinkResolution.ABSOLUTE_PATH -> Icons.Filled.FolderOpen
+                                            }
+                                        },
+                                        onSelect = { resolution ->
+                                            noteStructureDraft =
+                                                noteStructureDraft.copy(linkResolution = resolution)
+                                        },
+                                    )
+                                },
+                            ) { Text("${strings.markdownLink} / ${strings.wikiLink}") }
+                        }
                     }
-                }
+                    Spacer(Modifier.height(SettingsGroupSpacing))
                 SettingsGroup {
                     SettingsActionItem(
                         label = strings.reset,

@@ -883,9 +883,9 @@ validated add/edit/remove segmented lists instead of multiline bulk editors.
 Tapping a tag-color rule row opens its editor; the row retains dedicated remove
 and edit actions.
 The internal-link-resolution choices sit below the note-detail order list on a
-separate settings panel. Its single segmented row uses a `MarkdownLink / WikiLink`
-headline in the same style as the Appearance "Theme" row, above the shared
-resolution choices.
+separate settings panel. A `Markdown Link / WikiLink` row contains the shared
+resolution choices below its heading. The Note structure reset action sits
+below this panel with extra vertical spacing.
 Tag settings and appearance settings can be exported together as JSON.
 Flutter's private `tag-settings.json` contains configurable gallery-target tag
 prefixes, Markdown heading aliases for memo, related items, and the end of post

@@ -85,7 +85,7 @@ jobs:
           Add-Type -AssemblyName System.IO.Compression.FileSystem
           $archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
           try {
-            foreach ($name in 'Kaede-Gallery.exe', 'LICENSE', 'LICENSE.ja.md', 'README.md', 'README.ja.md',
+            foreach ($name in 'Kaede-Gallery.exe', 'LICENSE', 'README.md', 'README.ja.md',
                               'THIRD_PARTY_NOTICES.md', 'THIRD_PARTY_NOTICES.ja.md') {
               if (-not ($archive.Entries | Where-Object { $_.FullName -eq $name })) {
                 throw "$name must be in the Windows ZIP root."
