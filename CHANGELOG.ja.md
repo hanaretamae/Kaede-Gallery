@@ -14,7 +14,7 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 ### 変更
 
 - Linux 向けリリースから FFmpeg と mpv の同梱をやめ、`.tar.zst` で配布します。動画の再生とサムネイルには `mpv` と `ffmpeg` を `PATH` に用意してください。
-- Windows: `\\?\` 形式のパスで画像・動画の読み込みや「開く」「ファイルマネージャーで表示」が失敗する問題を修正しました。Obsidian のリンクはブラウザを経由せず開きます。システムのアクセントカラーとテーマを反映し、Vault 選択に新しいフォルダーダイアログを使い、全画面解除後にレイアウトを再計算し、Vault 登録解除後に読み込み続ける問題を修正しました。起動ファイルの隣の `tools/ffmpeg.exe`・`tools/mpv.exe` を `PATH` より優先します。ZIP は `Kaede-Gallery.exe` と LICENSE・README を含み、ARM64 ビルドジョブを追加しました（ビルドのみで実機未確認）。
+- Windows: `\\?\` 形式のパスで画像・動画の読み込みや「開く」「ファイルマネージャーで表示」が失敗する問題を修正しました。Obsidian のリンクはブラウザを経由せず開きます。システムのアクセントカラーとテーマを反映し、Vault 選択に新しいフォルダーダイアログを使い、全画面解除後にレイアウトを再計算し、Vault 登録解除後に読み込み続ける問題を修正しました。起動ファイルの隣の `tools/ffmpeg.exe`・`tools/mpv.exe` を `PATH` より優先します。ZIP は `Kaede-Gallery.exe` と LICENSE・README を含み、Windows ARM64 は uniffi ランタイムに `win32-aarch64` ライブラリがないため未対応です。
 - Linux 向けに `.AppImage` も配布します（Nix で固定した `appimagetool` を使用）。Windows ZIP は固定した GPL ビルドの `mpv.exe` と `ffmpeg.exe` を `tools/` に同梱します。
 - 関連項目を開いても詳細ビューを維持し、リンク解決の見出しを他の設定行と揃えました。
 - ギャラリーの読み込み表示、ビューアー遷移、幅に応じた操作UI、外観設定を整理しました。

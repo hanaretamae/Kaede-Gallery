@@ -25,12 +25,6 @@ jobs:
             media_arch: x86_64
             mpv_sha256: 769a9bb120b35aad20c25ae502c44ed8f59b4e607fcbc7f6cdde61f98dceabaf
             ffmpeg_sha256: 417681c7e000d2fb3d25d3403bd02d542a34fdb0d35a708f22b98750668b94c5
-          - arch: arm64
-            java_distribution: microsoft
-            runner: windows-11-arm
-            media_arch: aarch64
-            mpv_sha256: b40be5bfc5ac5ac2f7086f1a1c3ec26e9fccebb1f6f20c3be6c9a56de7e33826
-            ffmpeg_sha256: fd3e75c5775443dcc6a296757a0ba26557ad3b62e63d280e84f3a47a2d97b11b
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
