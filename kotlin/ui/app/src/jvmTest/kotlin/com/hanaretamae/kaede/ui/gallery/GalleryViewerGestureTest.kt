@@ -321,6 +321,33 @@ class GalleryViewerGestureTest {
     }
 
     @Test
+    fun detailsDragFinishesPanelExpansionBeforeScrollingContent() {
+        showViewer(withLongBody = true)
+        showDetails()
+        val details = compose.onNodeWithTag("viewer-note-details")
+        val initialTop = details.fetchSemanticsNode().boundsInRoot.top
+        details.performTouchInput {
+            down(center)
+            moveTo(center - Offset(0f, 440f), 300)
+            up()
+        }
+        compose.waitForIdle()
+        val expandedTop = details.fetchSemanticsNode().boundsInRoot.top
+        assertTrue(expandedTop < initialTop - 50f)
+
+        details.performTouchInput {
+            down(center)
+            moveTo(center - Offset(0f, 180f), 200)
+            up()
+        }
+        compose.waitForIdle()
+        assertTrue(
+            abs(details.fetchSemanticsNode().boundsInRoot.top - expandedTop) < 1f,
+            "Scrolling note content must not repeatedly resize the expanded panel.",
+        )
+    }
+
+    @Test
     fun scrollingDetailsWithoutOverflowDoesNotShrinkTheImageArea() {
         showViewer()
         showDetails()

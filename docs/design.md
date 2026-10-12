@@ -325,7 +325,10 @@ caches are invalidated on rescan or Vault removal. Video previews also fall
 back across multiple sync-frame timestamps when the first MP4 frame cannot be
 decoded. These changes still require a fresh large-media latency benchmark.
 Linux and Windows video are rendered in an embedded native child window from a
-separate `mpv` process; desktop runtime requires `mpv` and `ffmpeg` on `PATH` (Linux bundles do not ship them; the Windows ZIP bundles pinned GPL `mpv.exe`/`ffmpeg.exe` under `tools/`, which take precedence over `PATH`).
+separate `mpv` process. Linux bundles do not ship `mpv` or `ffmpeg`, so they
+must be on `PATH`. Windows CI artifacts and release ZIPs include pinned GPL
+`mpv.exe`/`ffmpeg.exe` in `tools/` beside `Kaede-Gallery.exe`; these take
+precedence over `PATH`.
 Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
 and automatic sidecar loading. Linux playback forces mpv's X11 video output so
 its `--wid` targets the Swing canvas under XWayland instead of creating a
@@ -334,8 +337,8 @@ file input, one frame, 512-pixel bounds, a 4 MiB output cap, a 10-second
 timeout, and two concurrent extraction processes. Linux playback controls are
 rendered by Compose rather than mpv's on-screen display; a private Unix-domain
 IPC connection controls play/pause, seeking, speed, looping, and mute while
-mpv supplies embedded video rendering. A basic localized About
-section now links to the project and license. Windows x64 CI passed for the
+mpv supplies embedded video rendering. A basic localized About section now
+links to the project and license. Windows x64 CI passed for the
 current migration branch at commit `076436a`
 ([workflow run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37559570910)).
 This verifies the Windows build and packaging path, not execution on physical
@@ -691,8 +694,10 @@ the transparent state. The viewer detail toolbar transitions from transparent
 to `surfaceContainerHigh` when vertical scrolling expands the details panel or
 scrolls its content, and returns to transparent when both return to the top.
 The same vertical drag over media and details expands/collapses the panel;
-drags over details also scroll its content. Toolbar color stays independent of
-the black media background.
+drags over details resize it first, then scroll its content when the panel
+reaches its limit. Reverse drags scroll back to the top before collapsing the
+panel, avoiding simultaneous remeasurement and scrolling. Toolbar color stays
+independent of the black media background.
 Adaptive gallery columns use a 200dp minimum tile width, 12dp spacing, and
 24dp horizontal content padding, with at least two columns. This yields four
 columns at an 866dp content width; users can still select a fixed count in
@@ -1038,7 +1043,7 @@ The viewer uses an animated transition between media and details. Opening
 details resets image zoom. Dates, post text, memo, and related content use
 grouped Material 3 surface containers; section headings such as Related sit
 outside their tonal content surfaces, like the tag heading. The shared details
-panel observes vertical input without manually dispatching raw scroll deltas,
+panel uses nested scrolling rather than manually dispatching raw scroll deltas,
 so Android touch flings and desktop wheel/trackpad scrolling retain their
 native scroll behavior; wheel-driven expansion is limited to content that
 actually overflows, alongside unzoomed vertical drags over media. Inner details scrolling stops at its

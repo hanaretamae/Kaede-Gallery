@@ -363,8 +363,8 @@ private fun DesktopApplication(
     var startupAppearance by remember { mutableStateOf(AppearanceSettings()) }
     var showWelcomeExample by remember { mutableStateOf(false) }
 
-    suspend fun openVault(path: String, performScan: Boolean = true) {
-        if (path == vaultPath && session != null) return
+    suspend fun openVault(path: String, performScan: Boolean = true, force: Boolean = false) {
+        if (!force && path == vaultPath && session != null) return
         loading = true
         openingVaultName = Path.of(path).fileName?.toString()
         error = null
@@ -704,7 +704,7 @@ private fun DesktopApplication(
             onForgetVault = {
                 val selectedPath = vaultPath
                 session?.close()
-                session = null
+                // Clearing the session here would cancel the settings coroutine during cleanup.
                 if (selectedPath == null) {
                     RepositoryResult.Failure(RepositoryError.VAULT_UNAVAILABLE)
                 } else {
@@ -718,10 +718,12 @@ private fun DesktopApplication(
                             openVault(
                                 selectedPath,
                                 performScan = !Path.of(privateData, "gallery.sqlite").toFile().isFile,
+                                force = true,
                             )
                             RepositoryResult.Failure(forgotten.error)
                         }
                         is RepositoryResult.Success -> {
+                            session = null
                             vaultPath = null
                             error = null
                             loading = false
@@ -883,17 +885,13 @@ private fun isGnomeDesktop(): Boolean =
             .uppercase(java.util.Locale.ROOT).contains("GNOME")
 
 private fun showInWindowsFileManager(media: Path): Boolean {
-    val process = try {
-        ProcessBuilder(windowsFileManagerShowItemCommand(media))
-            .redirectOutput(ProcessBuilder.Redirect.DISCARD)
-            .redirectError(ProcessBuilder.Redirect.DISCARD)
-            .start()
-    } catch (_: IOException) {
-        return false
+    return try {
+        selectInWindowsExplorer(media)
+    } catch (_: LinkageError) {
+        false
     } catch (_: SecurityException) {
-        return false
+        false
     }
-    return process.isAlive || process.exitValue() == 0
 }
 
 private fun showInLinuxFileManager(media: Path): Boolean {
@@ -921,9 +919,6 @@ private fun showInLinuxFileManager(media: Path): Boolean {
         false
     }
 }
-
-internal fun windowsFileManagerShowItemCommand(media: Path): List<String> =
-    listOf("explorer.exe", "/select,", media.toString())
 
 internal fun linuxFileManagerShowItemsCommand(media: Path): List<String> {
     val uri = media.toUri().toASCIIString()

@@ -56,7 +56,7 @@ gh workflow run windows.yml \
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
-このworkflowはtagとversionを検査し、Windows x64 packageを作り、ZIPと更新後のチェックサムを既存Releaseへアップロードします。Release自体は作成しません。
+このworkflowはtagとversionを検査し、Windows x64 packageを作り、ZIPと更新後のチェックサムを既存Releaseへアップロードします。Release自体は作成しません。両方のWindows workflowは `Kaede-Gallery.exe` と同じ階層に `LICENSE` とその日本語参考訳、英語・日本語のREADMEとサードパーティライセンス通知を配置します。配布前にartifact内の各ファイルを確認してください。
 
 ## 任意のリモートビルド
 
@@ -71,7 +71,7 @@ tools/run-optional-builds.sh both
 
 1回の起動につき、いずれか1つを選んでください。GitHub Actions画面の **Optional Android and Linux AArch64 builds** からも起動できます。これは手動専用で、ローカルビルドを通常の方法とし、artifactは14日間保存します。`android-debug` はdebug署名APKで、production APKではありません。`linux-aarch64` は x86_64 runner 上で AArch64 bundle をクロスビルドします。このworkflowはx86_64のrelease bundle、GitHub Release、production署名済みAndroid APKを作成・公開しません。
 
-別の `windows.yml` workflowはtagなしならWindows artifactを作れますが、tagを指定した場合も、同じtagのGitHub Releaseがすでに存在するときに限りZIPを添付します。
+自動実行の `kotlin-windows.yml` artifact と手動実行の `windows.yml` ZIP には、チェックサムを検証したWindows版mpv／FFmpegを `tools/` に、ライセンステキストを `licenses/` に同梱します。手動workflowはtagなしならWindows artifactを作れますが、tagを指定した場合も、同じtagのGitHub Releaseがすでに存在するときに限りZIPを添付します。
 
 ## Actionsだけでproduction releaseを行う方法
 

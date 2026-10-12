@@ -51,6 +51,12 @@ jobs:
         run: |
           grep -h -A6 "UnsatisfiedLinkError" test-results/jvmTest/*.xml | head -40 || true
           find . -name "*.dll" | head
+      - name: Prepare Windows distribution
+        shell: pwsh
+        run: |
+          $bundle = 'kotlin/desktopApp/build/compose/binaries/main/app/desktopApp'
+          ./tools/prepare-windows-distribution.ps1 -Bundle $bundle
+          ./tools/prepare-windows-media.ps1 -Bundle $bundle -Arch '${{ matrix.arch }}'
       - uses: actions/upload-artifact@v4
         with:
           name: kaede-gallery-kotlin-windows-${{ matrix.arch }}

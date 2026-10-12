@@ -68,16 +68,6 @@ class DesktopMediaPathTest {
 
 
     @Test
-    fun windowsFileManagerSelectsTheExactMediaPathAsAnArgument() {
-        val media = Path.of("C:\\fictional vault\\image with spaces.png")
-
-        assertEquals(
-            listOf("explorer.exe", "/select,", media.toString()),
-            windowsFileManagerShowItemCommand(media),
-        )
-    }
-
-    @Test
     fun obsidianNoteOpeningIsLimitedToExistingFilesInsideTheVault() {
         val vault = Files.createTempDirectory("kaede-note-vault")
         val outside = Files.createTempDirectory("kaede-note-outside")

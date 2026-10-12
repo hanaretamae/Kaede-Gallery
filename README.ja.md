@@ -256,4 +256,4 @@ kotlin/
 docs/design.md      設計の基準
 ```
 
-このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。同梱コンポーネントのライセンスは [THIRD_PARTY_NOTICES.ja.md](THIRD_PARTY_NOTICES.ja.md) と各配布物に含まれる notices を確認してください。公開済みリリースと検証状況は[リリース一覧](https://github.com/hanaretamae/Kaede-Gallery/releases)で確認してください。
+このリポジトリは配布のみを目的とし、外部からの Issue・Pull Request は受け付けていません。開発者向け手順は [CONTRIBUTING.ja.md](CONTRIBUTING.ja.md) を参照してください。ライセンスは [LICENSE](LICENSE)（MIT）です。[日本語参考訳](LICENSE.ja.md) もあります。同梱コンポーネントのライセンスは [THIRD_PARTY_NOTICES.ja.md](THIRD_PARTY_NOTICES.ja.md) と各配布物に含まれる notices を確認してください。公開済みリリースと検証状況は[リリース一覧](https://github.com/hanaretamae/Kaede-Gallery/releases)で確認してください。

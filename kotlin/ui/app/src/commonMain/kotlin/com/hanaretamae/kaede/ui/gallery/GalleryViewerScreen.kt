@@ -107,6 +107,9 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isShiftPressed
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
@@ -705,7 +708,8 @@ fun GalleryViewerScreen(
                                         )
                                         .verticalScroll(
                                             detailsScrollState,
-                                            enabled = detailsScrollState.maxValue > 0,
+                                            enabled = detailsScrollState.maxValue > 0 ||
+                                                detailsPanelExpansionPx.floatValue > 0f,
                                         )
                                         .background(MaterialTheme.colorScheme.surfaceContainer)
                                         .padding(16.dp),
@@ -1130,7 +1134,8 @@ fun GalleryViewerScreen(
                                         )
                                         .verticalScroll(
                                             detailsScrollState,
-                                            enabled = detailsScrollState.maxValue > 0,
+                                            enabled = detailsScrollState.maxValue > 0 ||
+                                                detailsPanelExpansionPx.floatValue > 0f,
                                         )
                                         .background(MaterialTheme.colorScheme.surfaceContainer)
                                         .testTag("viewer-note-details")
@@ -1352,69 +1357,34 @@ internal fun galleryViewerCanForwardMediaVerticalScroll(
     imageZoomed: Boolean,
 ): Boolean = detailsVisible && !fullscreen && !isVideo && !imageZoomed
 
+@Composable
 private fun Modifier.viewerDetailsPanelExpansion(
     enabled: Boolean,
     scrollState: ScrollState,
     panelExpansion: MutableFloatState,
     expandDistancePx: Float,
-): Modifier = pointerInput(enabled, scrollState, panelExpansion, expandDistancePx) {
-    if (!enabled) return@pointerInput
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            if (event.type != PointerEventType.Scroll) continue
-            val change = event.changes.firstOrNull() ?: continue
-            val deltaY = change.scrollDelta.y
-            if (
-                scrollState.maxValue > 0 &&
-                abs(deltaY) > abs(change.scrollDelta.x) &&
-                (
-                    (deltaY > 0f && scrollState.canScrollForward) ||
-                        (deltaY < 0f && scrollState.canScrollBackward)
-                    )
-            ) {
-                panelExpansion.floatValue = galleryViewerPanelExpansion(
-                    currentExpansionPx = panelExpansion.floatValue,
-                    availableScrollPx = deltaY,
-                    maxExpansionPx = expandDistancePx,
-                )
-            }
-        }
-    }
-}.pointerInput(enabled, panelExpansion, expandDistancePx) {
-    if (!enabled) return@pointerInput
-    val touchSlop = viewConfiguration.touchSlop
-    awaitEachGesture {
-        val down = awaitFirstDown(
-            requireUnconsumed = false,
-            pass = PointerEventPass.Initial,
-        )
-        var previous = down.position
-        var total = Offset.Zero
-        var draggingVertically = false
-        var pointerPressed = true
-        while (pointerPressed) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            val change = event.changes.firstOrNull { it.id == down.id } ?: break
-            if (event.changes.count { it.pressed } > 1) break
-            val delta = change.position - previous
-            previous = change.position
-            if (!draggingVertically) {
-                total += delta
-                if (abs(total.y) > touchSlop && abs(total.y) > abs(total.x)) {
-                    draggingVertically = true
+): Modifier {
+    val connection = remember(enabled, scrollState, panelExpansion, expandDistancePx) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (!enabled || abs(available.y) <= abs(available.x)) return Offset.Zero
+                val expanding = available.y < 0f
+                if (expanding && scrollState.maxValue == 0 && panelExpansion.floatValue == 0f) {
+                    return Offset.Zero
                 }
-            }
-            if (draggingVertically) {
-                panelExpansion.floatValue = galleryViewerPanelExpansion(
-                    currentExpansionPx = panelExpansion.floatValue,
-                    availableScrollPx = -delta.y,
+                if (!expanding && scrollState.canScrollBackward) return Offset.Zero
+                val previous = panelExpansion.floatValue
+                val next = galleryViewerPanelExpansion(
+                    currentExpansionPx = previous,
+                    availableScrollPx = -available.y,
                     maxExpansionPx = expandDistancePx,
                 )
+                panelExpansion.floatValue = next
+                return Offset(0f, previous - next)
             }
-            pointerPressed = change.pressed
         }
     }
+    return nestedScroll(connection)
 }
 
 internal fun galleryViewerDetailsPanelFraction(

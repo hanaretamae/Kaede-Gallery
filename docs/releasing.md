@@ -56,7 +56,7 @@ gh workflow run windows.yml \
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
-The workflow verifies the tag and version, packages Windows x64, and uploads the ZIP and updated checksums to the existing release. It cannot create the release itself.
+The workflow verifies the tag and version, packages Windows x64, and uploads the ZIP and updated checksums to the existing release. It cannot create the release itself. Both Windows workflows package `Kaede-Gallery.exe` with `LICENSE`, its Japanese reference translation, English and Japanese READMEs, and English and Japanese third-party notices beside the launcher; verify these files in the artifact before distribution.
 
 ## Optional remote builds
 
@@ -71,7 +71,7 @@ tools/run-optional-builds.sh both
 
 Choose one target per invocation. The workflow also appears in the GitHub Actions UI as **Optional Android and Linux AArch64 builds**. It is manual-only, keeps local builds as the normal path, and uploads artifacts for 14 days. `android-debug` is a debug-signed APK, not the production APK; `linux-aarch64` cross-builds an AArch64 bundle on an x86_64 runner. This workflow does not build the x86_64 release bundle, create a GitHub Release, or sign/publish a production Android APK.
 
-The separate `windows.yml` workflow can produce a Windows artifact without a tag, but it only attaches a ZIP when dispatched with a tag for an already-created GitHub Release.
+The automatic `kotlin-windows.yml` artifact and the manual `windows.yml` ZIP both include checksum-verified Windows mpv/FFmpeg builds under `tools/` and their license texts under `licenses/`. The manual workflow can produce an artifact without a tag, but it only attaches a ZIP when dispatched with a tag for an already-created GitHub Release.
 
 ## Entirely Actions-based production release
 
