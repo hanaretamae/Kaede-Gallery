@@ -286,6 +286,8 @@ data class GallerySettingsStrings(
     val reset: String,
     val resetTitle: String,
     val resetMessage: String,
+    val resetTagSettingsMessage: String,
+    val resetNoteStructureMessage: String,
     val restoreDefaults: String,
     val cancel: String,
     val save: String,
@@ -447,6 +449,8 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     reset = "Reset to defaults",
     resetTitle = "Reset settings?",
     resetMessage = "Restore display, tag, note-structure, and list settings to their defaults?",
+    resetTagSettingsMessage = "Restore tag settings to their defaults?",
+    resetNoteStructureMessage = "Restore note structure settings to their defaults?",
     restoreDefaults = "Restore defaults",
     cancel = "Cancel",
     save = "Save",
@@ -607,6 +611,8 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     reset = "既定値に戻す",
     resetTitle = "設定をリセットしますか？",
     resetMessage = "表示、タグ、ノート構造、一覧の設定を既定値に戻しますか？",
+    resetTagSettingsMessage = "タグ設定を既定値に戻しますか？",
+    resetNoteStructureMessage = "ノート構造の設定を既定値に戻しますか？",
     restoreDefaults = "既定値に戻す",
     cancel = "キャンセル",
     save = "保存",
@@ -734,7 +740,10 @@ fun GallerySettingsScreen(
         mutableStateOf(state.settings?.hiddenTagPrefixes?.joinToString("\n").orEmpty())
     }
     var tagDisplayPrefixesError by remember { mutableStateOf(false) }
+    var tagCategoriesError by remember { mutableStateOf(false) }
+    var noteStructureError by remember { mutableStateOf(false) }
     var confirmReset by remember { mutableStateOf(false) }
+    var confirmPageReset by remember { mutableStateOf<GallerySettingsPage?>(null) }
     if (loadOnEnter) {
         LaunchedEffect(stateHolder) { stateHolder.load() }
     }
@@ -1316,7 +1325,6 @@ fun GallerySettingsScreen(
                 ) {
                     mutableStateOf(storedCategorySettings)
                 }
-                var tagCategoriesError by remember { mutableStateOf(false) }
                 var editingCategory by remember { mutableStateOf<Int?>(null) }
                 var categoryRule by remember { mutableStateOf(GalleryTagCategoryRule("", "")) }
                 LaunchedEffect(categoryDraft, storedCategorySettings) {
@@ -1496,6 +1504,16 @@ fun GallerySettingsScreen(
                     )
                 }
                 }
+                SettingsGroup {
+                    SettingsActionItem(
+                        label = strings.reset,
+                        icon = Icons.Filled.RestartAlt,
+                        index = 0,
+                        count = 1,
+                        enabled = !state.saving,
+                        destructive = true,
+                    ) { confirmPageReset = GallerySettingsPage.TAG_SETTINGS }
+                }
 
                 }
 
@@ -1522,7 +1540,6 @@ fun GallerySettingsScreen(
                 ) {
                     mutableStateOf(storedNoteStructure)
                 }
-                var noteStructureError by remember { mutableStateOf(false) }
                 var noteOptionsVisible by remember { mutableStateOf(false) }
                 var selectedNoteOptions by remember { mutableStateOf<GalleryNoteBlock?>(null) }
                 LaunchedEffect(noteStructureDraft, storedNoteStructure) {
@@ -1764,6 +1781,16 @@ fun GallerySettingsScreen(
                             },
                         ) { Text("${strings.markdownLink} / ${strings.wikiLink}") }
                     }
+                }
+                SettingsGroup {
+                    SettingsActionItem(
+                        label = strings.reset,
+                        icon = Icons.Filled.RestartAlt,
+                        index = 0,
+                        count = 1,
+                        enabled = !state.saving,
+                        destructive = true,
+                    ) { confirmPageReset = GallerySettingsPage.NOTE_STRUCTURE }
                 }
                 }
                 }
@@ -2032,6 +2059,59 @@ fun GallerySettingsScreen(
                             TextButton(shapes = ButtonDefaults.shapes(), onClick = { confirmReset = false }) {
                                 Text(strings.cancel)
                             }
+                        },
+                    )
+                }
+                confirmPageReset?.let { pageToReset ->
+                    val message = when (pageToReset) {
+                        GallerySettingsPage.TAG_SETTINGS -> strings.resetTagSettingsMessage
+                        GallerySettingsPage.NOTE_STRUCTURE -> strings.resetNoteStructureMessage
+                        else -> strings.resetMessage
+                    }
+                    AlertDialog(
+                        onDismissRequest = { confirmPageReset = null },
+                        title = { Text(strings.resetTitle) },
+                        text = { Text(message) },
+                        confirmButton = {
+                            TextButton(
+                                shapes = ButtonDefaults.shapes(),
+                                onClick = {
+                                    confirmPageReset = null
+                                    when (pageToReset) {
+                                        GallerySettingsPage.TAG_SETTINGS -> {
+                                            galleryTagPrefixesSaveJob?.cancel()
+                                            tagDisplayPrefixesSaveJob?.cancel()
+                                            tagColorRulesSaveJob?.cancel()
+                                            tagCategorySettingsSaveJob?.cancel()
+                                            galleryTagPrefixesError = false
+                                            tagDisplayPrefixesError = false
+                                            tagCategoriesError = false
+                                            val japaneseDefaults =
+                                                state.settings?.appearance?.language
+                                                    ?.resolve(platformSystemLanguagePreference()) ==
+                                                    LanguagePreference.JAPANESE
+                                            scope.launch {
+                                                stateHolder.resetTagSettings(japaneseDefaults)
+                                            }
+                                        }
+                                        GallerySettingsPage.NOTE_STRUCTURE -> {
+                                            noteStructureSaveJob?.cancel()
+                                            noteStructureError = false
+                                            scope.launch {
+                                                stateHolder.resetNoteStructureSettings()
+                                            }
+                                        }
+                                        else -> Unit
+                                    }
+                                },
+                                enabled = !state.saving,
+                            ) { Text(strings.restoreDefaults) }
+                        },
+                        dismissButton = {
+                            TextButton(
+                                shapes = ButtonDefaults.shapes(),
+                                onClick = { confirmPageReset = null },
+                            ) { Text(strings.cancel) }
                         },
                     )
                 }

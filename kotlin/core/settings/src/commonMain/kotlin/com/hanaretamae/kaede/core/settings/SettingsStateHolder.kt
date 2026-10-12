@@ -220,6 +220,39 @@ class SettingsStateHolder(
         }
     }
 
+    suspend fun resetNoteStructureSettings(): RepositoryResult<Unit> =
+        saveNoteStructureSettings(GalleryNoteStructureSettings())
+
+    suspend fun resetTagSettings(japaneseDefaults: Boolean): RepositoryResult<Unit> =
+        saveMutex.withLock {
+            val current = mutableState.value.settings
+                ?: return@withLock RepositoryResult.Failure(RepositoryError.OPERATION_FAILED)
+            val defaultSettings = GallerySettings()
+            val tagSettingsJson = try {
+                GalleryTagCategoryCodec.update(
+                    GalleryTagColorCodec.update(
+                        current.flutterTagSettingsJson,
+                        GalleryTagColorCodec.DEFAULT_RULES,
+                    ),
+                    GalleryTagCategoryCodec.decodeSettings(
+                        tagSettingsJson = null,
+                        japaneseDefaults = japaneseDefaults,
+                    ),
+                )
+            } catch (_: IllegalArgumentException) {
+                mutableState.value = mutableState.value.copy(error = RepositoryError.INVALID_REQUEST)
+                return@withLock RepositoryResult.Failure(RepositoryError.INVALID_REQUEST)
+            }
+            persistLocked(
+                current.copy(
+                    galleryTagPrefixes = defaultSettings.galleryTagPrefixes,
+                    includedTagPrefixes = defaultSettings.includedTagPrefixes,
+                    hiddenTagPrefixes = defaultSettings.hiddenTagPrefixes,
+                    flutterTagSettingsJson = tagSettingsJson,
+                ),
+            )
+        }
+
     fun reportError(error: RepositoryError) {
         mutableState.value = mutableState.value.copy(error = error)
     }

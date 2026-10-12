@@ -63,8 +63,6 @@
 >
 > [最新のリリースをダウンロード](https://github.com/hanaretamae/Kaede-Gallery/releases)
 >
-> このソースから作成する AppImage は、システムの Fontconfig 設定と
-> インストール済みフォントを参照します。
 > ビルド・リリースの詳細は[リリース手順](docs/releasing.ja.md)を参照してください。
 
 ## アプリを使う
@@ -207,10 +205,6 @@ Nix package と Linux release bundle には、バージョンを固定した
 `mpv`・`ffmpeg` と実行時ライブラリを同梱します。
 動画再生とサムネイル生成に、ホストの `PATH` 上の実行ファイルは不要です。
 
-このソースから作成する AppImage は、`FONTCONFIG_FILE` が未設定で
-`/etc/fonts/fonts.conf` がある場合、システムの Fontconfig 設定を使います。
-システムにインストールした日本語フォントなどを参照できます。
-`FONTCONFIG_FILE` を明示している場合は、その設定を優先します。
 Google Sans Flex はアプリ内に同梱しており、外観設定から選べます。
 
 配布物は[最新のリリース](https://github.com/hanaretamae/Kaede-Gallery/releases)からダウンロードできます。

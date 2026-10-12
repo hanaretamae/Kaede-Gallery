@@ -222,6 +222,108 @@ class SettingsStateHolderTest {
     }
 
     @Test
+    fun resetsNoteStructureWithoutChangingTagOrGeneralSettings() = runTest {
+        val original = GallerySettings(
+            appearance = AppearanceSettings(theme = ThemePreference.DARK),
+            pageSize = 48,
+            galleryTagPrefixes = listOf("portfolio"),
+            includedTagPrefixes = listOf("portfolio"),
+            hiddenTagPrefixes = listOf("private"),
+            flutterTagSettingsJson = """
+                {"includedPrefixes":["portfolio"],"hiddenPrefixes":["private"],
+                "colors":[{"prefix":"custom","color":"#123456"}],
+                "tagCategories":{"categories":[{"name":"Work","path":"work/*"}]},
+                "noteStructure":{"memoHeadings":["Journal"]},"custom":"kept"}
+            """.trimIndent(),
+        )
+        val repository = FakeSettingsRepository(settings = original)
+        val holder = SettingsStateHolder(repository, this)
+        holder.load()
+        advanceUntilIdle()
+
+        val result = holder.resetNoteStructureSettings()
+
+        assertTrue(result is RepositoryResult.Success)
+        val saved = repository.saved.single()
+        assertEquals(original.appearance, saved.appearance)
+        assertEquals(original.pageSize, saved.pageSize)
+        assertEquals(original.galleryTagPrefixes, saved.galleryTagPrefixes)
+        assertEquals(original.includedTagPrefixes, saved.includedTagPrefixes)
+        assertEquals(original.hiddenTagPrefixes, saved.hiddenTagPrefixes)
+        assertEquals(
+            GalleryNoteStructureSettings(galleryTagPrefixes = original.galleryTagPrefixes),
+            GalleryNoteStructureCodec.decodeSettings(
+                saved.flutterTagSettingsJson,
+                saved.galleryTagPrefixes,
+            ),
+        )
+        assertEquals(
+            listOf(GalleryTagColorRule("custom", 0xff123456.toInt())),
+            GalleryTagColorCodec.decodeRules(saved.flutterTagSettingsJson),
+        )
+        assertEquals(
+            GalleryTagCategorySettings(
+                categories = listOf(GalleryTagCategoryRule("Work", "work/*")),
+            ),
+            GalleryTagCategoryCodec.decodeSettings(
+                saved.flutterTagSettingsJson,
+                japaneseDefaults = false,
+            ),
+        )
+        assertTrue(saved.flutterTagSettingsJson.orEmpty().contains(""""custom":"kept""""))
+    }
+
+    @Test
+    fun resetsTagSettingsWithoutChangingNoteStructureOrGeneralSettings() = runTest {
+        val original = GallerySettings(
+            appearance = AppearanceSettings(theme = ThemePreference.DARK),
+            pageSize = 48,
+            galleryTagPrefixes = listOf("portfolio"),
+            includedTagPrefixes = listOf("portfolio"),
+            hiddenTagPrefixes = listOf("private"),
+            flutterTagSettingsJson = """
+                {"includedPrefixes":["portfolio"],"hiddenPrefixes":["private"],
+                "colors":[{"prefix":"custom","color":"#123456"}],
+                "tagCategories":{"categories":[{"name":"Work","path":"work/*"}]},
+                "noteStructure":{"memoHeadings":["Journal"]},"custom":"kept"}
+            """.trimIndent(),
+        )
+        val repository = FakeSettingsRepository(settings = original)
+        val holder = SettingsStateHolder(repository, this)
+        holder.load()
+        advanceUntilIdle()
+
+        val result = holder.resetTagSettings(japaneseDefaults = true)
+
+        assertTrue(result is RepositoryResult.Success)
+        val saved = repository.saved.single()
+        assertEquals(original.appearance, saved.appearance)
+        assertEquals(original.pageSize, saved.pageSize)
+        assertEquals(GallerySettings().galleryTagPrefixes, saved.galleryTagPrefixes)
+        assertEquals(GallerySettings().includedTagPrefixes, saved.includedTagPrefixes)
+        assertEquals(GallerySettings().hiddenTagPrefixes, saved.hiddenTagPrefixes)
+        assertEquals(
+            GalleryTagColorCodec.DEFAULT_RULES,
+            GalleryTagColorCodec.decodeRules(saved.flutterTagSettingsJson),
+        )
+        assertEquals(
+            GalleryTagCategoryCodec.decodeSettings(null, japaneseDefaults = true),
+            GalleryTagCategoryCodec.decodeSettings(
+                saved.flutterTagSettingsJson,
+                japaneseDefaults = true,
+            ),
+        )
+        assertEquals(
+            listOf("Journal"),
+            GalleryNoteStructureCodec.decodeSettings(
+                saved.flutterTagSettingsJson,
+                saved.galleryTagPrefixes,
+            ).memoHeadings,
+        )
+        assertTrue(saved.flutterTagSettingsJson.orEmpty().contains(""""custom":"kept""""))
+    }
+
+    @Test
     fun reportsOversizedTransferExportsAsInvalidRequests() = runTest {
         val repeatedPrefix = "a".repeat(GalleryTagPrefixesCodec.MAX_PREFIX_LENGTH)
         val advancedSettings = """

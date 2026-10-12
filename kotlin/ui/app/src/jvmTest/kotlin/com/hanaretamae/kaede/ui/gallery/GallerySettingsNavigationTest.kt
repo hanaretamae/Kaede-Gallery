@@ -22,11 +22,17 @@ import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.semantics.SemanticsActions
 import com.hanaretamae.kaede.core.repository.RepositoryResult
 import com.hanaretamae.kaede.core.settings.AppearanceSettings
+import com.hanaretamae.kaede.core.settings.GalleryNoteStructureCodec
+import com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings
 import com.hanaretamae.kaede.core.settings.GallerySettings
+import com.hanaretamae.kaede.core.settings.GalleryTagCategoryCodec
+import com.hanaretamae.kaede.core.settings.GalleryTagColorCodec
+import com.hanaretamae.kaede.core.settings.LanguagePreference
 import com.hanaretamae.kaede.core.settings.SettingsRepository
 import com.hanaretamae.kaede.core.settings.SettingsStateHolder
 import org.junit.Rule
 import org.junit.Test
+import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
@@ -132,6 +138,7 @@ class GallerySettingsNavigationTest {
     }
 
     private fun showSettings(
+        initialSettings: GallerySettings = GallerySettings(),
         onBackHandlerChanged: (((() -> Unit)?) -> Unit)? = null,
         onSaved: (GallerySettings) -> Unit = {},
     ) {
@@ -139,7 +146,7 @@ class GallerySettingsNavigationTest {
             val scope = rememberCoroutineScope()
             val holder = remember {
                 SettingsStateHolder(object : SettingsRepository {
-                    override suspend fun load() = RepositoryResult.Success(GallerySettings())
+                    override suspend fun load() = RepositoryResult.Success(initialSettings)
                     override suspend fun save(settings: GallerySettings): RepositoryResult<Unit> {
                         onSaved(settings)
                         return RepositoryResult.Success(Unit)
@@ -333,6 +340,85 @@ class GallerySettingsNavigationTest {
         compose.onNode(hasText(strings.tagSettings) and hasClickAction())
             .performScrollTo().performClick()
         compose.onNodeWithText(strings.tagCategories).performScrollTo().assertIsDisplayed()
+    }
+
+    @Test
+    fun noteStructureAndTagSettingsPagesResetOnlyTheirOwnSettings() {
+        val initialSettings = GallerySettings(
+            appearance = AppearanceSettings(language = LanguagePreference.ENGLISH),
+            pageSize = 48,
+            galleryTagPrefixes = listOf("portfolio"),
+            includedTagPrefixes = listOf("portfolio"),
+            hiddenTagPrefixes = listOf("private"),
+            flutterTagSettingsJson = """
+                {"includedPrefixes":["portfolio"],"hiddenPrefixes":["private"],
+                "colors":[{"prefix":"custom","color":"#123456"}],
+                "tagCategories":{"categories":[{"name":"Work","path":"work/*"}]},
+                "noteStructure":{"memoHeadings":["Journal"]}}
+            """.trimIndent(),
+        )
+        var savedSettings: GallerySettings? = null
+        showSettings(initialSettings = initialSettings, onSaved = { savedSettings = it })
+        val strings = EnglishGallerySettingsStrings
+
+        compose.onNode(hasText(strings.noteStructure) and hasClickAction())
+            .performScrollTo().performClick()
+        compose.onNodeWithText(strings.reset).performScrollTo().performClick()
+        compose.onNodeWithText(strings.resetNoteStructureMessage).assertIsDisplayed()
+        compose.onNodeWithText(strings.restoreDefaults).performClick()
+        compose.waitUntil(5_000) {
+            savedSettings?.let {
+                GalleryNoteStructureCodec.decodeSettings(
+                    it.flutterTagSettingsJson,
+                    it.galleryTagPrefixes,
+                ) == GalleryNoteStructureSettings(
+                    galleryTagPrefixes = initialSettings.galleryTagPrefixes,
+                )
+            } == true
+        }
+        compose.runOnIdle {
+            val saved = assertNotNull(savedSettings)
+            assertEquals(initialSettings.pageSize, saved.pageSize)
+            assertEquals(initialSettings.includedTagPrefixes, saved.includedTagPrefixes)
+            assertEquals(initialSettings.hiddenTagPrefixes, saved.hiddenTagPrefixes)
+            assertEquals(
+                listOf("custom"),
+                GalleryTagColorCodec.decodeRules(saved.flutterTagSettingsJson)
+                    .map { it.prefix },
+            )
+        }
+
+        compose.onNodeWithContentDescription(strings.close).performClick()
+        compose.onNode(hasText(strings.tagSettings) and hasClickAction())
+            .performScrollTo().performClick()
+        compose.onNodeWithText(strings.reset).performScrollTo().performClick()
+        compose.onNodeWithText(strings.resetTagSettingsMessage).assertIsDisplayed()
+        compose.onNodeWithText(strings.restoreDefaults).performClick()
+        compose.waitUntil(5_000) {
+            savedSettings?.let {
+                it.galleryTagPrefixes == GallerySettings().galleryTagPrefixes &&
+                    GalleryTagColorCodec.decodeRules(it.flutterTagSettingsJson) ==
+                    GalleryTagColorCodec.DEFAULT_RULES &&
+                    GalleryTagCategoryCodec.decodeSettings(
+                        it.flutterTagSettingsJson,
+                        japaneseDefaults = false,
+                    ) == GalleryTagCategoryCodec.decodeSettings(
+                        null,
+                        japaneseDefaults = false,
+                    )
+            } == true
+        }
+        compose.runOnIdle {
+            val saved = assertNotNull(savedSettings)
+            assertEquals(initialSettings.pageSize, saved.pageSize)
+            assertEquals(
+                listOf("Journal"),
+                GalleryNoteStructureCodec.decodeSettings(
+                    saved.flutterTagSettingsJson,
+                    saved.galleryTagPrefixes,
+                ).memoHeadings,
+            )
+        }
     }
 
     @Test

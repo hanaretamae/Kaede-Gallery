@@ -66,9 +66,6 @@
 >
 > [Download the latest release](https://github.com/hanaretamae/Kaede-Gallery/releases).
 >
-> AppImages built from this source use the host's Fontconfig configuration and
-> installed fonts when available.
->
 > See [the release guide](docs/releasing.md) for build and release details.
 
 ## Using the app
@@ -253,10 +250,7 @@ The Nix package and Linux release bundles use pinned `mpv` and `ffmpeg`,
 including their runtime libraries, so video playback and thumbnails do not
 depend on host executables in `PATH`.
 
-AppImages built from this source use the host's Fontconfig configuration and
-installed fonts when `/etc/fonts/fonts.conf` is available. An explicit
-`FONTCONFIG_FILE` setting takes precedence. Google Sans Flex remains available
-as an app appearance option.
+Google Sans Flex remains available as an app appearance option.
 
 See the [latest release](https://github.com/hanaretamae/Kaede-Gallery/releases)
 for downloads.

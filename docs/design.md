@@ -906,7 +906,14 @@ includes a separate bottom card for a fictional example note that can be viewed
 as selectable Markdown and copied, but is never written to the Vault. The Vault
 picker displays the same card using default settings; after selection the
 example reflects that Vault's current settings. Settings can be exported
-to or imported from versioned JSON, or reset to defaults.
+to or imported from versioned JSON, or reset to defaults. The Note structure
+and Tag settings pages each offer a confirmed, page-scoped reset. Resetting
+Note structure restores its aliases, link resolution, and viewer block order
+and visibility while preserving gallery eligibility and tag settings. Resetting
+Tag settings restores gallery eligibility, tag filter visibility, colors, and
+categories while preserving Note structure and unrelated settings; category
+defaults follow the selected UI language. The Data page retains the whole
+settings reset.
 In the note viewer, frontmatter remains fixed first; author, media, post text,
 the post-text end marker, related, and memo blocks follow the configured order.
 The default order places the post-text end marker after post text, followed by
