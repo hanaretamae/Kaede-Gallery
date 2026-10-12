@@ -14,13 +14,13 @@
 
 The public GitHub releases were checked on 2026-10-12. `2.0.0b5` is published as a prerelease with Android APKs, Linux x86_64/AArch64 bundles, license notices, checksums, and the Windows ZIP. `2.0.0b4` remains without its Windows ZIP; workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`, so the Phase 14 acceptance gate remains open.
 
-The `2.0.0rc1` candidate commit (`d11b09b`) and annotated tag are pushed to `origin/main`; no GitHub Release has been created. The changelog remains a draft, so review its release notes before publishing with `tools/release.sh`. Do not move or recreate historical tags.
+The public `2.0.0rc1` prerelease was verified on 2026-10-12 with Android, Linux, Windows x64, and checksum assets attached. Its changelog remains a draft. `2.0.0rc2` is the prepared candidate version; its changelog is also a draft and must be reviewed before publishing with `tools/release.sh`. Do not move or recreate historical tags.
 
 Android version codes reserve suffixes b1-b898 for beta builds, rc1-rc100 for release candidates, and 999 for the final release. The release script permits Markdown-only documentation commits after the tag, except changes to `CHANGELOG.md`; it requires the current commit to match `origin/main`. Keep the release notes and all non-documentation release code at the tagged commit.
 
 ## Preparing the stable 2.0.0 release
 
-The prepared version is `2.0.0rc1`; this guide update does not create a tag or publish anything. Do not begin the stable release until the Phase 14 acceptance gate in `docs/design.md` is satisfied, including the required prerelease and Windows archive checks. Then review and finalize the draft in `CHANGELOG.md` against the release commit, update `VERSION` to `2.0.0`, and include both in a reviewed release commit. Commit and push that exact source, create and push the matching `2.0.0` tag, and run the full local release procedure below with `tools/release.sh 2.0.0`. Unlike prerelease tags, `2.0.0` is published as a stable release.
+The prepared candidate version is `2.0.0rc2`. Do not begin the stable release until the Phase 14 acceptance gate in `docs/design.md` is satisfied, including the required prerelease and Windows archive checks. Then review and finalize the draft in `CHANGELOG.md` against the release commit, update `VERSION` to `2.0.0`, and include both in a reviewed release commit. Commit and push that exact source, create and push the matching `2.0.0` tag, and run the full local release procedure below with `tools/release.sh 2.0.0`. Unlike prerelease tags, `2.0.0` is published as a stable release.
 
 Before publishing, verify the generated Android APK signatures and package permissions, the Linux x86_64/AArch64 bundles, generated license notices, checksums, and the Kotlin/Rust test results. Attach the Windows archive only after the stable GitHub Release exists. Record only target checks that actually completed; Windows runtime execution and any untested hardware/provider combinations remain unverified. The exact release assets and checksums should be checked on the public Release page after upload.
 
@@ -41,7 +41,7 @@ Configure paths to the KeePassXC database and key file locally. Do not place the
 ```sh
 export KEEPASSXC_DATABASE="/absolute/path/to/signing-database.kdbx"
 export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
-tools/release.sh 2.0.0rc1
+tools/release.sh 2.0.0rc2
 ```
 
 The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with attachment `release.jks`. The script exports the key temporarily, builds and verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and Kotlin tests, creates x86_64 and AArch64 Linux bundles as `.tar.zst` archives and `.AppImage` files (a pinned `appimagetool` and type2 runtime from the flake wrap the Nix bundle), calculates checksums, and publishes a version-titled prerelease. It requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android` targets already installed. Both Linux bundles are built on an x86_64 Linux builder; the AArch64 Rust FFI is cross-compiled and target-native runtime files are assembled without QEMU/binfmt or an AArch64/remote builder. `XDG_RUNTIME_DIR` must be a private directory owned by the current user with mode `700`; signing material is kept there. Large temporary release artifacts are staged in a private directory under `TMPDIR` (default `/tmp`) to avoid filling small runtime tmpfs mounts.
@@ -52,7 +52,7 @@ After the prerelease exists, build and attach the Windows ZIP through the manual
 gh workflow run windows.yml \
   --repo hanaretamae/Kaede-Gallery \
   --ref main \
-  --field tag=2.0.0rc1
+  --field tag=2.0.0rc2
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
@@ -77,4 +77,4 @@ The automatic `kotlin-windows.yml` artifact and the manual `windows.yml` ZIP bot
 
 A complete Actions-only signed release is **not available yet**. The current production signing process reads the keystore and password from the release owner's local KeePassXC database. The optional build workflow only creates temporary debug/build artifacts, and the Windows workflow requires a release to exist first.
 
-Supporting a full remote release would require a dedicated protected release workflow, a deliberate decision to provide the Android signing keystore/password through a protected GitHub Environment or an external secret manager, and CI verification of the signed APKs and all release bundles. Do not upload the KeePassXC database/key file or put signing material in repository files. This remote signing setup has not been approved or configured. For `2.0.0rc1`, use the local release procedure above after the release checks are complete.
+Supporting a full remote release would require a dedicated protected release workflow, a deliberate decision to provide the Android signing keystore/password through a protected GitHub Environment or an external secret manager, and CI verification of the signed APKs and all release bundles. Do not upload the KeePassXC database/key file or put signing material in repository files. This remote signing setup has not been approved or configured. For `2.0.0rc2`, use the local release procedure above after the release checks are complete.

@@ -3,6 +3,19 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.0rc2] - Draft
+
+### Fixed
+
+- Windows: show the full Compose video controls and connect playback, seeking, speed, looping, and mute actions to mpv.
+- Stabilized detail-panel gestures so resizing and note-content scrolling happen in sequence instead of competing during a drag.
+- Handle Windows extended-length Vault paths in the picker, startup display, and settings export; keep Vault removal from leaving the app loading.
+- Open an already-running Windows Explorer window with the selected media item.
+
+### Changed
+
+- Windows distributions place the Japanese license reference and English/Japanese README and third-party notices beside `Kaede-Gallery.exe`.
+
 ## [2.0.0rc1] - Draft
 
 ### Fixed
