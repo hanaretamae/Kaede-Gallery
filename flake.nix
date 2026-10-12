@@ -53,6 +53,14 @@
             android_sdk.accept_license = true;
           };
         };
+      desktopRuntimeBinPath =
+        packages:
+        packages.lib.makeBinPath [
+          packages.coreutils
+          packages.ffmpeg
+          packages.glib
+          packages.mpv
+        ];
     in
     {
       packages = forAllSystems (
@@ -183,10 +191,7 @@
               cat > "$app_dir/bin/desktopApp" <<'EOF'
               #!${pkgs.bash}/bin/bash
               set -euo pipefail
-              export PATH="${pkgs.lib.makeBinPath [
-                pkgs.coreutils
-                pkgs.glib
-              ]}''${PATH:+:$PATH}"
+              export PATH="${desktopRuntimeBinPath pkgs}''${PATH:+:$PATH}"
               launcher_path="$(readlink -f -- "$0")"
               app_dir="$(cd -- "$(dirname -- "$launcher_path")/../lib/app" && pwd -P)"
               export LD_LIBRARY_PATH="${pkgs.lib.makeLibraryPath [
@@ -332,10 +337,7 @@
                     cat > "$app_dir/bin/desktopApp" <<'EOF'
                     #!${targetPkgs.bash}/bin/bash
                     set -euo pipefail
-                    export PATH="${targetPkgs.lib.makeBinPath [
-                      targetPkgs.coreutils
-                      targetPkgs.glib
-                    ]}''${PATH:+:$PATH}"
+                    export PATH="${desktopRuntimeBinPath targetPkgs}''${PATH:+:$PATH}"
                     launcher_path="$(readlink -f -- "$0")"
                     app_dir="$(cd -- "$(dirname -- "$launcher_path")/../lib/app" && pwd -P)"
                     export LD_LIBRARY_PATH="${targetPkgs.lib.makeLibraryPath [

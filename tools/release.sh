@@ -236,9 +236,18 @@ appimagetool="$(nix build --no-link --print-out-paths ".#packages.x86_64-linux.a
 for arch in x86_64 aarch64; do
   package=default
   [[ $arch != aarch64 ]] || package=aarch64Cross
+  installable=".#packages.x86_64-linux.$package"
+  linux_package="$(nix build --no-link --print-out-paths "$installable")" ||
+    fail "could not build the Linux $arch package"
+  linux_closure="$(nix path-info --recursive "$linux_package")" ||
+    fail "could not inspect the Linux $arch package closure"
+  for media_tool in ffmpeg mpv; do
+    grep -Eq -- "/nix/store/[a-z0-9]+-${media_tool}(-[^/]*)?$" <<< "$linux_closure" ||
+      fail "the Linux $arch package closure does not include $media_tool"
+  done
   linux_out="$dist_dir/linux-$arch"
   nix bundle --system x86_64-linux --out-link "$linux_out" \
-    ".#packages.x86_64-linux.$package" ||
+    "$installable" ||
     fail "could not build the Linux $arch bundle"
   [[ -f $linux_out ]] || fail "the Linux $arch bundle was not produced"
   linux_name="kaede-gallery-$version-linux-$arch"
@@ -251,6 +260,15 @@ for arch in x86_64 aarch64; do
   appdir="$dist_dir/AppDir-$arch"
   mkdir -p -- "$appdir/usr/bin"
   cp -- "$linux_stage/kaede-gallery" "$appdir/usr/bin/kaede-gallery"
+  mkdir -p -- "$appdir/usr/share/doc/kaede-gallery"
+  license_dir="$appdir/usr/share/licenses/kaede-gallery"
+  mkdir -p -- "$license_dir/licenses"
+  cp -- README.md README.ja.md \
+    "$appdir/usr/share/doc/kaede-gallery/"
+  cp -- THIRD_PARTY_NOTICES.md THIRD_PARTY_NOTICES.ja.md "$license_dir/"
+  install -m 644 LICENSE "$license_dir/LICENSE"
+  cp -a kotlin/shared-assets/licenses/. \
+    "$license_dir/licenses/"
   install -m 755 packaging/appimage/AppRun "$appdir/AppRun"
   install -m 644 packaging/appimage/com.hanaretamae.kaede.desktop "$appdir/com.hanaretamae.kaede.desktop"
   install -m 644 kotlin/shared-assets/branding/kaede-gallery-icon.png "$appdir/kaede-gallery.png"
@@ -265,6 +283,8 @@ for arch in x86_64 aarch64; do
     fail "could not create the Linux $arch AppImage"
   rm -rf -- "$appdir"
   cp -- LICENSE README.md README.ja.md THIRD_PARTY_NOTICES.md THIRD_PARTY_NOTICES.ja.md "$linux_stage/"
+  mkdir -p -- "$linux_stage/licenses"
+  cp -a kotlin/shared-assets/licenses/. "$linux_stage/licenses/"
   tar -C "$dist_dir" --owner=0 --group=0 --numeric-owner -cf - "$linux_name" |
     zstd -19 -T0 -q -o "$dist_dir/$linux_name.tar.zst" ||
     fail "could not create the Linux $arch tar.zst archive"

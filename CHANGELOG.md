@@ -3,6 +3,17 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.0.1] - Draft
+
+### Fixed
+
+- Keep the video surface usable while collapsing viewer details with reverse scrolling.
+- Suppress mpv's non-subtitle on-screen display so playback controls remain in the app.
+
+### Changed
+
+- Bundle pinned mpv and FFmpeg with Linux release executables and AppImages, including their runtime closure and license materials.
+
 ## [2.0.0rc2] - Draft
 
 ### Fixed

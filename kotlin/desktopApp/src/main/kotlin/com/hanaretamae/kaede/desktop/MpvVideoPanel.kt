@@ -71,6 +71,7 @@ internal object MpvVideoCommand {
         add("--no-config")
         add("--no-load-scripts")
         add("--osc=no")
+        add("--osd-level=1")
         add("--input-default-bindings=no")
         add("--no-ytdl")
         add("--autoload-files=no")

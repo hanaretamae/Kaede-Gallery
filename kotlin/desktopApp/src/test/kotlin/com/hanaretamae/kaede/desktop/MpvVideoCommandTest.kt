@@ -31,6 +31,7 @@ class MpvVideoCommandTest {
                 "--no-config",
                 "--no-load-scripts",
                 "--osc=no",
+                "--osd-level=1",
                 "--input-default-bindings=no",
                 "--no-ytdl",
                 "--autoload-files=no",
@@ -62,6 +63,7 @@ class MpvVideoCommandTest {
         assertNotEquals(endpoint, windowsMpvPipePath())
         assertTrue("--input-ipc-server=$endpoint" in arguments)
         assertTrue("--osc=no" in arguments)
+        assertTrue("--osd-level=1" in arguments)
         assertTrue("--input-default-bindings=no" in arguments)
     }
 

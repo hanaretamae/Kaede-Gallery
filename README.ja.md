@@ -17,12 +17,12 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20Android%20%7C%20Windows-informational">
   <img alt="Rust" src="https://img.shields.io/badge/core-Rust-orange">
   <img alt="Kotlin Multiplatform" src="https://img.shields.io/badge/UI-Kotlin%20Multiplatform-7F52FF">
-  <img alt="Offline" src="https://img.shields.io/badge/network-none-success">
+  <img alt="既定でオフライン" src="https://img.shields.io/badge/network-offline%20by%20default-success">
 </p>
 
 > [!IMPORTANT]
 > Vault には**一切書き込みません**。索引・サムネイル・設定はすべて Vault の外のアプリ専用データに保存します。
-> ネットワーク通信・テレメトリ・アナリティクスもありません。
+> アプリは自動でネットワーク通信を行わず、テレメトリやアナリティクスも送信しません。外部URLは明示的な操作時だけブラウザーに渡します。
 
 ## 目次
 
@@ -49,7 +49,8 @@
 > [!NOTE]
 > 現在の UI は Kotlin Multiplatform / Compose です。Android と Linux Desktop のビルド手順があります。
 > Windows x64／ARM64 のテスト・パッケージ作成と手動 Release workflow も用意していますが、実機での実行は未確認です。
-> 公開済みの最新 KMP prerelease は `2.0.0rc2` です。安定版 `2.0.0` はまだ公開されていません。
+> 安定版 `2.0.0` は 2026-10-12 に公開済みです（[Release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)）。
+> ソースの `2.0.1` は準備済みですが、GitHub Release は未公開です。
 > production 署名付き Release にはローカルの release script と認証情報が必要です。
 > 検証済みのビルド経路と残るリリース要件は[リリース手順](docs/releasing.ja.md)を参照してください。
 
@@ -176,7 +177,7 @@ nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#package
 
 この cross package は x86_64 上で Rust FFI を AArch64 向けにコンパイルし、AArch64 用 Compose native runtime、JRE、launcher、Linux library を組み立てます。従来の native `aarch64-linux` package も AArch64 host で利用できます。`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` は native KMP package を選びます。後述する任意の手動 Actions workflow も AArch64 bundle を cross-build して upload します。
 
-Linux の動画再生には `mpv`、ギャラリーの動画サムネイル生成には `ffmpeg` が必要で、どちらも `PATH` から起動します。Linux の `.tar.zst` と `.AppImage` には同梱されないため、動画機能を使う場合はシステムにインストールしてください。
+Nix flake の package は固定した `mpv` と `ffmpeg` を使います。公開済みの安定版 `2.0.0` の Linux `.tar.zst` と `.AppImage` は `PATH` 上のシステム実行ファイルを使うため、動画再生とサムネイル生成には両方をインストールしてください。`2.0.1` のリリース構成では固定版と実行時依存を同梱するよう準備済みですが、配布物はまだ公開していません。
 
 <details>
 <summary>索引データベースの場所</summary>

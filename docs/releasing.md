@@ -6,21 +6,21 @@
 
 | Route | What it produces | Where it runs |
 | --- | --- | --- |
-| Full release (for a beta or release candidate) | Production-signed universal, arm64-v8a, and x86_64 Android APKs; x86_64 and AArch64 Linux bundles; checksums; and a GitHub prerelease | Local Linux host through `tools/release.sh`; Windows ZIP is attached afterward by Actions |
+| Full release (stable, beta, or release candidate) | Production-signed universal, arm64-v8a, and x86_64 Android APKs; x86_64 and AArch64 Linux bundles; checksums; and a version-titled GitHub Release | Local Linux host through `tools/release.sh`; Windows ZIP is attached afterward by Actions |
 | Optional remote builds | Android debug APK and/or Linux AArch64 bundle as temporary workflow artifacts | Manually dispatched Actions workflow; not a production release |
 | Entirely Actions-based signed release | Not currently supported | No workflow currently handles Android production signing and creates the complete release |
 
 ## Current release status
 
-The public GitHub releases were checked on 2026-10-12. `2.0.0rc2` is published as a prerelease with Android APKs, Linux x86_64/AArch64 bundles, Windows x64/ARM64 ZIPs, license notices, and checksums. `2.0.0b4` remains without its Windows ZIP; workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`, so that specific Phase 14 acceptance item remains open. The release owner explicitly authorized stable `2.0.0` despite that item; this does not mark Phase 14 acceptance complete. The latest stable Release remains `v1.6.2`; stable `2.0.0` has not been published. The `2.0.0` version and changelogs are committed to `main` at `e3abe0f`, but the stable release has not been published. Do not move or recreate historical tags.
+The public GitHub release state was verified on 2026-10-12. Stable `2.0.0` is published with Android, Linux x86_64/AArch64, and Windows x64/ARM64 assets ([release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)). The older `2.0.0b4` prerelease still has no Windows ZIP: workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`, so its archive and upload steps were skipped. Phase 14 was subsequently closed by explicit owner approval using the stable release assets and successful Windows workflow run [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594); the missing b4 artifact remains a waived historical omission, not a passed upload. The `2.0.1` source tag is pushed, but no GitHub Release or 2.0.1 download assets have been published. Do not move or recreate historical tags.
 
 Android version codes reserve suffixes b1-b898 for beta builds, rc1-rc100 for release candidates, and 999 for the final release. The release script permits Markdown-only documentation commits after the tag, except changes to `CHANGELOG.md`; it requires the current commit to match `origin/main`. Keep the release notes and all non-documentation release code at the tagged commit.
 
-## Preparing the stable 2.0.0 release
+## Preparing a 2.0.1 GitHub Release
 
-The release target is `2.0.0`. The release owner explicitly waived the still-open b4-specific Phase 14 Windows-archive gate for this stable release; the waiver does not mark Phase 14 acceptance complete. Review and finalize the notes in `CHANGELOG.md` and `CHANGELOG.ja.md` against the release commit, set `VERSION` to `2.0.0`, and include them in a reviewed release commit. Commit and push that exact source, create and push the matching `2.0.0` tag, and run the full local release procedure below with `tools/release.sh 2.0.0`. Unlike prerelease tags, `2.0.0` is published as a stable release.
+The `2.0.1` source commit and matching tag are pushed, but the tag alone does not publish a GitHub Release. Stable `2.0.0` remains the latest published release. Review and finalize the draft notes in `CHANGELOG.md` and `CHANGELOG.ja.md` against the tagged source, then run the full local release procedure below with `tools/release.sh 2.0.1` when release credentials and prerequisites are available. This stable tag creates a non-prerelease GitHub Release.
 
-Before publishing, verify the generated Android APK signatures and package permissions, the Linux x86_64/AArch64 bundles, generated license notices, checksums, and the Kotlin/Rust test results. Attach the Windows archive only after the stable GitHub Release exists. Record only target checks that actually completed; Windows runtime execution and any untested hardware/provider combinations remain unverified. The exact release assets and checksums should be checked on the public Release page after upload.
+The already-published 2.0.0 Linux archives use system `mpv` and `ffmpeg` from `PATH`. The 2.0.1 packaging includes pinned media tools and their runtime closure in the Linux x86_64/AArch64 `.tar.zst` and AppImage bundles. Before publishing, verify the generated Android APK signatures and package permissions, Linux bundles and license notices, checksums, and Kotlin/Rust test results. Attach the Windows archive only after the stable GitHub Release exists. Record only target checks that actually completed; Windows runtime execution and any untested hardware/provider combinations remain unverified. Check the exact release assets and checksums on the public Release page after upload.
 
 ## Full release from a local Linux host
 
@@ -39,18 +39,18 @@ Configure paths to the KeePassXC database and key file locally. Do not place the
 ```sh
 export KEEPASSXC_DATABASE="/absolute/path/to/signing-database.kdbx"
 export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
-tools/release.sh 2.0.0rc2
+tools/release.sh 2.0.1
 ```
 
-The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with attachment `release.jks`. The script exports the key temporarily, builds and verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and Kotlin tests, creates x86_64 and AArch64 Linux bundles as `.tar.zst` archives and `.AppImage` files (a pinned `appimagetool` and type2 runtime from the flake wrap the Nix bundle), calculates checksums, and publishes a version-titled prerelease. It requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android` targets already installed. Both Linux bundles are built on an x86_64 Linux builder; the AArch64 Rust FFI is cross-compiled and target-native runtime files are assembled without QEMU/binfmt or an AArch64/remote builder. `XDG_RUNTIME_DIR` must be a private directory owned by the current user with mode `700`; signing material is kept there. Large temporary release artifacts are staged in a private directory under `TMPDIR` (default `/tmp`) to avoid filling small runtime tmpfs mounts.
+The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with attachment `release.jks`. The script exports the key temporarily, builds and verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and Kotlin tests, creates x86_64 and AArch64 Linux bundles as `.tar.zst` archives and `.AppImage` files (a pinned `appimagetool` and type2 runtime from the flake wrap the Nix bundle), calculates checksums, and publishes a version-titled stable release or prerelease according to the tag. Starting with 2.0.1, each Linux bundle is a self-contained Nix closure including pinned `mpv`, `ffmpeg`, runtime libraries, and license materials; the release script checks that both media tools are present in each architecture's package closure before bundling. It requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android` targets already installed. Both Linux bundles are built on an x86_64 Linux builder; the AArch64 Rust FFI is cross-compiled and target-native runtime files are assembled without QEMU/binfmt or an AArch64/remote builder. `XDG_RUNTIME_DIR` must be a private directory owned by the current user with mode `700`; signing material is kept there. Large temporary release artifacts are staged in a private directory under `TMPDIR` (default `/tmp`) to avoid filling small runtime tmpfs mounts.
 
-After the prerelease exists, build and attach the Windows ZIP through the manual Windows workflow:
+After the GitHub Release exists, build and attach the Windows ZIP through the manual Windows workflow:
 
 ```sh
 gh workflow run windows.yml \
   --repo hanaretamae/Kaede-Gallery \
   --ref main \
-  --field tag=2.0.0rc2
+  --field tag=2.0.1
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
@@ -75,4 +75,4 @@ The automatic `kotlin-windows.yml` artifact and the manual `windows.yml` ZIP bot
 
 A complete Actions-only signed release is **not available yet**. The current production signing process reads the keystore and password from the release owner's local KeePassXC database. The optional build workflow only creates temporary debug/build artifacts, and the Windows workflow requires a release to exist first.
 
-Supporting a full remote release would require a dedicated protected release workflow, a deliberate decision to provide the Android signing keystore/password through a protected GitHub Environment or an external secret manager, and CI verification of the signed APKs and all release bundles. Do not upload the KeePassXC database/key file or put signing material in repository files. This remote signing setup has not been approved or configured. For `2.0.0rc2`, use the local release procedure above after the release checks are complete.
+Supporting a full remote release would require a dedicated protected release workflow, a deliberate decision to provide the Android signing keystore/password through a protected GitHub Environment or an external secret manager, and CI verification of the signed APKs and all release bundles. Do not upload the KeePassXC database/key file or put signing material in repository files. This remote signing setup has not been approved or configured. For `2.0.1`, use the local release procedure above after the release checks are complete.

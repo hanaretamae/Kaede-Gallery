@@ -17,12 +17,13 @@
   <img alt="Platform" src="https://img.shields.io/badge/platform-Linux%20%7C%20Android%20%7C%20Windows-informational">
   <img alt="Rust" src="https://img.shields.io/badge/core-Rust-orange">
   <img alt="Kotlin Multiplatform" src="https://img.shields.io/badge/UI-Kotlin%20Multiplatform-7F52FF">
-  <img alt="Offline" src="https://img.shields.io/badge/network-none-success">
+  <img alt="Offline by default" src="https://img.shields.io/badge/network-offline%20by%20default-success">
 </p>
 
 > [!IMPORTANT]
 > Kaede Gallery **never writes to your Vault**. The index, thumbnails and settings are stored in
-> private app data outside the Vault. There is no network access, telemetry or analytics.
+> private app data outside the Vault. The app makes no automatic network requests and sends no telemetry
+> or analytics. External URLs are handed to your browser only after an explicit action.
 
 ## Contents
 
@@ -50,7 +51,8 @@
 > [!NOTE]
 > The active UI is Kotlin Multiplatform / Compose. Android and Linux Desktop build paths are available.
 > Windows x64 and ARM64 tests, packaging, and a manual release workflow are configured; physical Windows runtime behavior has not
-> been verified. The latest published KMP prerelease is `2.0.0rc2`; stable `2.0.0` has not been published.
+> been verified. Stable `2.0.0` was published on 2026-10-12 ([release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)).
+> Source version `2.0.1` is prepared but is not yet a published GitHub Release.
 > Production-signed releases use the local release script and require release credentials.
 > See [the release guide](docs/releasing.md) for verified build paths and remaining release prerequisites.
 
@@ -209,7 +211,7 @@ nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#package
 
 The cross package compiles the Rust FFI for AArch64 and assembles the AArch64 Compose native runtime, JRE, launcher, and Linux libraries on the x86_64 host. The earlier native `aarch64-linux` package remains available when building on an AArch64 host. `packages.<system>.default`, `nixosModules.default`, and `homeManagerModules.default` select the native KMP package. The optional manual Actions workflow also cross-builds and uploads an AArch64 bundle.
 
-Linux video playback requires `mpv`, and gallery video thumbnails require `ffmpeg`; both executables are launched from `PATH`. Linux `.tar.zst` bundles and `.AppImage` files do not include them, so install them on the system to use video features.
+The Nix flake package supplies pinned `mpv` and `ffmpeg`. The published stable `2.0.0` Linux `.tar.zst` and `.AppImage` downloads use system executables from `PATH`, so install both for video playback and thumbnails. The `2.0.1` release packaging is configured to include pinned executables and their runtime closure; its release downloads are not published yet.
 
 ### Run and package the KMP app
 

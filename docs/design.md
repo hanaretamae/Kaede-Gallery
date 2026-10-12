@@ -10,8 +10,9 @@ other conflicts instead of silently overriding either contract.
 ## Purpose and scope
 
 Provide an offline gallery for media and metadata in an Obsidian Vault,
-initially targeting Linux and Android, with Windows support in progress. Rust
-owns parsing, scanning, indexing, filtering, and image thumbnails. Kotlin
+initially targeting Linux and Android, with Windows packaging and CI support.
+Physical Windows runtime behavior is not part of the current acceptance plan.
+Rust owns parsing, scanning, indexing, filtering, and image thumbnails. Kotlin
 Multiplatform and Compose Multiplatform are the target application and shared
 UI layers; Android and desktop integrations remain platform-specific. The
 Vault is always read-only.
@@ -105,24 +106,27 @@ integrations.
     passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
     [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
     The `2.0.0b5` GitHub prerelease has its Windows archive attached. The
-    `2.0.0b4` archive is still absent, as verified on 2026-10-12; keep that
-    Phase 14 acceptance gate open until the archive is attached. The earlier
-    Windows workflow failure in `LinuxPortalDirectoryPickerTest` and the
-    aarch64 cache timeout are historical evidence. The public `2.0.0rc2`
-    prerelease was published on 2026-10-12 with Android, Linux, Windows x64 and
-    ARM64 archives, and checksums. The release owner explicitly directed
-    proceeding with stable `2.0.0` despite the b4-specific gate; this release
-    waiver does not mark Phase 14 acceptance complete.
+    `2.0.0b4` archive remains absent, as verified on 2026-10-12; this is a
+    historical omission, not a delivered artifact. The earlier Windows
+    workflow failure in `LinuxPortalDirectoryPickerTest` and the aarch64 cache
+    timeout are historical evidence. Stable `2.0.0` was published on
+    2026-10-12 with Android, Linux, and Windows x64/ARM64 archives. The release
+    owner explicitly closed Phase 14 against that stable release and successful
+    Windows workflow run
+    [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594),
+    waiving the b4-specific archive item; do not claim the missing b4 ZIP was
+    uploaded.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
 
 Implementation for shared UI, settings, Android, and desktop is present.
 Phase 13 acceptance is recorded below as historical evidence. Phase 14's
-migration implementation is in place. The declared native aarch64 Nix package
-build was confirmed successful on 2026-10-09; the builder mechanism was not
-recorded. The x86_64-hosted `aarch64Cross` path cross-compiles the Rust FFI and
-assembles a self-contained AArch64 runtime without emulation.
+migration implementation and owner-approved acceptance closure are complete.
+The declared native aarch64 Nix package build was confirmed successful on
+2026-10-09; the builder mechanism was not recorded. The x86_64-hosted
+`aarch64Cross` path cross-compiles the Rust FFI and assembles a self-contained
+AArch64 runtime without emulation.
 GitHub Actions run Windows tests/package checks on push and pull request, with
 Android debug and Linux AArch64 build artifacts available only through explicit
 manual dispatch, either in the Actions UI or via `tools/run-optional-builds.sh`.
@@ -130,7 +134,7 @@ Local builds remain primary, and the manual workflow does not sign or publish
 Android releases. The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
 must not be moved. The public `2.0.0b4` GitHub prerelease was verified on
 2026-10-11. Its Android and Linux release assets are present, but the Windows
-archive is still pending after workflow run
+archive remains absent after workflow run
 [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
 failed in `LinuxPortalDirectoryPickerTest`. Full Actions-only
 production release is not implemented: the current signing flow uses the local
@@ -229,37 +233,31 @@ settings if desired.
 Local verification passed for the Rust workspace tests, formatting, Clippy, and
 cargo-deny checks; KMP Rust/settings/UI/desktop JVM tests and Linux Desktop
 distributable; Android debug APK assembly; and signed Android release APK
-assembly with a disposable self-signed validation key. The release APK was
+assembly with a disposable self-signed validation key. The validation APK was
 verified as `com.hanaretamae.kaede`, signature-valid, and free of network and
 broad-storage permissions. Media3's merged `ACCESS_NETWORK_STATE` permission is
-explicitly removed because this offline gallery does not need network state.
+explicitly removed because the gallery does not need network state.
 `nix build --no-link .#default` passed on x86_64 Linux, including the Gradle
 bundle and license installation. `nix bundle --system x86_64-linux` also
 produced the self-contained Linux release bundle. The Gradle dependency updater
-completed and its JSON output parsed successfully. No real signing key or Vault
-was used.
+completed and its JSON output parsed successfully. No user's Vault was used.
 
-**Still pending before Phase 14 can be marked complete:** attach the Windows ZIP
-to the `2.0.0b4` GitHub prerelease. The public release and Android/Linux assets
-were verified on 2026-10-11, but the asset list does not include a Windows ZIP.
-Windows workflow run
+**Phase 14 complete (owner-approved closure, 2026-10-12):** Stable `2.0.0` is
+published with Android, Linux x86_64/AArch64, and Windows x64/ARM64 assets. The
+successful Windows workflow run
+[38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594)
+provides current Windows CI evidence. The older `2.0.0b4` Windows ZIP remains
+absent; the owner explicitly waived that b4-specific gate when closing the
+phase. The earlier failure
 [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
-failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`
-on its path-equality assertion; the archive and upload steps were skipped. The
-test now checks the resolved parent and filename separately, but Windows CI
-must pass and attach the archive before this gate is complete. The owner
-verified the declared AArch64 Linux Desktop build on 2026-10-09 with
+and skipped upload remain historical facts, not a successful artifact
+acceptance. The owner verified the declared AArch64 Linux Desktop build on
+2026-10-09 with
 `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
-(exit status 0); the exact builder mechanism was not recorded. The previous
-Android and Windows GitHub Actions workflows passed on `7a6cd83` (runs
-[37761351814](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814)
-and [37761351884](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)); those runs are historical. Windows builds remain automatic, while Android debug and Linux AArch64 builds can be dispatched manually as artifact-only jobs; local verification remains the default. Real-key Android signing and release publication have not happened because the local KeePassXC database/key-file configuration is not available in the release environment.
-
-**Owner-approved stable-release override (2026-10-12):** Proceed with stable
-`2.0.0` despite the still-open `2.0.0b4` Windows archive acceptance item. The
-published `2.0.0rc2` includes Windows x64 and ARM64 ZIPs, but this release
-override does not close Phase 14 or substitute for its remaining acceptance
-evidence.
+(exit status 0); the exact builder mechanism was not recorded. Windows builds
+remain automatic, while Android debug and Linux AArch64 builds can be
+dispatched manually as artifact-only jobs; local verification remains the
+default.
 
 ### Current KMP implementation status
 
@@ -335,18 +333,26 @@ caches are invalidated on rescan or Vault removal. Video previews also fall
 back across multiple sync-frame timestamps when the first MP4 frame cannot be
 decoded. These changes still require a fresh large-media latency benchmark.
 Linux and Windows video are rendered in an embedded native child window from a
-separate `mpv` process. Linux bundles do not ship `mpv` or `ffmpeg`, so they
-must be on `PATH`. Windows CI artifacts and release ZIPs include pinned GPL
-`mpv.exe`/`ffmpeg.exe` in `tools/` beside `Kaede-Gallery.exe`; these take
-precedence over `PATH`.
+separate `mpv` process. The published stable `2.0.0` Linux bundles use system
+`mpv` and `ffmpeg` from `PATH`. The `2.0.1` Linux release configuration bundles
+pinned copies inside the self-contained runtime closure; the release script
+verifies both tools in each target closure before packaging. Windows CI artifacts and release
+ZIPs include pinned GPL `mpv.exe`/`ffmpeg.exe` in `tools/` beside
+`Kaede-Gallery.exe`; these take precedence over `PATH`.
 Rust may return Windows extended-length Vault paths (`\\?\`); the desktop
 platform layer removes that prefix only for Java path parsing and display,
 while passing the original locator to the Rust filesystem repository.
 Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
-mpv's OSC and default input bindings, and automatic sidecar loading. Linux
-playback forces mpv's X11 video output so its `--wid` targets the Swing canvas
-under XWayland instead of creating a separate Wayland window. Desktop video
-thumbnails limit ffmpeg to local file input, one frame, 512-pixel bounds, a
+mpv's OSC, non-subtitle OSD, default input bindings, and automatic sidecar
+loading. Linux playback forces mpv's X11 video output so its `--wid` targets
+the Swing canvas under XWayland instead of creating a separate Wayland window.
+The Nix package launcher prepends its pinned `mpv` and `ffmpeg` binaries to
+`PATH`. Linux release archives and AppImages are self-contained `nix bundle`
+executables whose closure includes those pinned tools and their runtime
+libraries; they do not depend on host `mpv` or `ffmpeg`. The release script
+checks both tools are in each target package closure and includes the
+third-party notices and license texts with the archive and AppImage. Desktop
+video thumbnails limit ffmpeg to local file input, one frame, 512-pixel bounds, a
 4 MiB output cap, a 10-second timeout, and two concurrent extraction
 processes. Desktop playback controls are rendered by Compose rather than
 mpv's on-screen display. A private
