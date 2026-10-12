@@ -52,7 +52,8 @@
 > The active UI is Kotlin Multiplatform / Compose. Android and Linux Desktop build paths are available.
 > Windows x64 and ARM64 tests, packaging, and a manual release workflow are configured; physical Windows runtime behavior has not
 > been verified. Stable `2.0.0` was published on 2026-10-12 ([release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)).
-> Source version `2.0.1` is prepared but is not yet a published GitHub Release.
+> Stable `2.0.1` was published on 2026-10-12 ([release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)).
+> Check the release page for its current platform assets; Windows runtime behavior remains unverified.
 > Production-signed releases use the local release script and require release credentials.
 > See [the release guide](docs/releasing.md) for verified build paths and remaining release prerequisites.
 
@@ -211,7 +212,7 @@ nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#package
 
 The cross package compiles the Rust FFI for AArch64 and assembles the AArch64 Compose native runtime, JRE, launcher, and Linux libraries on the x86_64 host. The earlier native `aarch64-linux` package remains available when building on an AArch64 host. `packages.<system>.default`, `nixosModules.default`, and `homeManagerModules.default` select the native KMP package. The optional manual Actions workflow also cross-builds and uploads an AArch64 bundle.
 
-The Nix flake package supplies pinned `mpv` and `ffmpeg`. The published stable `2.0.0` Linux `.tar.zst` and `.AppImage` downloads use system executables from `PATH`, so install both for video playback and thumbnails. The `2.0.1` release packaging is configured to include pinned executables and their runtime closure; its release downloads are not published yet.
+The Nix flake package supplies pinned `mpv` and `ffmpeg`. The published stable `2.0.0` Linux `.tar.zst` and `.AppImage` downloads use system executables from `PATH`, so install both for video playback and thumbnails. Stable `2.0.1` Linux bundles include pinned executables and their runtime closure. Check the [2.0.1 release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1) for the current downloads.
 
 ### Run and package the KMP app
 

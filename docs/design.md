@@ -79,67 +79,42 @@ integrations.
     security properties, build/release paths, and performance evidence have
     been checked against the documented fictional fixtures and target-specific
     acceptance plan.
-14. **In progress (migration implementation complete; final target acceptance
-    pending):** Flutter app sources, Cargo bridge, Dart tooling, and legacy
-    release/build paths have been retired after adding KMP/Rust replacements.
-    Nix defaults, Gradle dependency locking, Android/Linux release scripts,
-    Windows packaging/release workflow, license assets, and active documentation
-    now target KMP. Local Linux x86_64 and Android debug/release packaging checks
-    pass. Nix declares both x86_64 and aarch64 Linux Desktop packages. On
-    2026-10-09, the owner confirmed that
-    `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
-    exited 0 after refreshing the Gradle dependency cache. This verifies the
-    declared AArch64 package build; the exact builder mechanism (native,
-    QEMU/binfmt, or remote) was not recorded. A separate
-    `packages.x86_64-linux.aarch64Cross` path now builds the AArch64 artifact on
-    an x86_64 host: Gradle resolves the ARM64 Compose runtime explicitly, Rust
-    FFI is compiled with the pinned Nix cross toolchain, and the x86_64
-    JPackage image is assembled with the pinned AArch64 JDK, target libraries,
-    and a target-native launcher. This path does not execute target binaries or
-    require QEMU/binfmt. Windows tests/package checks remain
-    automatic on push and pull request. Per the owner's updated preference on
-    2026-10-09, Android debug and Linux AArch64 builds are also available through
-    a separate manual-only Actions workflow; local builds remain the default.
-    It can be dispatched in the Actions UI or with the authenticated GitHub CLI
-    through `tools/run-optional-builds.sh`. It uploads build artifacts only and
-    never signs production Android packages or publishes releases. The prior Android and Windows Actions runs
-    passed on `7a6cd83` ([Android run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351814),
-    [Windows run](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/37761351884)).
-    The `2.0.0b5` GitHub prerelease has its Windows archive attached. The
-    `2.0.0b4` archive remains absent, as verified on 2026-10-12; this is a
-    historical omission, not a delivered artifact. The earlier Windows
-    workflow failure in `LinuxPortalDirectoryPickerTest` and the aarch64 cache
-    timeout are historical evidence. Stable `2.0.0` was published on
-    2026-10-12 with Android, Linux, and Windows x64/ARM64 archives. The release
-    owner explicitly closed Phase 14 against that stable release and successful
-    Windows workflow run
-    [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594),
-    waiving the b4-specific archive item; do not claim the missing b4 ZIP was
-    uploaded.
+14. **Complete:** Flutter/Dart application sources, the old Cargo bridge, and
+    retired build/release paths have been removed. Kotlin Multiplatform /
+    Compose with the Rust parser, core, and UniFFI is the active application
+    path. Nix defaults, Gradle dependency locking, Android/Linux release
+    scripts, Windows packaging/workflows, license assets, and active developer
+    documentation target this implementation. Linux x86_64, Android, and
+    Windows JVM build/package checks have been exercised; physical Windows
+    runtime behavior is not claimed as verified. Linux x86_64 and AArch64
+    packages are available, including the x86_64-hosted `aarch64Cross` path
+    that cross-compiles the Rust FFI and assembles a target-native runtime
+    without executing target binaries. Android debug and Linux AArch64 optional
+    builds are manual-only; local builds remain the default. The owner closed
+    Phase 14 against the stable `2.0.0` release and successful Windows workflow
+    run [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594).
+    The missing Windows ZIP for historical prerelease `2.0.0b4` was explicitly
+    waived and was not uploaded. Stable `2.0.1` was subsequently published on
+    2026-10-12; see `docs/releasing.md` for its verified assets and the current
+    Windows archive status.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
 
 Implementation for shared UI, settings, Android, and desktop is present.
-Phase 13 acceptance is recorded below as historical evidence. Phase 14's
-migration implementation and owner-approved acceptance closure are complete.
-The declared native aarch64 Nix package build was confirmed successful on
-2026-10-09; the builder mechanism was not recorded. The x86_64-hosted
-`aarch64Cross` path cross-compiles the Rust FFI and assembles a self-contained
-AArch64 runtime without emulation.
-GitHub Actions run Windows tests/package checks on push and pull request, with
-Android debug and Linux AArch64 build artifacts available only through explicit
-manual dispatch, either in the Actions UI or via `tools/run-optional-builds.sh`.
-Local builds remain primary, and the manual workflow does not sign or publish
-Android releases. The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
-must not be moved. The public `2.0.0b4` GitHub prerelease was verified on
-2026-10-11. Its Android and Linux release assets are present, but the Windows
-archive remains absent after workflow run
-[38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
-failed in `LinuxPortalDirectoryPickerTest`. Full Actions-only
-production release is not implemented: the current signing flow uses the local
-KeePassXC database. See `docs/releasing.md` for the supported local/remote paths
-and the signing prerequisite. There is no active Flutter application or release path.
+Phase 13 acceptance and Phase 14 migration/owner-approved closure are recorded
+below as historical evidence. The stable `2.0.1` GitHub Release was verified
+on 2026-10-12; the release guide records the public asset manifest and the
+Windows packaging workflow status. GitHub Actions run Windows tests/package
+checks on push and pull request, with Android debug and Linux AArch64 optional
+build artifacts available only through manual dispatch. Local builds remain
+primary, and the optional workflow does not sign or publish Android releases.
+The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
+must not be moved. The missing `2.0.0b4` Windows archive is a waived historical
+omission, not a delivered artifact. Full Actions-only production release is
+not implemented: the signing flow uses the local KeePassXC database. See
+`docs/releasing.md` for supported release paths and prerequisites. Flutter and
+Dart are not active application, build, or release paths.
 
 ### Phase 13 acceptance status
 
@@ -259,14 +234,20 @@ remain automatic, while Android debug and Linux AArch64 builds can be
 dispatched manually as artifact-only jobs; local verification remains the
 default.
 
-### Current KMP implementation status
+### KMP implementation and target-acceptance status
 
-The repository currently contains the KMP model, repository, Rust binding
-adapter, and initial shared Gallery/Search/Filter screens with paging and
-filter state, including indexed position jumps. A shared Gallery-to-note-detail
-route, related-note navigation, note dates and tags, and same-note media
-navigation are also present; the common viewer delegates media rendering to a
-platform capability. Linux image display is implemented in `desktopApp`;
+The Flutter/Dart-to-Kotlin migration is complete. The active application is
+Kotlin Multiplatform / Compose with shared gallery, search, filtering, paging,
+settings, note details, and viewer behavior; Rust provides parsing, indexing,
+and the FFI. Android and Linux Desktop are active application targets.
+Windows JVM CI and release packaging are configured, but physical Windows
+runtime behavior is not claimed as verified. Stable `2.0.1` was published on
+2026-10-12; see `docs/releasing.md` for the public asset status. Flutter and
+Dart remain only in the historical acceptance record below and are not active
+application, build, or release paths.
+
+The common viewer delegates media rendering to a platform capability. Linux
+image display is implemented in `desktopApp`;
 Android has an application module with SAF selection, bounded staged scans,
 private-index reuse on launch, explicit rescan, bounded image decoding, and a
 Media3 video player. API 36 device smoke tests verified fixture selection and
@@ -285,8 +266,9 @@ the broad few-seconds target on this device and provider. The app also provides
 a confirmed forget-Vault action that removes the private index and releases the
 persisted read grant. Its debug APK and Android arm64/x86_64 native libraries
 build successfully.
-Linux/JVM Compose Desktop packaging is available; a Windows x64 CI job has been
-added to verify the JVM FFI ABI and application packaging.
+Linux/JVM Compose Desktop packaging is available. Windows x64 and ARM64 release
+packaging is configured, with CI verification of the JVM FFI ABI and
+application packaging.
 Common appearance, gallery-pagination, and gallery-target-prefix settings
 models, state, controls, and Android and desktop private-settings adapters are
 present. Both platforms now
@@ -370,10 +352,10 @@ Windows hardware or runtime availability of native mpv embedding there.
 Android visual/interaction checks are complete for the documented fixture
 scenarios. The Phase 13 parity gate has passed for the documented acceptance
 scope. Phase 14 migrated the build and release paths to KMP/Rust and retired the
-Flutter application. Historical Android and Windows Actions passed on `7a6cd83`;
-Actions now build Windows only. The Windows beta archive, local aarch64 QEMU build,
-and signed Android release remain pending. Nix Desktop packages are declared for
-x86_64 and aarch64 Linux.
+Flutter application. The following Android/Windows workflow references and
+pending release items describe an earlier migration checkpoint; Phase 14 was
+later closed by owner approval and stable releases were published. Current
+release assets and build routes are documented in `docs/releasing.md`.
 KMP now supports editing Flutter-compatible tag color and filter-category
 rules. The most-specific color prefix is applied to filter options and viewer
 tags; category changes are written to private Rust settings and rescan the
@@ -528,10 +510,10 @@ tests also verify vault-contained export is rejected before creating a file.
 The embedded-video launch argument test checks the Linux player disables
 mpv's user configuration, scripts, and automatic sidecar loading.
 
-Complete and verify one migration phase before starting the next. During
-Phase 14, Flutter and KMP coexisted until the KMP build, packaging, release, and
-licensing paths had replacements. Flutter has since been removed; Phase 14
-remains open until its outstanding target-specific acceptance checks pass.
+Complete and verify one development phase before starting another. Phase 14
+and the Flutter/Dart-to-Kotlin migration are complete; no migration acceptance
+work remains open. Preserve the target-specific verification limits above and
+in the bilingual release guide when documenting platform support.
 
 ## Application language
 
@@ -860,7 +842,7 @@ internal-link targets; they are excluded from gallery results, tag counts, and
 pagination totals.
 Read/parse failures are reported as aggregate scan warnings because their tags
 cannot be checked to decide whether they belong in the gallery. Display
-exclusions never remove eligible notes from the index. The Flutter gallery requests validated video paths from the core. For
+exclusions never remove eligible notes from the index. The application requests validated video paths from the core. For
 SAF-backed folders, it tries the platform thumbnail API first and falls back to
 the bundled media decoder through a validated file descriptor; filesystem
 galleries use the platform video-thumbnail backend. Linux development requires
@@ -1098,8 +1080,8 @@ them when note details are shown. Android video playback loops the current
 media by default (toggleable) and overlays the independent controls described
 above on the video, with no shared control-panel background; tapping the video
 toggles them and playback hides them after inactivity.
-Video playback uses Media3 on Android and `media_kit`/mpv on Linux; keep the
-platform-specific playback implementations separate.
+Video playback uses Media3 on Android and embedded mpv on Linux and Windows;
+keep the platform-specific playback implementations separate.
 
 The tag-filter panel has separate tag-option and note-name/path search fields.
 A tag chip cycles through OR include, AND include, exclude, and inactive.
@@ -1121,9 +1103,8 @@ present. Choices with no matches under active filters remain
 visible but disabled. Expanded filter sections retain their state while the
 category data refreshes. Gallery and category results remain visible while
 filter-triggered reloads are pending, avoiding a loading-indicator flash.
-On Linux, the folder chooser remains a native GTK dialog
-and therefore follows the desktop's GTK/system theme, independently of Flutter
-widget themes.
+On Linux, the folder chooser remains a native GTK dialog and therefore follows
+the desktop's GTK/system theme, independently of the Compose application theme.
 
 The default database is under `$XDG_STATE_HOME/vault-gallery` or
 `$HOME/.local/state/vault-gallery`, never in the Vault. `tools/` generates

@@ -1,8 +1,9 @@
 # Rust–Kotlin FFI contract
 
-This document defines the target boundary for the Kotlin migration. It does
-not replace or change the current Flutter Rust Bridge API; that API remains in
-use until a Kotlin implementation has passed parity checks.
+This document records the active boundary between the Kotlin Multiplatform
+application and the Rust parser/core. The Flutter Rust Bridge and its Dart
+callers have been retired; Kotlin uses UniFFI through the repository's
+platform binding adapter.
 
 ## Ownership and dependency direction
 
@@ -23,26 +24,20 @@ must not depend on Kotlin, UniFFI, or UI types.
 
 ## Binding technology and target qualification
 
-The current KMP implementation uses UniFFI 0.32.0 through the third-party
-Kotlin Multiplatform Gradle plugin; this is not yet acceptance of every target
-or of the migration as complete. The plugin is not part of Mozilla's UniFFI
+The shipped KMP implementation uses UniFFI 0.32.0 through the third-party
+Kotlin Multiplatform Gradle plugin. The plugin is not part of Mozilla's UniFFI
 project ([plugin overview and target
 matrix](https://ubiqueinnovation.github.io/uniffi-kotlin-multiplatform-bindings/),
 [Mozilla UniFFI](https://github.com/mozilla/uniffi-rs)). The current plugin
 documentation specifies Rust 1.91+, UniFFI 0.32.0, Gradle 9.6.1+, Kotlin
 2.4.0+, and Android Gradle Plugin 9.x. The workspace's declared Rust minimum
 is 1.85, while its pinned build toolchain is 1.98.1. The plugin's `mingwX64`
-target uses GNU Windows ABI, whereas this repository's Flutter bridge targets
-`x86_64-pc-windows-msvc`; this difference must be explicitly resolved rather
-than assuming the generated library can replace the current Windows bridge.
-The desktop Compose app uses the JVM host target, so Windows must instead
-verify the plugin's Windows-host Rust/JVM integration and runtime packaging.
-The added Windows CI workflow has passed on the migration branch, verifying
-the JVM host ABI tests and Windows distributable packaging. Physical Windows
-runtime and embedded video playback remain unverified by design; this
-acceptance plan uses CI rather than a Windows device run. The separate
-`mingwX64` target is not the application's Windows desktop integration and is
-not treated as a supported application ABI. Keep the core minimum Rust version unchanged unless an explicit
+target uses GNU Windows ABI. The desktop Compose app instead uses the Windows
+JVM host integration; `mingwX64` is not the application's Windows desktop
+target and is not treated as a supported application ABI. Windows CI verifies
+the JVM host tests and distributable packaging, but physical Windows runtime
+behavior and embedded video playback are not claimed as verified. Keep the
+core minimum Rust version unchanged unless an explicit
 compatibility review justifies a change; isolate any higher toolchain
 requirement to the FFI crate. If target compatibility or supply-chain review
 fails, compare a small owned C ABI facade rather than weakening core
@@ -55,23 +50,25 @@ native unsafe boundary.
 
 The Compose Desktop Windows build uses the plugin's JVM host target, which
 builds a Windows-host Rust library rather than the separate `mingwX64` static
-cinterop target. The Windows CI workflow has successfully built and tested the
-KMP host ABI and distributable on the migration branch. This verifies build
-and packaging, not execution on physical Windows hardware. Keep the legacy
-Flutter MSVC distribution untouched.
+cinterop target. The Windows CI workflow builds and tests the KMP host ABI and
+distributable. This verifies build and packaging, not execution on physical
+Windows hardware.
 
 Linux and Windows Compose Desktop render local video in an AWT canvas hosted
 by the application window, with mpv's native video child window embedded into
 that canvas. The launcher passes the validated local media path as a separate
 process argument and disables mpv configuration, scripts, network helpers,
-and automatic sidecar loading. Desktop users need an `mpv` executable with
-native window embedding support on `PATH`; this integration is build-tested
-on Windows CI but has not been exercised on physical Windows hardware. Linux
-and Windows gallery video tiles use `ffmpeg` on `PATH` to extract a single local frame. The
-extractor validates the indexed media location, disables network input
-protocols, caps the output at 512 pixels and 4 MiB, limits execution to
-10 seconds, and runs at most two extractions concurrently. Android continues to
-use its SAF-backed native thumbnail path.
+and automatic sidecar loading. Development launches require an `mpv`
+executable with native window embedding support on `PATH`. The 2.0.1 Linux
+release bundles include pinned `mpv` and `ffmpeg` with their runtime closure;
+the Windows release package includes these tools beside the launcher. Windows
+build/package integration is covered by CI, but physical Windows runtime
+behavior has not been verified. Linux and Windows gallery video tiles use
+`ffmpeg` to extract a single local frame. The extractor validates the indexed
+media location, disables network input protocols, caps the output at 512
+pixels and 4 MiB, limits execution to 10 seconds, and runs at most two
+extractions concurrently. Android continues to use its SAF-backed native
+thumbnail path.
 
 ## Coarse-grained repository operations
 
@@ -142,8 +139,8 @@ reads, and 512 MiB total note content per scan.
 The scan-content bound is generated from the shared SAF limits file and is
 enforced while Kotlin reads notes and Rust stages batches.
 
-The current Flutter adapter gathers the bounded scan data before one
-`scan_saf` FFI call. Kotlin uses the staged scan-session operations
+The Android platform adapter enumerates and reads bounded SAF batches. Kotlin
+uses the staged scan-session operations
 `begin_saf_scan`, `append_saf_scan_batch`, `finish_saf_scan`, and
 `cancel_saf_scan`. It writes bounded batches to private staging files, then
 streams those files into the Core transaction at finish; it does not retain
@@ -173,12 +170,11 @@ the per-batch note-count and byte caps before crossing FFI.
 - FFI exposes local operations only. No network client, background upload,
   telemetry, or implicit external-link launch is permitted.
 
-## Migration checks
+## FFI change checks
 
-Before the first generated binding ships, add integration tests for private
+For changes to this boundary, maintain integration coverage for private
 directory preparation, query/page/count, category filters, note detail,
 filesystem media-path validation, thumbnail size limits, SAF scan limits,
-sanitized failures, and disposal/reopening of the index. Run them against
-fictional fixtures only. Keep the Flutter bridge and its existing checks until
-the Kotlin calls produce matching results and the replacement is verified on
-each target.
+sanitized failures, and disposal/reopening of the index. Run tests against
+fictional fixtures only. Keep generated bindings behind the platform adapter
+and repository; do not add direct FFI calls from Composables.

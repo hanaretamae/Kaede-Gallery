@@ -81,11 +81,11 @@ GitHub CLI (`gh auth login`) で認証しておく必要があります。ロー
 - **安全性**: core／parser は `forbid(unsafe_code)`、オフライン、入力上限あり、ログ・エラーにノート内容を含めない。
 - **パスと保存先**: パスは開く前に検証し、索引・キャッシュは Vault 外のプライベートなアプリデータに置きます。
 - **ネットワーク**: 通信・テレメトリ・広告・リモートのクラッシュレポートに関する依存は追加しません。
-- **フェーズ**: 1回に1フェーズずつ完了・検証し、将来フェーズの UI を Phase 1 の core に入れないでください。
+- **フェーズ**: Flutter／Dart から Kotlin への移行である Phase 14 は完了しています。現在の実装に変更を限定し、退役したアプリやリリース経路を復活させないでください。
 
 ## Changelog とリリース
 
-- 各リリースの `CHANGELOG.md` は AI が実装差分と実際の検証結果を基に草案・更新します。
+- `CHANGELOG.md` は release tag 作成前に、実装差分と実際の検証結果を基に草案・更新します。tag 作成後は変更しません。`tools/release.sh` は tag 時点の内容との一致を要求します。
 - AI は未確認の動作、実施していないテスト、将来予定を完了済みのように書かず、秘密情報や個人情報を含めません。
 - リリース担当者は内容とタグのバージョンを確認してからコミット・公開します。アプリの唯一の version source は `VERSION` です。`tools/release.sh` は署名済み KMP Android APK と x86_64 / aarch64 Linux bundle をビルドします。AArch64 Linux package は x86_64 上で Rust FFI をクロスコンパイルし、AArch64 用の Compose native runtime、JRE、launcher、library を組み立てます。QEMU/binfmt や remote builder は不要です。Rustup 1.98.1 の Android targets は事前にインストール済みのものだけを使います。タグは `VERSION` と完全一致させ、`v` を付けません。`2.0.0b1` のような beta タグは GitHub の prerelease として公開します。Windows の手動 workflow は KMP を package 化し、tag を指定して起動すると既存 GitHub Release に ZIP を添付します。別の Android/Linux AArch64 workflow は `workflow_dispatch` のみで、リリース署名・公開には使いません。Release 公開にはリリース担当者の認証情報と対象環境の検証が必要です。
 

@@ -50,7 +50,8 @@
 > 現在の UI は Kotlin Multiplatform / Compose です。Android と Linux Desktop のビルド手順があります。
 > Windows x64／ARM64 のテスト・パッケージ作成と手動 Release workflow も用意していますが、実機での実行は未確認です。
 > 安定版 `2.0.0` は 2026-10-12 に公開済みです（[Release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)）。
-> ソースの `2.0.1` は準備済みですが、GitHub Release は未公開です。
+> 安定版 `2.0.1` も 2026-10-12 に公開済みです（[Release](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)）。
+> 各プラットフォームの最新の配布物は Release ページで確認してください。Windows 実機での動作は未確認です。
 > production 署名付き Release にはローカルの release script と認証情報が必要です。
 > 検証済みのビルド経路と残るリリース要件は[リリース手順](docs/releasing.ja.md)を参照してください。
 
@@ -177,7 +178,7 @@ nix bundle --system x86_64-linux --out-link /tmp/kaede-gallery-aarch64 .#package
 
 この cross package は x86_64 上で Rust FFI を AArch64 向けにコンパイルし、AArch64 用 Compose native runtime、JRE、launcher、Linux library を組み立てます。従来の native `aarch64-linux` package も AArch64 host で利用できます。`packages.<system>.default`、`nixosModules.default`、`homeManagerModules.default` は native KMP package を選びます。後述する任意の手動 Actions workflow も AArch64 bundle を cross-build して upload します。
 
-Nix flake の package は固定した `mpv` と `ffmpeg` を使います。公開済みの安定版 `2.0.0` の Linux `.tar.zst` と `.AppImage` は `PATH` 上のシステム実行ファイルを使うため、動画再生とサムネイル生成には両方をインストールしてください。`2.0.1` のリリース構成では固定版と実行時依存を同梱するよう準備済みですが、配布物はまだ公開していません。
+Nix flake の package は固定した `mpv` と `ffmpeg` を使います。公開済みの安定版 `2.0.0` の Linux `.tar.zst` と `.AppImage` は `PATH` 上のシステム実行ファイルを使うため、動画再生とサムネイル生成には両方をインストールしてください。安定版 `2.0.1` の Linux bundle には固定した実行ファイルと実行時依存を同梱しています。最新の配布物は[2.0.1 Release ページ](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)で確認してください。
 
 <details>
 <summary>索引データベースの場所</summary>

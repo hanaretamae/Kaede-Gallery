@@ -1,9 +1,10 @@
 # Phase 1 performance baseline
 
 Historical baseline: the Android image/grid benchmark below used the retired
-Flutter UI. It does not measure the maintained KMP/Compose app. Current KMP
-Android `ContentResolver` throughput and Compose frame performance have not been
-measured.
+Flutter UI and does not measure the maintained KMP/Compose app. KMP Android
+SAF scan and Compose grid-frame measurements are recorded later in this
+document for a single API 36 device, provider, and fictional fixture; they do
+not characterize other providers, devices, or large-media loading.
 
 Measured on 2026-10-01 using the release CLI and fresh generated fictional
 notes/indexes only. Timings are wall-clock values printed by Bash `time`;
@@ -127,8 +128,9 @@ an injectable background dispatcher, and rapid tag changes are coalesced before
 refreshing the gallery and category counts. This prevents synchronous Rust
 calls from blocking the UI and avoids redundant filter requests; it does not
 reduce the underlying cold SAF read/decode cost. Cold note and display-sized
-image loading still need device measurements before claiming that the
-Dart-versus-Kotlin latency gap is resolved.
+image loading still need device measurements; the current scan and grid-frame
+measurements do not establish a latency comparison with the historical Flutter
+application.
 
 ## KMP Android SAF and Compose acceptance
 

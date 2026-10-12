@@ -83,11 +83,13 @@ The script requires an authenticated GitHub CLI (`gh auth login`).
 - **Paths and storage:** Validate paths before opening them. Store indexes and caches outside the Vault in
   private app data.
 - **Network:** Do not add dependencies for networking, telemetry, advertising, or remote crash reporting.
-- **Phases:** Complete and verify one development phase at a time. Do not add future-phase UI to the Phase 1 core.
+- **Phases:** Phase 14, the Flutter/Dart-to-Kotlin migration, is complete. Keep changes scoped to the current
+  implementation and do not revive retired application or release paths.
 
 ## Changelog and releases
 
-- Draft changelog entries from the implementation diff and actual verification results.
+- Draft changelog entries from the implementation diff and actual verification results before creating a release
+  tag. Once tagged, keep `CHANGELOG.md` unchanged; `tools/release.sh` requires it to match the release tag.
 - Do not describe unverified behavior, tests that were not run, or future plans as completed. Do not include
   secrets or personal information.
 - The release owner verifies the changelog and tag version before committing and publishing. `VERSION` is the
