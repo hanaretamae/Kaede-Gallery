@@ -12,6 +12,14 @@ parallel Flutter/Dart implementation or describe it as an active build or
 release path. Treat Flutter-era measurements and acceptance notes as history,
 not as evidence of current KMP behavior.
 
+Keep evergreen README and process documentation version-neutral about
+publication status. Describe the checked-out source; do not add temporary
+notes about which release is currently latest or whether a published artifact
+predates a source fix. Keep release-specific status in GitHub Release metadata
+or versioned release notes when needed, and retain older version facts in
+evergreen docs only when required for licensing, compatibility, or migration
+history.
+
 Preserve unrelated worktree changes and complete one development phase at a
 time. Use fictional fixtures only; never access or modify a user's Obsidian
 Vault. Keep core/parser code safe, offline, bounded, and free of note content

@@ -94,21 +94,17 @@ integrations.
     Phase 14 against the stable `2.0.0` release and successful Windows workflow
     run [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594).
     The missing Windows ZIP for historical prerelease `2.0.0b4` was explicitly
-    waived and was not uploaded. Stable `2.0.1` was subsequently published on
-    2026-10-12; see `docs/releasing.md` for its verified assets and the current
-    Windows archive status.
+    waived and was not uploaded.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
 
 Implementation for shared UI, settings, Android, and desktop is present.
 Phase 13 acceptance and Phase 14 migration/owner-approved closure are recorded
-below as historical evidence. The stable `2.0.1` GitHub Release was verified
-on 2026-10-12; the release guide records the public asset manifest and the
-Windows packaging workflow status. GitHub Actions run Windows tests/package
-checks on push and pull request, with Android debug and Linux AArch64 optional
-build artifacts available only through manual dispatch. Local builds remain
-primary, and the optional workflow does not sign or publish Android releases.
+below as historical evidence. GitHub Actions run Windows tests/package checks
+on push and pull request, with Android debug and Linux AArch64 optional build
+artifacts available only through manual dispatch. Local builds remain primary,
+and the optional workflow does not sign or publish Android releases.
 The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
 must not be moved. The missing `2.0.0b4` Windows archive is a waived historical
 omission, not a delivered artifact. Full Actions-only production release is
@@ -241,10 +237,9 @@ Kotlin Multiplatform / Compose with shared gallery, search, filtering, paging,
 settings, note details, and viewer behavior; Rust provides parsing, indexing,
 and the FFI. Android and Linux Desktop are active application targets.
 Windows JVM CI and release packaging are configured, but physical Windows
-runtime behavior is not claimed as verified. Stable `2.0.1` was published on
-2026-10-12; see `docs/releasing.md` for the public asset status. Flutter and
-Dart remain only in the historical acceptance record below and are not active
-application, build, or release paths.
+runtime behavior is not claimed as verified. Flutter and Dart remain only in
+the historical acceptance record below and are not active application, build,
+or release paths.
 
 The common viewer delegates media rendering to a platform capability. Linux
 image display is implemented in `desktopApp`;
@@ -315,10 +310,9 @@ caches are invalidated on rescan or Vault removal. Video previews also fall
 back across multiple sync-frame timestamps when the first MP4 frame cannot be
 decoded. These changes still require a fresh large-media latency benchmark.
 Linux and Windows video are rendered in an embedded native child window from a
-separate `mpv` process. The published stable `2.0.0` Linux bundles use system
-`mpv` and `ffmpeg` from `PATH`. The `2.0.1` Linux release configuration bundles
-pinned copies inside the self-contained runtime closure; the release script
-verifies both tools in each target closure before packaging. Windows CI artifacts and release
+separate `mpv` process. Linux release bundles include pinned `mpv` and `ffmpeg`
+inside the self-contained runtime closure; the release script verifies both
+tools in each target closure before packaging. Windows CI artifacts and release
 ZIPs include pinned GPL `mpv.exe`/`ffmpeg.exe` in `tools/` beside
 `Kaede-Gallery.exe`; these take precedence over `PATH`.
 Rust may return Windows extended-length Vault paths (`\\?\`); the desktop

@@ -66,9 +66,8 @@
 >
 > [Download the latest release](https://github.com/hanaretamae/Kaede-Gallery/releases).
 >
-> The current 2.0.1 AppImages predate the system-font fix. AppImages built
-> from this source use the host's Fontconfig configuration and installed fonts
-> when available.
+> AppImages built from this source use the host's Fontconfig configuration and
+> installed fonts when available.
 >
 > See [the release guide](docs/releasing.md) for build and release details.
 
@@ -250,14 +249,12 @@ Compose runtime, JRE, launcher, and Linux libraries on an x86_64 host. A native
 `homeManagerModules.default` select the native KMP package. The optional
 Actions workflow can also cross-build an AArch64 bundle.
 
-The Nix package uses pinned `mpv` and `ffmpeg`.
-Linux downloads for version 2.0.0 use the system executables from `PATH`;
-install both for video playback and thumbnails.
+The Nix package and Linux release bundles use pinned `mpv` and `ffmpeg`,
+including their runtime libraries, so video playback and thumbnails do not
+depend on host executables in `PATH`.
 
-Version 2.0.1 Linux bundles include these tools and their runtime libraries.
-The published 2.0.1 AppImages predate the system-font change described here.
-AppImages built from this source use your system Fontconfig configuration and
-installed fonts when `/etc/fonts/fonts.conf` is available. Your own
+AppImages built from this source use the host's Fontconfig configuration and
+installed fonts when `/etc/fonts/fonts.conf` is available. An explicit
 `FONTCONFIG_FILE` setting takes precedence. Google Sans Flex remains available
 as an app appearance option.
 

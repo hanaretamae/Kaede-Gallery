@@ -59,8 +59,8 @@ by the application window, with mpv's native video child window embedded into
 that canvas. The launcher passes the validated local media path as a separate
 process argument and disables mpv configuration, scripts, network helpers,
 and automatic sidecar loading. Development launches require an `mpv`
-executable with native window embedding support on `PATH`. The 2.0.1 Linux
-release bundles include pinned `mpv` and `ffmpeg` with their runtime closure;
+executable with native window embedding support on `PATH`. Linux release
+bundles include pinned `mpv` and `ffmpeg` with their runtime closure;
 the Windows release package includes these tools beside the launcher. Windows
 build/package integration is covered by CI, but physical Windows runtime
 behavior has not been verified. Linux and Windows gallery video tiles use

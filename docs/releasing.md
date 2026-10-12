@@ -10,36 +10,30 @@
 | Optional remote builds | Android debug APK and/or Linux AArch64 bundle as temporary workflow artifacts | Manually dispatched Actions workflow; not a production release |
 | Entirely Actions-based signed release | Not currently supported | No workflow currently handles Android production signing and creates the complete release |
 
-## Current release status
+Before documenting a release as published, verify the public GitHub Release and
+its actual uploaded assets. A tag or configured workflow alone is not evidence
+of publication.
 
-Stable `2.0.1` is published ([release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.1)) with universal, arm64-v8a, and x86_64 Android APKs; x86_64 and AArch64 Linux `.tar.zst` and `.AppImage` bundles; x64 and ARM64 Windows ZIPs; `SHA256SUMS`; and license materials. The Windows packaging and upload workflow [38239334210](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38239334210) completed successfully. Physical Windows runtime behavior remains unverified. Stable `2.0.0` is also published with Android, Linux x86_64/AArch64, and Windows x64/ARM64 assets ([release page](https://github.com/hanaretamae/Kaede-Gallery/releases/tag/2.0.0)).
+## Historical release exception
 
-The older `2.0.0b4` prerelease has no Windows ZIP: workflow run [38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`, so its archive and upload steps were skipped. Phase 14 was subsequently closed by explicit owner approval using the stable release assets and successful Windows workflow run [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594); the missing b4 artifact remains a waived historical omission, not a passed upload. Do not move or recreate historical tags.
+The `2.0.0b4` prerelease has no Windows ZIP: workflow run
+[38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
+failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`,
+so its archive and upload steps were skipped. Phase 14 was subsequently closed
+by explicit owner approval using the successful Windows workflow run
+[38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594);
+the missing b4 artifact remains a waived historical omission, not a passed
+upload. Do not move or recreate historical tags.
 
 Android version codes reserve suffixes b1-b898 for beta builds, rc1-rc100 for release candidates, and 999 for the final release. The release script permits Markdown-only documentation commits after the tag, except changes to `CHANGELOG.md`; it requires the current commit to match `origin/main`. Keep the release notes and all non-documentation release code at the tagged commit.
 
-## 2.0.1 published release
-
-Stable `2.0.1` is published as a non-prerelease GitHub Release. Its release
-page contains the three Android APK variants, Linux x86_64/AArch64 `.tar.zst`
-and AppImage bundles, Windows x64/ARM64 ZIPs, checksums, and license materials.
-
-Starting with 2.0.1, Linux bundles include pinned `mpv` and `ffmpeg`
-executables with their runtime closure; unlike the 2.0.0 Linux downloads, they
-do not require those executables from the host `PATH`.
-
-The 2.0.1 AppImages predate the system-font launcher change. AppImages built
-from this source use `/etc/fonts/fonts.conf` when it is readable and
-`FONTCONFIG_FILE` is unset. If `FONTCONFIG_PATH` is unset, the launcher sets
-it to `/etc/fonts`. Explicit Fontconfig environment settings are preserved.
-
-The Windows x64/ARM64 archives are built and uploaded by the separate workflow.
-Physical Windows runtime behavior and untested hardware/provider combinations
-remain unverified.
-
 ## Full release from a local Linux host
 
-For a future, not-yet-published release only, use a clean checkout of the reviewed `main` commit and confirm `VERSION` matches the intended release tag. `2.0.1` is already published; do not rerun these commands for it. The release script verifies the tag, branch, GitHub authentication, test prerequisites, signing files, Rust targets, and Nix builders before publishing.
+For a new, unpublished release only, use a clean checkout of the reviewed
+`main` commit and confirm `VERSION` matches the intended release tag. Do not
+rerun the procedure for an already-published tag. The release script verifies
+the tag, branch, GitHub authentication, test prerequisites, signing files,
+Rust targets, and Nix builders before publishing.
 
 ```sh
 git switch main
@@ -58,7 +52,24 @@ release_tag="$(cat VERSION)"
 tools/release.sh "$release_tag"
 ```
 
-The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with attachment `release.jks`. The script exports the key temporarily, builds and verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and Kotlin tests, creates x86_64 and AArch64 Linux bundles as `.tar.zst` archives and `.AppImage` files (a pinned `appimagetool` and type2 runtime from the flake wrap the Nix bundle), calculates checksums, and publishes a version-titled stable release or prerelease according to the tag. Starting with 2.0.1, each Linux bundle is a self-contained Nix closure including pinned `mpv`, `ffmpeg`, runtime libraries, and license materials; the release script checks that both media tools are present in each architecture's package closure before bundling. It requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android` targets already installed. Both Linux bundles are built on an x86_64 Linux builder; the AArch64 Rust FFI is cross-compiled and target-native runtime files are assembled without QEMU/binfmt or an AArch64/remote builder. `XDG_RUNTIME_DIR` must be a private directory owned by the current user with mode `700`; signing material is kept there. Large temporary release artifacts are staged in a private directory under `TMPDIR` (default `/tmp`) to avoid filling small runtime tmpfs mounts.
+The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with
+attachment `release.jks`. The script exports the key temporarily, builds and
+verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and
+Kotlin tests, creates x86_64 and AArch64 Linux bundles as `.tar.zst` archives
+and `.AppImage` files (a pinned `appimagetool` and type2 runtime from the flake
+wrap the Nix bundle), calculates checksums, and publishes a version-titled
+stable release or prerelease according to the tag. Linux bundles are
+self-contained Nix closures including pinned `mpv`, `ffmpeg`, runtime
+libraries, and license materials; the release script checks that both media
+tools are present in each architecture's package closure before bundling. It
+requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android`
+targets already installed. Both Linux bundles are built on an x86_64 Linux
+builder; the AArch64 Rust FFI is cross-compiled and target-native runtime files
+are assembled without QEMU/binfmt or an AArch64/remote builder.
+`XDG_RUNTIME_DIR` must be a private directory owned by the current user with
+mode `700`; signing material is kept there. Large temporary release artifacts
+are staged in a private directory under `TMPDIR` (default `/tmp`) to avoid
+filling small runtime tmpfs mounts.
 
 After creating a future GitHub Release, build and attach its Windows ZIP through the manual Windows workflow:
 
@@ -91,4 +102,10 @@ The automatic `kotlin-windows.yml` artifact and the manual `windows.yml` ZIP bot
 
 A complete Actions-only signed release is **not available yet**. The current production signing process reads the keystore and password from the release owner's local KeePassXC database. The optional build workflow only creates temporary debug/build artifacts, and the Windows workflow requires a release to exist first.
 
-Supporting a full remote release would require a dedicated protected release workflow, a deliberate decision to provide the Android signing keystore/password through a protected GitHub Environment or an external secret manager, and CI verification of the signed APKs and all release bundles. Do not upload the KeePassXC database/key file or put signing material in repository files. This remote signing setup has not been approved or configured. The 2.0.1 release is already published; use the local release procedure above only for a future, approved version.
+Supporting a full remote release would require a dedicated protected release
+workflow, a deliberate decision to provide the Android signing keystore/password
+through a protected GitHub Environment or an external secret manager, and CI
+verification of the signed APKs and all release bundles. Do not upload the
+KeePassXC database/key file or put signing material in repository files. This
+remote signing setup has not been approved or configured. Use the local release
+procedure above only for a new, approved version.

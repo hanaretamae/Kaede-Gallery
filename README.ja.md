@@ -63,7 +63,6 @@
 >
 > [最新のリリースをダウンロード](https://github.com/hanaretamae/Kaede-Gallery/releases)
 >
-> 公開中の 2.0.1 AppImage はシステムフォント対応前のビルドです。
 > このソースから作成する AppImage は、システムの Fontconfig 設定と
 > インストール済みフォントを参照します。
 > ビルド・リリースの詳細は[リリース手順](docs/releasing.ja.md)を参照してください。
@@ -204,12 +203,9 @@ AArch64 host では従来の native `aarch64-linux` package も利用できま�
 `homeManagerModules.default` は native KMP package を選びます。
 手動 Actions workflow でも AArch64 bundle を cross-build できます。
 
-Nix package では、バージョンを固定した `mpv` と `ffmpeg` を使います。
-バージョン 2.0.0 の Linux 配布物では、動画再生とサムネイル生成に
-`PATH` 上の `mpv` と `ffmpeg` が必要です。
-
-バージョン 2.0.1 の Linux 配布物には、これらの実行ファイルと実行時ライブラリを同梱しています。
-公開中の 2.0.1 AppImage には、ここで説明するシステムフォント対応はまだ含まれていません。
+Nix package と Linux release bundle には、バージョンを固定した
+`mpv`・`ffmpeg` と実行時ライブラリを同梱します。
+動画再生とサムネイル生成に、ホストの `PATH` 上の実行ファイルは不要です。
 
 このソースから作成する AppImage は、`FONTCONFIG_FILE` が未設定で
 `/etc/fonts/fonts.conf` がある場合、システムの Fontconfig 設定を使います。
