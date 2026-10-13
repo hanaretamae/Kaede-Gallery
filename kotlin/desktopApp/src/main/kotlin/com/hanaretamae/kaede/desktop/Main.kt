@@ -298,8 +298,7 @@ private fun DesktopApplication(
                 val transform = awtWindow.graphicsConfiguration.defaultTransform
                 val targetSize = awtWindowSizeFromX11(
                     dimensions = nativeSize,
-                    scaleX = transform.scaleX,
-                    scaleY = transform.scaleY,
+                    defaultTransform = transform,
                     insets = awtWindow.insets,
                 )
                 if (targetSize.width <= 0 || targetSize.height <= 0) return

@@ -8,6 +8,8 @@ import com.sun.jna.ptr.IntByReference
 import com.sun.jna.ptr.NativeLongByReference
 import java.awt.Dimension
 import java.awt.Insets
+import java.awt.geom.AffineTransform
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 internal data class X11WindowDimensions(
@@ -17,10 +19,11 @@ internal data class X11WindowDimensions(
 
 internal fun awtWindowSizeFromX11(
     dimensions: X11WindowDimensions,
-    scaleX: Double,
-    scaleY: Double,
+    defaultTransform: AffineTransform,
     insets: Insets,
 ): Dimension {
+    val scaleX = hypot(defaultTransform.scaleX, defaultTransform.shearY)
+    val scaleY = hypot(defaultTransform.shearX, defaultTransform.scaleY)
     require(scaleX.isFinite() && scaleX > 0.0)
     require(scaleY.isFinite() && scaleY > 0.0)
     return Dimension(

@@ -1152,6 +1152,9 @@ On Desktop, a remembered Vault opens directly into the gallery using its
 private index; when an initial scan is needed, it starts after the gallery
 appears. The resizable window opens at 1000×700dp, has a 400×500dp minimum, and
 uses the host's Compose density for display scaling without a fixed aspect ratio.
+Linux X11 window synchronization derives scale from the full AWT transform so
+rotated displays retain correctly sized windows. Desktop gallery direct-drag
+scrolling uses the shared fling behavior to retain touch momentum.
 On Linux, the AWT app class, desktop-entry ID, and `StartupWMClass` use the same
 identifier so Waybar's Niri window module can resolve the Niri app ID to the
 installed desktop icon.

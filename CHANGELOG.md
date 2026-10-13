@@ -3,6 +3,13 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.1.2] - Draft
+
+### Fixed
+
+- Preserve touch-scroll momentum when dragging the Desktop gallery.
+- Correct Linux X11 window-size synchronization for rotated, scaled displays.
+
 ## [2.1.1] - Draft
 
 ### Added

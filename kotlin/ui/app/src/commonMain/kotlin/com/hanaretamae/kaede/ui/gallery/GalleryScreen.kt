@@ -40,6 +40,9 @@ import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.FlingBehavior
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Card
@@ -122,6 +125,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.util.VelocityTracker
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.zIndex
 import androidx.compose.ui.Modifier
@@ -148,6 +152,8 @@ import com.hanaretamae.kaede.core.settings.GalleryTagColorRule
 import com.hanaretamae.kaede.core.settings.SavedGallerySearch
 import com.hanaretamae.kaede.core.settings.isGalleryTagDisplayed
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
@@ -180,18 +186,26 @@ internal fun galleryAdaptiveColumnCount(
     return count.coerceAtLeast(GALLERY_GRID_MINIMUM_COLUMN_COUNT)
 }
 
-private fun Modifier.directVerticalDragScroll(gridState: LazyGridState): Modifier =
-    pointerInput(gridState) {
+private fun Modifier.directVerticalDragScroll(
+    gridState: LazyGridState,
+    flingBehavior: FlingBehavior,
+): Modifier = pointerInput(gridState, flingBehavior) {
+    coroutineScope {
+        var flingJob: Job? = null
         awaitEachGesture {
             val down = awaitFirstDown(
                 requireUnconsumed = false,
                 pass = PointerEventPass.Initial,
             )
+            flingJob?.cancel()
+            val velocityTracker = VelocityTracker()
+            velocityTracker.addPosition(down.uptimeMillis, down.position)
             var previousPosition = down.position
             var dragging = false
             while (true) {
                 val event = awaitPointerEvent(PointerEventPass.Initial)
                 val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                velocityTracker.addPosition(change.uptimeMillis, change.position)
                 val totalDelta = change.position - down.position
                 val verticalDragStarted =
                     abs(totalDelta.y) > viewConfiguration.touchSlop &&
@@ -205,10 +219,21 @@ private fun Modifier.directVerticalDragScroll(gridState: LazyGridState): Modifie
                     gridState.dispatchRawDelta(-deltaY)
                 }
                 previousPosition = change.position
-                if (!change.pressed) break
+                if (!change.pressed) {
+                    val velocity = -velocityTracker.calculateVelocity().y
+                    if (dragging && velocity.isFinite() && velocity != 0f) {
+                        flingJob = launch {
+                            gridState.scroll(MutatePriority.Default) {
+                                with(flingBehavior) { performFling(velocity) }
+                            }
+                        }
+                    }
+                    break
+                }
             }
         }
     }
+}
 
 data class GalleryStrings(
     val title: String,
@@ -467,6 +492,7 @@ fun GalleryScreen(
         }
     }
     val galleryCoroutineScope = rememberCoroutineScope()
+    val galleryFlingBehavior = ScrollableDefaults.flingBehavior()
     var showFilters by remember(stateHolder) { mutableStateOf(false) }
     val filterSheetState = rememberBottomSheetState(
         initialValue = SheetValue.Hidden,
@@ -874,7 +900,10 @@ fun GalleryScreen(
                                 .testTag("gallery-grid")
                                 .then(
                                     if (enableDirectDragScrolling) {
-                                        Modifier.directVerticalDragScroll(gridState)
+                                        Modifier.directVerticalDragScroll(
+                                            gridState,
+                                            galleryFlingBehavior,
+                                        )
                                     } else {
                                         Modifier
                                     },

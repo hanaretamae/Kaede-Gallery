@@ -31,7 +31,10 @@ class GalleryScrollbarTest {
     val compose = createComposeRule()
     private var galleryGridState: LazyGridState? = null
 
-    private fun showGallery(enableDirectDragScrolling: Boolean = false) {
+    private fun showGallery(
+        enableDirectDragScrolling: Boolean = false,
+        fixedColumnCount: Int = 0,
+    ) {
         val entries = (1L..60L).map { id ->
             NoteSummary(
                 id = NoteId(id),
@@ -84,6 +87,7 @@ class GalleryScrollbarTest {
                     onSettings = {},
                     gridState = gridState,
                     enableDirectDragScrolling = enableDirectDragScrolling,
+                    fixedColumnCount = fixedColumnCount,
                 )
             }
         }
@@ -148,6 +152,29 @@ class GalleryScrollbarTest {
                 state.firstVisibleItemIndex > 0 ||
                     state.firstVisibleItemScrollOffset > 0
                 )
+        }
+    }
+
+    @Test
+    fun directTouchDragContinuesWithFlingAfterRelease() {
+        showGallery(enableDirectDragScrolling = true, fixedColumnCount = 2)
+
+        compose.onNodeWithTag("gallery-grid").performTouchInput {
+            swipe(
+                start = center + Offset(0f, 40f),
+                end = center - Offset(0f, 40f),
+                durationMillis = 80,
+            )
+        }
+
+        compose.waitUntil(2_000) {
+            val state = galleryGridState ?: return@waitUntil false
+            val rowHeight = state.layoutInfo.visibleItemsInfo.firstOrNull()?.size?.height
+                ?: return@waitUntil false
+            val scrolledPixels =
+                state.firstVisibleItemIndex / 2 * rowHeight +
+                    state.firstVisibleItemScrollOffset
+            scrolledPixels > 100
         }
     }
 

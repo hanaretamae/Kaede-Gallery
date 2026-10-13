@@ -17,7 +17,7 @@ class GalleryScreenTest {
 
     @Test
     fun desktopGalleryFitsFourColumnsAtReportedWindowWidthAcrossDisplayScales() {
-        listOf(1f, 1.25f, 1.5f, 2f).forEach { density ->
+        listOf(1f, 1.2f, 1.25f, 1.5f, 2f).forEach { density ->
             assertEquals(
                 4,
                 galleryAdaptiveColumnCount(866f / density, 180f / density),
