@@ -1,14 +1,19 @@
 package com.hanaretamae.kaede.ui.gallery
 
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.performMouseInput
-import androidx.compose.ui.test.MouseButton
+import androidx.compose.ui.test.performTouchInput
+import androidx.compose.ui.test.swipe
 import com.hanaretamae.kaede.core.model.GalleryPage
 import com.hanaretamae.kaede.core.model.GalleryQuery
 import com.hanaretamae.kaede.core.model.MediaId
@@ -24,8 +29,9 @@ import kotlin.test.assertTrue
 class GalleryScrollbarTest {
     @get:Rule
     val compose = createComposeRule()
+    private var galleryGridState: LazyGridState? = null
 
-    private fun showGallery() {
+    private fun showGallery(enableDirectDragScrolling: Boolean = false) {
         val entries = (1L..60L).map { id ->
             NoteSummary(
                 id = NoteId(id),
@@ -69,8 +75,16 @@ class GalleryScrollbarTest {
         compose.setContent {
             val scope = rememberCoroutineScope()
             val holder = remember { GalleryStateHolder(repository, scope) }
+            val gridState = rememberLazyGridState()
+            SideEffect { galleryGridState = gridState }
             KaedeGalleryTheme(AppearanceSettings()) {
-                GalleryScreen(holder, onEntrySelected = {}, onSettings = {})
+                GalleryScreen(
+                    holder,
+                    onEntrySelected = {},
+                    onSettings = {},
+                    gridState = gridState,
+                    enableDirectDragScrolling = enableDirectDragScrolling,
+                )
             }
         }
 
@@ -92,7 +106,7 @@ class GalleryScrollbarTest {
 
     @Test
     fun draggingScrollbarTrackWithMouseShowsPositionPopup() {
-        showGallery()
+        showGallery(enableDirectDragScrolling = true)
         compose.onNodeWithTag("gallery-scrollbar-track").performMouseInput {
             enter(center)
             press(MouseButton.Primary)
@@ -113,6 +127,47 @@ class GalleryScrollbarTest {
         compose.onNodeWithTag("gallery-scrollbar-position").assertIsDisplayed()
         compose.onNodeWithTag("gallery-scrollbar-track").performMouseInput {
             release(MouseButton.Primary)
+        }
+    }
+
+    @Test
+    fun directTouchDragScrollsDesktopGallery() {
+        showGallery(enableDirectDragScrolling = true)
+
+        compose.onNodeWithTag("gallery-grid").performTouchInput {
+            swipe(
+                start = center + Offset(0f, 80f),
+                end = center - Offset(0f, 80f),
+                durationMillis = 400,
+            )
+        }
+
+        compose.waitUntil(2_000) {
+            val state = galleryGridState
+            state != null && (
+                state.firstVisibleItemIndex > 0 ||
+                    state.firstVisibleItemScrollOffset > 0
+                )
+        }
+    }
+
+    @Test
+    fun mouseEmulatedDragScrollsDesktopGallery() {
+        showGallery(enableDirectDragScrolling = true)
+
+        compose.onNodeWithTag("gallery-grid").performMouseInput {
+            enter(center + Offset(0f, 80f))
+            press(MouseButton.Primary)
+            moveTo(center - Offset(0f, 80f), delayMillis = 400)
+            release(MouseButton.Primary)
+        }
+
+        compose.waitUntil(2_000) {
+            val state = galleryGridState
+            state != null && (
+                state.firstVisibleItemIndex > 0 ||
+                    state.firstVisibleItemScrollOffset > 0
+                )
         }
     }
 }

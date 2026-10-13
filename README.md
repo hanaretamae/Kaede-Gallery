@@ -42,6 +42,10 @@
   running number and counts of images, memos, and related links.
 - **Page through results:** Set the page size, jump to any position, and load
   neighbouring pages automatically while scrolling.
+- **Desktop layout and input:** The resizable window follows system display
+  scaling, and gallery columns adapt to the available space. Scroll the gallery
+  with the wheel, trackpad, or a vertical drag; fixed column counts are available
+  in Settings.
 - **Search:** Find note names and paths with fuzzy matching. Search tags with
   `#tag` (OR), `+#tag` (AND), or `-#tag` (exclude); `&#tag` is also accepted
   as an AND alias.

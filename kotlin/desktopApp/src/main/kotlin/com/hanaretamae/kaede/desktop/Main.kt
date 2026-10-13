@@ -155,7 +155,9 @@ import java.util.concurrent.atomic.AtomicReference
 
 private const val DESKTOP_VIEWER_IMAGE_SIZE = 4_096
 private const val DESKTOP_GALLERY_THUMBNAIL_SIZE = 512
+private const val DESKTOP_GALLERY_MIN_CELL_WIDTH_PX = 180f
 internal val DESKTOP_MINIMUM_WINDOW_SIZE = DpSize(400.dp, 500.dp)
+internal val DESKTOP_DEFAULT_WINDOW_SIZE = DpSize(1_000.dp, 700.dp)
 private const val DESKTOP_LAYOUT_DEBUG_PROPERTY = "kaede.debugLayout"
 private const val PORTAL_REFRESH_INTERVAL_MILLIS = 15_000L
 
@@ -166,8 +168,8 @@ fun main() {
     }
     application {
         val windowState = rememberWindowState(
-            width = 1_200.dp,
-            height = 820.dp,
+            width = DESKTOP_DEFAULT_WINDOW_SIZE.width,
+            height = DESKTOP_DEFAULT_WINDOW_SIZE.height,
             position = WindowPosition(Alignment.Center),
             placement = WindowPlacement.Floating,
         )
@@ -564,6 +566,8 @@ private fun DesktopApplication(
             repository = activeSession.gallery,
             settingsRepository = settingsRepository,
             settingsStateHolder = rootSettingsStateHolder,
+            minimumAdaptiveCellWidthDp = DESKTOP_GALLERY_MIN_CELL_WIDTH_PX / density.density,
+            enableDirectDragScrolling = true,
             dynamicColorSchemeProvider = { themePreference ->
                 val darkTheme = when (themePreference) {
                     com.hanaretamae.kaede.core.settings.ThemePreference.SYSTEM ->

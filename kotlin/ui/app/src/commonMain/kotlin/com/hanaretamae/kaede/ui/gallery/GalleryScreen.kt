@@ -151,25 +151,64 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.abs
 import kotlin.math.floor
 
-private const val GALLERY_GRID_MIN_CELL_WIDTH_DP = 200f
+internal const val GALLERY_GRID_MIN_CELL_WIDTH_DP = 200f
 private const val GALLERY_GRID_HORIZONTAL_PADDING_DP = 24f
 private const val GALLERY_GRID_SPACING_DP = 12f
 private const val GALLERY_GRID_MINIMUM_COLUMN_COUNT = 2
 private const val GALLERY_SCROLLBAR_HIDE_DELAY_MILLIS = 900L
 
-internal fun galleryAdaptiveColumnCount(availableWidthDp: Float): Int {
-    if (!availableWidthDp.isFinite() || availableWidthDp <= 0f) {
+internal fun galleryAdaptiveColumnCount(
+    availableWidthDp: Float,
+    minimumCellWidthDp: Float = GALLERY_GRID_MIN_CELL_WIDTH_DP,
+): Int {
+    if (
+        !availableWidthDp.isFinite() ||
+        availableWidthDp <= 0f ||
+        !minimumCellWidthDp.isFinite() ||
+        minimumCellWidthDp <= 0f
+    ) {
         return GALLERY_GRID_MINIMUM_COLUMN_COUNT
     }
     val availableGridWidth = availableWidthDp - GALLERY_GRID_HORIZONTAL_PADDING_DP
     val count = floor(
         (availableGridWidth + GALLERY_GRID_SPACING_DP) /
-            (GALLERY_GRID_MIN_CELL_WIDTH_DP + GALLERY_GRID_SPACING_DP),
+            (minimumCellWidthDp + GALLERY_GRID_SPACING_DP),
     ).toInt()
     return count.coerceAtLeast(GALLERY_GRID_MINIMUM_COLUMN_COUNT)
 }
+
+private fun Modifier.directVerticalDragScroll(gridState: LazyGridState): Modifier =
+    pointerInput(gridState) {
+        awaitEachGesture {
+            val down = awaitFirstDown(
+                requireUnconsumed = false,
+                pass = PointerEventPass.Initial,
+            )
+            var previousPosition = down.position
+            var dragging = false
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull { it.id == down.id } ?: break
+                val totalDelta = change.position - down.position
+                val verticalDragStarted =
+                    abs(totalDelta.y) > viewConfiguration.touchSlop &&
+                        abs(totalDelta.y) > abs(totalDelta.x)
+                if (change.pressed && !dragging && verticalDragStarted) {
+                    dragging = true
+                }
+                if (change.pressed && dragging) {
+                    val deltaY = change.position.y - previousPosition.y
+                    change.consume()
+                    gridState.dispatchRawDelta(-deltaY)
+                }
+                previousPosition = change.position
+                if (!change.pressed) break
+            }
+        }
+    }
 
 data class GalleryStrings(
     val title: String,
@@ -407,6 +446,8 @@ fun GalleryScreen(
     showCounts: Boolean = true,
     showMissingMediaIcon: Boolean = false,
     fixedColumnCount: Int = 0,
+    minimumAdaptiveCellWidthDp: Float = GALLERY_GRID_MIN_CELL_WIDTH_DP,
+    enableDirectDragScrolling: Boolean = false,
     gridState: LazyGridState = rememberLazyGridState(),
     vaultName: String? = null,
     includedTagPrefixes: List<String> = GalleryTagDisplayPrefixesCodec.DEFAULT_INCLUDED,
@@ -821,7 +862,7 @@ fun GalleryScreen(
                 ) {
                     val galleryWidthDp = maxWidth.value
                     val columnCount = if (fixedColumnCount == 0) {
-                        galleryAdaptiveColumnCount(galleryWidthDp)
+                        galleryAdaptiveColumnCount(galleryWidthDp, minimumAdaptiveCellWidthDp)
                     } else {
                         fixedColumnCount
                     }
@@ -829,7 +870,15 @@ fun GalleryScreen(
                         LazyVerticalGrid(
                             state = gridState,
                             columns = GridCells.Fixed(columnCount),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier.fillMaxSize()
+                                .testTag("gallery-grid")
+                                .then(
+                                    if (enableDirectDragScrolling) {
+                                        Modifier.directVerticalDragScroll(gridState)
+                                    } else {
+                                        Modifier
+                                    },
+                                ),
                             contentPadding = PaddingValues(12.dp),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp),

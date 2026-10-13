@@ -707,10 +707,11 @@ drags over details resize it first, then scroll its content when the panel
 reaches its limit. Reverse drags scroll back to the top before collapsing the
 panel, avoiding simultaneous remeasurement and scrolling. Toolbar color stays
 independent of the black media background.
-Adaptive gallery columns use a 200dp minimum tile width, 12dp spacing, and
-24dp horizontal content padding, with at least two columns. This yields four
-columns at an 866dp content width; users can still select a fixed count in
-Settings.
+Adaptive gallery columns use a 200dp minimum tile width in shared UI and a
+180px density-adjusted minimum on Desktop, with 12dp spacing and 24dp horizontal
+content padding, and keep at least two columns. The shared layout yields four
+columns at an 866dp content width; Desktop fits four columns in an 866px window
+across common display scales. Users can still select a fixed count in Settings.
 
 Settings follows Material 3 Expressive list styling: the page uses the
 `background` role, the top app bar is pinned (container
@@ -1069,7 +1070,8 @@ grouped Material 3 surface containers; section headings such as Related sit
 outside their tonal content surfaces, like the tag heading. The shared details
 panel uses nested scrolling rather than manually dispatching raw scroll deltas,
 so Android touch flings and desktop wheel/trackpad scrolling retain their
-native scroll behavior; wheel-driven expansion is limited to content that
+native scroll behavior; the Desktop gallery also scrolls on direct vertical
+pointer drags. Wheel-driven expansion is limited to content that
 actually overflows, alongside unzoomed vertical drags over media. Inner details scrolling stops at its
 content bounds, including when the content does not overflow; a details panel
 with no scrollable overflow cannot resize itself through wheel scrolling.
@@ -1148,7 +1150,8 @@ filtering, and smooth lazy grid scrolling.
 
 On Desktop, a remembered Vault opens directly into the gallery using its
 private index; when an initial scan is needed, it starts after the gallery
-appears. The resizable window has a 400×500dp minimum and no fixed aspect ratio.
+appears. The resizable window opens at 1000×700dp, has a 400×500dp minimum, and
+uses the host's Compose density for display scaling without a fixed aspect ratio.
 On Linux, the AWT app class, desktop-entry ID, and `StartupWMClass` use the same
 identifier so Waybar's Niri window module can resolve the Niri app ID to the
 installed desktop icon.

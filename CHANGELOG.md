@@ -3,6 +3,16 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.1.1] - Draft
+
+### Added
+
+- Enable direct vertical drag scrolling in the Desktop gallery while preserving wheel and trackpad scrolling.
+
+### Changed
+
+- Reduce the default Desktop window size and adapt gallery columns to the available width and display density.
+
 ## [2.1.0] - Draft
 
 ### Added
