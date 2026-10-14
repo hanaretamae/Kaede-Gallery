@@ -1,34 +1,20 @@
-# AI instructions
+# Repository instructions
 
-See [.github/copilot-instructions.md](.github/copilot-instructions.md), then
-read [`docs/design.md`](docs/design.md) before changing architecture, behavior,
-privacy, security, or phase boundaries. Treat `docs/design.md` as authoritative
-and report contradictions instead of silently changing requirements.
+Before changing code or documentation, read
+[`.github/copilot-instructions.md`](.github/copilot-instructions.md) and
+[`docs/design.md`](docs/design.md). The design document is authoritative for
+architecture, behavior, privacy, security, and phase boundaries. Report
+contradictions instead of silently changing those requirements.
 
-The active application is Kotlin Multiplatform / Compose with the Rust parser,
-core, and FFI. The Flutter/Dart application and its bridge are retired
-historical references; Phase 14 migration is complete. Do not reintroduce a
-parallel Flutter/Dart implementation or describe it as an active build or
-release path. Treat Flutter-era measurements and acceptance notes as history,
-not as evidence of current KMP behavior.
+The maintained application is Kotlin Multiplatform / Compose with the Rust
+parser, core, and UniFFI boundary. Flutter/Dart and the old bridge are retired;
+do not reintroduce them as an active application, build, or release path.
+Use only fictional fixtures and never access or modify a user's Obsidian Vault.
 
-Keep evergreen user-facing documentation version-neutral. Do not add current
-release/build status, notes comparing published artifacts with source fixes,
-or standalone README statements about source-build-only behavior such as
-AppImage font support. Keep necessary implementation details in design
-documentation; put release-specific status in GitHub Release metadata or
-versioned release notes when needed. Retain older version facts in evergreen
-docs only when required for licensing, compatibility, or migration history.
-
-Preserve unrelated worktree changes and complete one development phase at a
-time. Use fictional fixtures only; never access or modify a user's Obsidian
-Vault. Keep core/parser code safe, offline, bounded, and free of note content
-in logs/errors. Validate paths before opening them and keep indexes/caches
-outside the Vault in private app data.
-
-Run the narrowest relevant Gradle/Rust checks after each coherent change, then
-run `git diff --check`. Follow the bilingual release guides for release work.
-Do not bump `VERSION`, create or move tags, publish releases, or claim target
-acceptance without explicit authorization and verified results. Verify the
-public GitHub Release and its actual assets before documenting release status;
-a tag or configured workflow alone is not proof of publication.
+Preserve unrelated worktree changes and keep each change scoped to the request
+and one development phase. Run the narrowest relevant Rust or Gradle checks,
+then `git diff --check`. Keep evergreen user-facing documentation
+version-neutral. Do not change `VERSION`, create or move tags, publish
+artifacts, or claim platform acceptance without explicit authorization and
+verified results. Verify the public GitHub Release and its actual assets before
+documenting release status.

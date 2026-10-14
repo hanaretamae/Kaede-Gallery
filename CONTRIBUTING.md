@@ -1,26 +1,47 @@
 # Contributing
 
 > [!NOTE]
-> This repository is for distribution only and does not accept external issues, pull requests, discussions,
-> or other contributions (issues and discussions are disabled; pull requests are limited to collaborators).
-> The following procedures are for project developers. See [the Japanese version](CONTRIBUTING.ja.md).
+> This repository is maintained as a distribution project. Public issues and
+> discussions are not used for general support, and pull requests are limited
+> to collaborators. This guide describes the project development workflow.
+> See [the Japanese version](CONTRIBUTING.ja.md).
 
-[`docs/design.md`](docs/design.md) is the source of truth for architecture, behavior, privacy, security, and
-phase boundaries. Check that changes do not contradict it.
+Read [`AGENTS.md`](AGENTS.md), [the AI instructions](.github/copilot-instructions.md),
+and [`docs/design.md`](docs/design.md) before making changes. The design
+document is authoritative for architecture, behavior, privacy, security, and
+phase boundaries. Report conflicts rather than silently changing those
+requirements.
+
+## Active implementation
+
+The application is Kotlin Multiplatform / Compose Multiplatform, with Rust
+providing parsing, indexing, filtering, thumbnails, and the UniFFI boundary.
+Flutter/Dart and the old bridge are retired and must not be reintroduced as an
+active application, build, or release path.
 
 ## Development environment
 
-Use the pinned development environment with `nix develop`. On Linux, the shell adds GLib's library directory to `LD_LIBRARY_PATH` so the Portal client can load GIO through JNA.
+Use the pinned toolchain with `nix develop`. It provides the Rust, JDK,
+Android, and native build tools used by the repository.
 
-## Checks before submitting
+## Safety and implementation rules
 
-When a Rust dependency changes, regenerate the bundled Rust license report:
+- Never access, edit, or write to a user's Obsidian Vault. Use fictional
+  fixtures only, including in tests and documentation.
+- Keep Vault access read-only. Validate paths before opening them and store
+  indexes and caches outside the Vault in private application data.
+- Keep core/parser behavior offline and bounded. Do not include note content,
+  paths, tags, or URLs in logs or errors.
+- Preserve the Rust `forbid(unsafe_code)` and no-network-dependency policies.
+- Do not add telemetry, advertising, remote crash reporting, or unrelated
+  languages or parallel UI implementations.
+- Keep English and Japanese user-facing strings and documentation in sync.
+- Keep changes scoped to one development phase and the requested behavior.
 
-```sh
-python3 tools/update-rust-license-notices.py
-```
+## Checks
 
-The generator updates `kotlin/shared-assets/licenses/RUST-DEPENDENCY-LICENSES.txt`, which is packaged by both Android and Desktop apps.
+Run the narrowest checks that cover the change. Use the broader suites when
+shared interfaces, dependencies, or cross-platform behavior are affected.
 
 ```sh
 # Rust
@@ -28,86 +49,42 @@ cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
 cargo deny check advisories bans licenses sources
-
-# Kotlin Multiplatform / Compose (from the repository root)
-cd kotlin
-./gradlew :core:model:allTests :core:settings:allTests :core:rust:allTests :ui:app:allTests :ui:app:compileKotlinJvm :ui:app:compileAndroidMain :desktopApp:test :desktopApp:compileKotlin
-
-# Run Linux Compose Desktop and create its distributable
-LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" \
-  ./gradlew :desktopApp:run
-./gradlew :desktopApp:createDistributable
-
-# Android debug APK on Linux x86_64 (inside nix develop)
-set -euo pipefail
-# Stop if either target is missing; do not launch Gradle and wait for its retry loop.
-export RUSTUP_TOOLCHAIN=1.98.1
-rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | grep -Fx aarch64-linux-android
-rustup target list --installed --toolchain "$RUSTUP_TOOLCHAIN" | grep -Fx x86_64-linux-android
-export RUSTC="$(rustup which rustc --toolchain "$RUSTUP_TOOLCHAIN")"
-export RUSTDOC="$(rustup which rustdoc --toolchain "$RUSTUP_TOOLCHAIN")"
-export PATH="$(dirname "$RUSTC"):$PATH"
-NDK_BIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
-export CC_aarch64_linux_android="$NDK_BIN/aarch64-linux-android23-clang"
-export CXX_aarch64_linux_android="$NDK_BIN/aarch64-linux-android23-clang++"
-export AR_aarch64_linux_android="$NDK_BIN/llvm-ar"
-export RANLIB_aarch64_linux_android="$NDK_BIN/llvm-ranlib"
-export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$NDK_BIN/aarch64-linux-android23-clang"
-export CC_x86_64_linux_android="$NDK_BIN/x86_64-linux-android23-clang"
-export CXX_x86_64_linux_android="$NDK_BIN/x86_64-linux-android23-clang++"
-export AR_x86_64_linux_android="$NDK_BIN/llvm-ar"
-export RANLIB_x86_64_linux_android="$NDK_BIN/llvm-ranlib"
-export CARGO_TARGET_X86_64_LINUX_ANDROID_LINKER="$NDK_BIN/x86_64-linux-android23-clang"
-./gradlew :androidApp:assembleDebug
 ```
-
-This creates a locally debug-signed APK under `kotlin/androidApp/build/outputs/apk/debug/` for the configured Android ABIs. It does not use the production signing key. Keep local builds as the normal path; the optional Actions workflow is manual-only and can build the Android debug APK, the Linux AArch64 bundle, or both. It never runs on push/pull request and does not publish a release. Once the workflow is present on GitHub, dispatch it from the Nix shell with:
 
 ```sh
-tools/run-optional-builds.sh android-debug
-# Or choose linux-aarch64 or both; an optional second argument selects the ref.
-tools/run-optional-builds.sh both main
+# Kotlin Multiplatform / Compose (from kotlin/)
+./gradlew :core:model:allTests :core:settings:allTests :core:rust:allTests \
+  :ui:app:allTests :ui:app:compileKotlinJvm :ui:app:compileAndroidMain \
+  :desktopApp:test :desktopApp:compileKotlin
+
+# Linux Compose Desktop tests and local distribution
+./gradlew :desktopApp:test
+./gradlew :desktopApp:createDistributable
 ```
 
-The script requires an authenticated GitHub CLI (`gh auth login`).
+The Android debug APK can be built with `:androidApp:assembleDebug` after
+installing the Android Rust targets and configuring the NDK cross-compilers.
+See [the release guide](docs/releasing.md) for platform-specific setup and
+release procedures. A debug build is not a production-signed release.
 
-## Rules
+After checks, run `git diff --check`.
 
-> [!IMPORTANT]
-> Never edit or write to an Obsidian Vault. Scanners and tests must follow this rule too.
+## Dependency and license changes
 
-- **Fictional data only:** Add only fictional notes and media to tests and documentation.
-- **Languages:** Rust and Kotlin/Compose are the active implementation; Flutter is retired. Do not reintroduce a parallel UI or add unrelated implementation languages.
-- **Safety:** Core and parser code must use `forbid(unsafe_code)`, remain offline and bounded, and never put note
-  content in logs or errors.
-- **Paths and storage:** Validate paths before opening them. Store indexes and caches outside the Vault in
-  private app data.
-- **Network:** Do not add dependencies for networking, telemetry, advertising, or remote crash reporting.
-- **Phases:** Phase 14, the Flutter/Dart-to-Kotlin migration, is complete. Keep changes scoped to the current
-  implementation and do not revive retired application or release paths.
+For a dependency change, record why it is needed, its maintenance status and
+license, any OS permissions and network use, and whether it introduces unsafe
+code or native libraries. When Rust dependencies change, regenerate the
+runtime dependency license report:
 
-## Changelog and releases
+```sh
+python3 tools/update-rust-license-notices.py
+```
 
-- Draft changelog entries from the implementation diff and actual verification results before creating a release
-  tag. Once tagged, keep `CHANGELOG.md` unchanged; `tools/release.sh` requires it to match the release tag.
-- Do not describe unverified behavior, tests that were not run, or future plans as completed. Do not include
-  secrets or personal information.
-- The release owner verifies the changelog and tag version before committing and publishing. `VERSION` is the
-  single application version source. `tools/release.sh` builds a signed KMP Android APK and x86_64/aarch64 Linux
-  bundles. The AArch64 Linux package cross-compiles the Rust FFI and assembles target-native runtime files on
-  x86_64 without QEMU/binfmt or a remote builder. It uses
-  the Rustup 1.98.1 Android targets already installed on the host and never retries target installation. The manual
-  Windows workflow packages KMP and attaches its ZIP to an existing GitHub Release when dispatched with a tag.
-  The separate optional Android/Linux AArch64 build workflow is `workflow_dispatch` only and never handles release
-  signing or publication. Release tags match `VERSION` exactly and have no `v` prefix; beta tags such as `2.0.0b1`
-  are published as GitHub prereleases. Release publication still requires the release owner's real credentials and
-  successful target-specific checks. See the [release guide](docs/releasing.md) for the local, optional Actions, and full-remote release paths.
+## Release documentation
 
-## Dependency changes
-
-For each dependency change, document:
-
-- [ ] Why the dependency is needed
-- [ ] Maintenance status and license
-- [ ] OS permissions and network usage
-- [ ] Use of unsafe code or native libraries
+Keep evergreen documentation version-neutral. Do not claim unverified
+behavior, tests, platform acceptance, or release assets. Release-specific
+information belongs in GitHub Release metadata or versioned release notes.
+Follow the [English](docs/releasing.md) and
+[Japanese](docs/releasing.ja.md) release guides. Do not change `VERSION`, create or move tags, or
+publish artifacts without explicit release-owner authorization.

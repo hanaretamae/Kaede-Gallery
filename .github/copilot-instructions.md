@@ -1,36 +1,48 @@
-# Repository instructions
+# AI assistant instructions
 
-Read the repository-root [`AGENTS.md`](../AGENTS.md) and
-[`docs/design.md`](../docs/design.md) before making changes. `docs/design.md`
-is authoritative for architecture, behavior, privacy, security, and phase
-boundaries; report contradictions rather than silently changing those
-requirements.
+Follow the repository-wide [`AGENTS.md`](../AGENTS.md) instructions and read
+[`docs/design.md`](../docs/design.md) before changing architecture, behavior,
+privacy, security, or phase boundaries. If a requested change conflicts with
+the design contract, report the conflict rather than silently redefining it.
 
-The active application is Kotlin Multiplatform / Compose with the Rust parser,
-core, and FFI. The Flutter/Dart application and its bridge are retired
-historical references; Phase 14 migration is complete. Do not reintroduce a
-parallel Flutter/Dart implementation or describe it as an active build or
-release path. Treat Flutter-era measurements and acceptance notes as history,
-not as evidence of current KMP behavior.
+## Current project
 
-Keep evergreen user-facing documentation version-neutral. Do not add current
-release/build status, notes comparing published artifacts with source fixes,
-or standalone README statements about source-build-only behavior such as
-AppImage font support. Keep necessary implementation details in design
-documentation; put release-specific status in GitHub Release metadata or
-versioned release notes when needed. Retain older version facts in evergreen
-docs only when required for licensing, compatibility, or migration history.
+- The active application is Kotlin Multiplatform / Compose Multiplatform.
+- Rust owns parsing, scanning, indexing, filtering, and thumbnails. Kotlin
+  reaches Rust through repositories and the coarse-grained UniFFI facade;
+  Composables do not call bindings directly.
+- Android and desktop integrations are platform-specific. Keep dependencies
+  pointing from UI to Kotlin state/repositories, then to the Rust FFI and core.
+- The Flutter/Dart application and its bridge are retired historical
+  references. Phase 14 is complete; do not restore parallel Flutter/Dart
+  application, build, or release paths.
 
-Keep changes scoped to one development phase and to the requested behavior.
-Preserve unrelated worktree changes, use fictional fixtures only, and never
-access or modify a user's Obsidian Vault. Core/parser changes must remain safe,
-offline, bounded, and free of note content in logs or errors. Validate paths
-before opening them and keep indexes/caches outside the Vault in private app
-data.
+## Safety and privacy
 
-Use the narrowest relevant test/build command, then `git diff --check`. Follow
-the bilingual release guides for release work. Do not change `VERSION`, create
-or move tags, publish artifacts, or state that a platform passed acceptance
-without explicit authorization and verified results. Verify the public GitHub
-Release and its actual assets before documenting release status; a tag or
-configured workflow alone is not proof of publication.
+- Never access, edit, or write to a user's Obsidian Vault. Use fictional
+  fixtures only; do not commit real notes or media.
+- Keep Vault access read-only. Validate paths before opening them and keep
+  indexes and caches outside the Vault in private application data.
+- Keep parser/core operations offline and bounded. Do not place note content,
+  paths, tags, or URLs in logs or errors.
+- Preserve `forbid(unsafe_code)` in core crates and the prohibition on network
+  dependencies. Do not add telemetry, advertising, or remote crash reporting.
+- External links and other outside-app actions must remain explicit user
+  actions. Do not render Markdown.
+
+## Implementation workflow
+
+- Inspect existing patterns and the related design contract before editing.
+- Preserve unrelated worktree changes. Keep work limited to the requested
+  behavior and one development phase.
+- Keep English and Japanese user-facing strings and evergreen documentation
+  consistent. Do not put release-specific build status in evergreen docs.
+- Do not use the README for source-build-only caveats or comparisons between
+  published artifacts and source fixes. Keep implementation details in the
+  design document and release-specific status in release metadata or
+  versioned release notes.
+- Run the narrowest relevant Gradle or Rust checks and then `git diff --check`.
+- Do not change `VERSION`, create or move tags, publish artifacts, or claim
+  target acceptance without explicit authorization and verified evidence.
+- Before documenting a release, verify the public GitHub Release and its
+  actual assets; a tag or configured workflow is not evidence of publication.

@@ -1,63 +1,48 @@
 # Third-party notices
 
-Kaede Gallery's application code is licensed under the [MIT License](LICENSE).
-The active Android and Compose Desktop applications are built with Kotlin
-Multiplatform / Compose and Rust. Their offline in-app **Open-source licenses**
-viewer and distribution archives use the license texts in
-`kotlin/shared-assets/licenses/`.
-The in-app viewer and Android/Desktop app resources also include the project
-MIT license, this notice, and a generated bundle of the platform/runtime license
-texts. These bundled license resources are assembled during the Kotlin build
-from the checked-in license files and notices.
+Kaede Gallery application code is licensed under the [MIT License](LICENSE).
+The application also uses third-party libraries and, for desktop
+distributions, media tools under their own licenses. The in-app **Open-source
+licenses** viewer and distributions include the project license, this notice,
+and license texts assembled from `kotlin/shared-assets/licenses/`.
 
-The Rust dependency report is generated from the shipped `gallery-ffi` Cargo
-dependency graph. It lists the package names and versions, selected SPDX license
-texts, and dependency `NOTICE` or copyright files. The accepted license
-expressions are maintained in `about.toml` and `deny.toml`. Regenerate the report
-after changing Rust dependencies with:
+## Components
+
+| Component or distribution | Third-party components | License information |
+| --- | --- | --- |
+| Android application | Kotlin and Compose, AndroidX, Media3, MaterialKolor, Skydoves Compose ColorPicker, and Rust UniFFI dependencies | Kotlin/Compose, AndroidX, Media3, Material Color Utilities, and Skydoves Compose ColorPicker use Apache-2.0. MaterialKolor is MIT-licensed. Rust runtime dependencies are listed in `RUST-DEPENDENCY-LICENSES.txt`. Android video playback uses Media3. |
+| Compose Desktop application | Compose, MaterialKolor, Skydoves Compose ColorPicker, JNA, and Rust UniFFI dependencies | MaterialKolor uses MIT. Material Color Utilities and Skydoves Compose ColorPicker use Apache-2.0. JNA is dual-licensed under Apache-2.0 or LGPL-2.1-or-later; the distribution includes both license texts. Rust runtime dependencies are listed in `RUST-DEPENDENCY-LICENSES.txt`. |
+| Linux desktop packages | Desktop application plus the Nix runtime closure, including mpv, FFmpeg, libass, and libplacebo | The Nix inputs are locked in `flake.lock`. FFmpeg is built with GPL support; the package includes GPL-3.0-or-later terms and the applicable LGPL and other runtime license texts. |
+| Windows desktop distributions | Desktop application and the bundled `mpv.exe` and `ffmpeg.exe` media tools | The media executables are GPL-licensed builds published by [mpv-winbuild](https://github.com/zhongfly/mpv-winbuild); the distribution includes GPL-3.0-or-later terms. See the upstream [mpv](https://github.com/mpv-player/mpv) and [FFmpeg](https://ffmpeg.org/) projects for source information. |
+
+The optional Google Sans Flex typeface is bundled under the SIL Open Font
+License 1.1. Its license is in
+`kotlin/shared-assets/licenses/GoogleSansFlex-OFL.txt`.
+
+The shared license assets also contain platform and runtime notices for
+components such as ANGLE, SwiftShader, Vulkan Loader, and the Windows SDK
+redistributables. The exact set included with a distribution depends on its
+platform runtime and is assembled by the build.
+
+## Rust dependency report
+
+`RUST-DEPENDENCY-LICENSES.txt` is generated from the shipped `gallery-ffi`
+Cargo dependency graph. It lists runtime packages, versions, selected SPDX
+license texts, and dependency `NOTICE` or copyright files for the target
+triples configured in `about.toml`. Build-only and development-only
+dependencies are excluded. Accepted license expressions are maintained in
+`about.toml` and `deny.toml`.
+
+After changing Rust dependencies, regenerate the report:
 
 ```sh
 python3 tools/update-rust-license-notices.py
 ```
 
-The report covers the seven Rust target triples configured in `about.toml`; it
-excludes build-only and development-only dependencies.
+## License files
 
-## Platform and media dependencies
-
-| Target            | Runtime components                                                               | License and distribution notes                                                                                                                                                                                                                 |
-| ----------------- | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Android APK       | AndroidX Media3, Kotlin/Compose, Skydoves Compose ColorPicker 1.3.0, Rust UniFFI bindings | AndroidX, Kotlin/Compose, and Skydoves Compose ColorPicker use Apache-2.0. Rust notices and license texts are included in the APK's offline license viewer and release archive.                                                                            |
-| Windows ZIP (x64 / ARM64) | Compose Desktop, Skydoves Compose ColorPicker 1.3.0, JNA 5.19.1, Rust UniFFI bindings | Skydoves Compose ColorPicker uses Apache-2.0. JNA is dual-licensed under Apache-2.0 or LGPL-2.1-or-later. The ZIP includes both license choices. The ZIP bundles pinned GPL builds of `mpv.exe` and `ffmpeg.exe` (zhongfly/mpv-winbuild release 2026-10-11-88eb9f2e73, SHA-256 verified in CI) under `tools/`, so the ZIP is distributed under GPL-3.0-or-later terms for those executables; see `licenses/GPL-3.0.txt`. Corresponding sources are available from the mpv-winbuild project and upstream mpv/FFmpeg. |
-| Stable 2.0.0 Linux downloads | System-provided `mpv` and `ffmpeg` from `PATH` | The published 2.0.0 `.tar.zst` and AppImage do not redistribute these media tools; users install them separately. |
-| Linux release bundles starting with 2.0.1 | Self-contained Nix bundle, including pinned nixpkgs `mpv`, `ffmpeg`, `libass`, and `libplacebo` | The locked nixpkgs source and package definitions are recorded in `flake.lock`. The 2.0.1 packaging includes both media tools and their runtime closure, and ships the third-party notices and license texts. FFmpeg is built with GPL support; the bundled executables are distributed under GPL terms. See `licenses/GPL-3.0.txt`, `licenses/LGPL-2.1.txt`, `licenses/LGPL-3.0.txt`, and `licenses/ISC.txt`; the mpv and FFmpeg source projects are [mpv](https://github.com/mpv-player/mpv) and [FFmpeg](https://ffmpeg.org/). |
-| Linux Nix package | Compose Desktop, MaterialKolor 6.0.0-beta01, Skydoves Compose ColorPicker 1.3.0, JNA 5.19.1, nixpkgs `mpv`, `ffmpeg`, `libass`, and `libplacebo` | MaterialKolor and its upstream Material Color Utilities are used to generate the KDE/XDG accent-based M3 Expressive color scheme; both use MIT/Apache-2.0 terms. Skydoves Compose ColorPicker uses Apache-2.0. The package wrapper uses pinned nixpkgs runtime dependencies. FFmpeg is built with GPL support, so the Linux package is distributed under GPL-3.0-or-later; see `Apache-2.0.txt`, `GPL-3.0.txt`, `LGPL-2.1.txt`, and `ISC.txt`. |
-
-The optional Google Sans Flex typeface is bundled with the shared UI under the
-SIL Open Font License 1.1. Its license is included in the offline license
-viewer and `kotlin/shared-assets/licenses/GoogleSansFlex-OFL.txt`.
-
-The Compose Desktop Linux and Windows distributions bundle JNA 5.19.1. Its JAR
-also contains the `META-INF/LICENSE` notice and license references. Source:
-<https://github.com/java-native-access/jna>
-
-## Bundled license files
-
-The KMP applications package the shared license assets from
-`kotlin/shared-assets/licenses/`. They include Apache-2.0 for Kotlin, Compose,
-AndroidX, Media3, Skydoves Compose ColorPicker, and Material Color Utilities; MIT and Apache-2.0 for
-MaterialKolor; Apache-2.0 and LGPL-2.1-or-later for JNA;
-platform/runtime notices where applicable; and the generated Rust dependency
-report, including the MPL-2.0 UniFFI entry. The Linux Nix package and Windows ZIP
-also include the project license and this notice file.
-
-## Rust dependencies
-
-`RUST-DEPENDENCY-LICENSES.txt` lists Rust packages in the shipped application
-dependency graph by license, package name, and version, followed by the license
-texts and any included dependency `NOTICE` or copyright files. Only runtime
-dependencies reachable from `gallery-ffi` are included.
-
-## macOS
-
-macOS is not supported and no macOS distribution is provided.
+The shared assets under `kotlin/shared-assets/licenses/` include the license
+texts and notices used by the application and its distributions, including
+Apache-2.0, MIT, GPL-3.0, LGPL-2.1, LGPL-3.0, ISC, zlib, and the generated Rust
+dependency report. The build assembles these into the offline license viewer
+and distribution resources.
