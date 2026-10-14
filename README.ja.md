@@ -14,8 +14,7 @@
 </p>
 
 <p align="center">
-  <img alt="アプリのプラットフォーム" src="https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20Windows%20x64-informational">
-  <img alt="Windows の JVM・パッケージ検証" src="https://img.shields.io/badge/Windows-JVM%20%2F%20package%20checks-informational">
+  <img alt="アプリのプラットフォーム" src="https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20Windows-informational">
   <img alt="Rust core" src="https://img.shields.io/badge/core-Rust-orange">
   <img alt="Kotlin Multiplatform・Compose UI" src="https://img.shields.io/badge/UI-Kotlin%20Multiplatform%20%2F%20Compose-7F52FF">
   <img alt="既定でオフライン" src="https://img.shields.io/badge/network-offline%20by%20default-success">
