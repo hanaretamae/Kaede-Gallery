@@ -5,13 +5,19 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
+## [2.3.0] - 草案
+
+### 変更
+
+- Linux配布物のJava 25ランタイムを縮小し、デスクトップで使用するMaterial Iconsのみを同梱します。また、通常のmpvとffmpeg-headlessを使用します。
+- AppImageへの Noto Sans CJK の同梱を終了し、日本語などCJK文字の表示はホストにインストールされたフォントに依存します。
+
 ## [2.2.0] - 草案
 
 ### 変更
 
 - デスクトップ実行環境とビルド環境をJava 25へ更新し、JVMバイトコードはJava 17互換を維持します。
 - Linux AArch64とWindows x64にはTemurin 25を使用し、Windows ARM64にはMicrosoft OpenJDK 25を使用します。
-- AppImageへの Noto Sans CJK の同梱を終了し、日本語などCJK文字の表示はホストにインストールされたフォントに依存します。
 
 ## [2.1.3] - 草案
 

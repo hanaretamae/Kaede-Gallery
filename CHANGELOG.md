@@ -3,13 +3,19 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.3.0] - Draft
+
+### Changed
+
+- Reduce Linux bundle size with a minimized Java 25 runtime, only the Material Icons used by the desktop app, regular mpv, and headless FFmpeg.
+- Stop bundling Noto Sans CJK with AppImages; Japanese and other CJK glyph availability depends on host-installed fonts.
+
 ## [2.2.0] - Draft
 
 ### Changed
 
 - Upgrade Desktop runtime and build environments to Java 25 while retaining Java 17-compatible JVM bytecode.
 - Use Temurin 25 for Linux AArch64 runtimes and Windows x64, and Microsoft OpenJDK 25 on Windows ARM64.
-- Stop bundling Noto Sans CJK with AppImages; Japanese and other CJK glyph availability now depends on host-installed fonts.
 
 ## [2.1.3] - Draft
 
