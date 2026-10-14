@@ -5,6 +5,13 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
+## [2.2.0] - 草案
+
+### 変更
+
+- デスクトップ実行環境とビルド環境をJava 25へ更新し、JVMバイトコードはJava 17互換を維持します。
+- Linux AArch64とWindows x64にはTemurin 25を使用し、Windows ARM64にはMicrosoft OpenJDK 25を使用します。
+
 ## [2.1.3] - 草案
 
 ### 追加
