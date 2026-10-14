@@ -1,39 +1,42 @@
-# Release and build guide
+# Build and release guide
 
-`VERSION` is the single application version source. Official releases use a tag matching it exactly, without a `v` prefix. Beta tags such as `2.0.0b5` and release-candidate tags such as `2.0.0rc1` become GitHub prereleases whose title is the version only.
+This is the maintainer procedure for building and publishing Kaede Gallery.
+Keep release-specific status and asset lists in GitHub Release metadata or
+versioned release notes; this guide describes the repeatable process.
 
-## Choose a route
+[`docs/design.md`](design.md) is authoritative for architecture and project
+constraints. Never use a user's Vault as a release or test fixture.
 
-| Route | What it produces | Where it runs |
-| --- | --- | --- |
-| Full release (stable, beta, or release candidate) | Production-signed universal, arm64-v8a, and x86_64 Android APKs; x86_64 and AArch64 Linux bundles; checksums; and a version-titled GitHub Release | Local Linux host through `tools/release.sh`; Windows ZIP is attached afterward by Actions |
-| Optional remote builds | Android debug APK and/or Linux AArch64 bundle as temporary workflow artifacts | Manually dispatched Actions workflow; not a production release |
-| Entirely Actions-based signed release | Not currently supported | No workflow currently handles Android production signing and creates the complete release |
+## Release routes
 
-Before documenting a release as published, verify the public GitHub Release and
-its actual uploaded assets. A tag or configured workflow alone is not evidence
-of publication.
+| Route | Output |
+| --- | --- |
+| Local production release with `tools/release.sh` | Signed universal, arm64-v8a, and x86_64 Android APKs; self-contained x86_64 and AArch64 Linux `.tar.zst` archives and AppImages; license materials, checksums, and a GitHub Release |
+| Manual Windows workflow with a release tag | Windows x64 and ARM64 ZIPs attached to an existing GitHub Release, with updated checksums |
+| Manual Windows workflow without a tag | Windows ZIP build artifacts without a GitHub Release attachment |
+| Optional Android/Linux workflow | Android debug APK and/or an AArch64 Linux bundle as temporary Actions artifacts |
 
-## Historical release exception
+The release tag must match `VERSION` exactly and must not have a `v` prefix.
+Tags with a beta (`bN`) or release-candidate (`rcN`) suffix are published as
+prereleases. `tools/release.sh` reads release notes from the matching section
+in `CHANGELOG.md`.
 
-The `2.0.0b4` prerelease has no Windows ZIP: workflow run
-[38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
-failed in `LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`,
-so its archive and upload steps were skipped. Phase 14 was subsequently closed
-by explicit owner approval using the successful Windows workflow run
-[38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594);
-the missing b4 artifact remains a waived historical omission, not a passed
-upload. Do not move or recreate historical tags.
+## Prepare a release
 
-Android version codes reserve suffixes b1-b898 for beta builds, rc1-rc100 for release candidates, and 999 for the final release. The release script permits Markdown-only documentation commits after the tag, except changes to `CHANGELOG.md`; it requires the current commit to match `origin/main`. Keep the release notes and all non-documentation release code at the tagged commit.
+Only the release owner should authorize a release, update `VERSION`, create
+tags, or publish artifacts. Before tagging:
 
-## Full release from a local Linux host
+- Review and update `CHANGELOG.md` from the actual implementation and verified
+  results.
+- Run the Rust and Kotlin checks required by the changes. The release script
+  also runs its required test suites and safety checks.
+- Commit the reviewed changes to `main`, push them, and confirm the worktree is
+  clean. The release script requires the commit to match `origin/main`.
+- Confirm `VERSION` and the release-note heading agree. Do not reuse a
+  previously published tag.
 
-For a new, unpublished release only, use a clean checkout of the reviewed
-`main` commit and confirm `VERSION` matches the intended release tag. Do not
-rerun the procedure for an already-published tag. The release script verifies
-the tag, branch, GitHub authentication, test prerequisites, signing files,
-Rust targets, and Nix builders before publishing.
+For example, from a clean checkout after the release owner has approved the
+version and changelog:
 
 ```sh
 git switch main
@@ -43,69 +46,102 @@ cat VERSION
 git status --short
 ```
 
-Configure paths to the KeePassXC database and key file locally. Do not place their contents in the repository, command arguments, or chat.
+## Publish Android and Linux artifacts
+
+Use a Linux host with the pinned Nix development environment, authenticated
+GitHub CLI, KeePassXC CLI, Android SDK/NDK, and Rustup 1.98.1. The Android
+targets `aarch64-linux-android` and `x86_64-linux-android` must already be
+installed for that toolchain. The release script runs the Rust workspace
+tests, Kotlin/JVM tests, Android release assembly and validation, and builds
+both Linux architectures. The AArch64 Linux package is cross-built from an
+x86_64 Linux host.
+
+Enter the development shell and point the script to the local KeePassXC
+database and key file. Do not put their contents or signing credentials in the
+repository, command arguments, or chat.
 
 ```sh
+nix develop
 export KEEPASSXC_DATABASE="/absolute/path/to/signing-database.kdbx"
 export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
 release_tag="$(cat VERSION)"
+```
+
+The release script uses the KeePassXC entry `Kaede Gallery Android signing`
+and attachment `release.jks` by default. It requires `XDG_RUNTIME_DIR` to be a
+private directory owned by the current user with mode `700`; temporary signing
+material is stored there and removed by the script.
+
+Create and push the annotated tag only after the reviewed release commit is
+already on `origin/main`. The script verifies the local and remote tag, source
+commit, credentials, release notes, and build prerequisites before publishing.
+
+```sh
+git tag -a "$release_tag" -m "$release_tag"
+git push origin main "$release_tag"
 tools/release.sh "$release_tag"
 ```
 
-The expected KeePassXC entry defaults to `Kaede Gallery Android signing`, with
-attachment `release.jks`. The script exports the key temporarily, builds and
-verifies the signed universal, arm64-v8a, and x86_64 APKs, runs the Rust and
-Kotlin tests, creates x86_64 and AArch64 Linux bundles as `.tar.zst` archives
-and `.AppImage` files (a pinned `appimagetool` and type2 runtime from the flake
-wrap the Nix bundle), calculates checksums, and publishes a version-titled
-stable release or prerelease according to the tag. Linux bundles are
-self-contained Nix closures including pinned `mpv`, `ffmpeg`, runtime
-libraries, and license materials; the release script checks that both media
-tools are present in each architecture's package closure before bundling. It
-requires Rustup 1.98.1 with `aarch64-linux-android` and `x86_64-linux-android`
-targets already installed. Both Linux bundles are built on an x86_64 Linux
-builder; the AArch64 Rust FFI is cross-compiled and target-native runtime files
-are assembled without QEMU/binfmt or an AArch64/remote builder.
-`XDG_RUNTIME_DIR` must be a private directory owned by the current user with
-mode `700`; signing material is kept there. Large temporary release artifacts
-are staged in a private directory under `TMPDIR` (default `/tmp`) to avoid
-filling small runtime tmpfs mounts.
-
-After creating a future GitHub Release, build and attach its Windows ZIP through the manual Windows workflow:
+The script creates the GitHub Release and its Android/Linux assets. After it
+finishes, start the Windows workflow to build both Windows architectures and
+attach their ZIPs:
 
 ```sh
 gh workflow run windows.yml \
   --repo hanaretamae/Kaede-Gallery \
   --ref main \
-  --field tag="$(cat VERSION)"
+  --field tag="$release_tag"
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
-The workflow verifies the tag and version, packages Windows x64, and uploads the ZIP and updated checksums to the existing release. It cannot create the release itself. Both Windows workflows package `Kaede-Gallery.exe` with `LICENSE`, English and Japanese READMEs, and English and Japanese third-party notices beside the launcher; verify these files in the artifact before distribution.
+The Windows workflow requires the release to exist first. It verifies that
+the tag matches `VERSION`, packages `Kaede-Gallery.exe` with the project and
+third-party notices, and updates the release checksums.
 
-## Optional remote builds
+## Optional artifact builds
 
-For artifact-only Android/Linux ARM builds, enter the Nix development shell and use the CLI wrapper. The default ref is `main`; the optional second argument selects another branch or tag containing the workflow.
+The optional Android/Linux workflow is manually dispatched; it does not run
+for pushes or pull requests and does not sign production APKs or publish
+releases. It can build an Android debug APK, an AArch64 Linux bundle, or both.
+Artifacts are temporary and retained for 14 days.
+
+From `nix develop`, use:
 
 ```sh
-nix develop
 tools/run-optional-builds.sh android-debug
 tools/run-optional-builds.sh linux-aarch64
 tools/run-optional-builds.sh both
 ```
 
-Choose one target per invocation. The workflow also appears in the GitHub Actions UI as **Optional Android and Linux AArch64 builds**. It is manual-only, keeps local builds as the normal path, and uploads artifacts for 14 days. `android-debug` is a debug-signed APK, not the production APK; `linux-aarch64` cross-builds an AArch64 bundle on an x86_64 runner. This workflow does not build the x86_64 release bundle, create a GitHub Release, or sign/publish a production Android APK.
+An optional second argument selects the workflow ref. The authenticated GitHub
+CLI is required.
 
-The automatic `kotlin-windows.yml` artifact and the manual `windows.yml` ZIP both include checksum-verified Windows mpv/FFmpeg builds under `tools/` and their license texts under `licenses/`. The manual workflow can produce an artifact without a tag, but it only attaches a ZIP when dispatched with a tag for an already-created GitHub Release.
+The manual Windows workflow can also be dispatched without a tag to build
+ZIP artifacts only. Its artifacts are retained for seven days. Supplying a
+tag attaches the Windows ZIPs to an existing release.
 
-## Entirely Actions-based production release
+## Verify publication
 
-A complete Actions-only signed release is **not available yet**. The current production signing process reads the keystore and password from the release owner's local KeePassXC database. The optional build workflow only creates temporary debug/build artifacts, and the Windows workflow requires a release to exist first.
+Do not describe a release as published based on a tag, workflow definition, or
+successful build alone. Inspect the public GitHub Release and verify its
+actual assets and checksums:
 
-Supporting a full remote release would require a dedicated protected release
-workflow, a deliberate decision to provide the Android signing keystore/password
-through a protected GitHub Environment or an external secret manager, and CI
-verification of the signed APKs and all release bundles. Do not upload the
-KeePassXC database/key file or put signing material in repository files. This
-remote signing setup has not been approved or configured. Use the local release
-procedure above only for a new, approved version.
+```sh
+gh release view "$release_tag" --repo hanaretamae/Kaede-Gallery
+verify_dir="$(mktemp -d)"
+gh release download "$release_tag" \
+  --repo hanaretamae/Kaede-Gallery \
+  --dir "$verify_dir"
+(cd "$verify_dir" && sha256sum -c SHA256SUMS)
+```
+
+Review the downloaded asset names and contents against the release notes and
+intended targets. Remove the temporary verification directory afterward.
+
+## Signing boundary
+
+Production Android signing is performed locally by `tools/release.sh`, which
+retrieves credentials from the release owner's KeePassXC database. The
+Actions workflows do not perform the complete production signing and
+publication process. Never upload the KeePassXC database or key file, or
+store signing material in repository files.

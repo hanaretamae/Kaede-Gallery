@@ -1,37 +1,39 @@
 # ビルド・リリース手順
 
-アプリの唯一のバージョン源は `VERSION` です。正式リリースのタグは `VERSION` と完全一致させ、先頭に `v` を付けません。`2.0.0b5` のような beta と `2.0.0rc1` のような release candidate は、バージョンだけをタイトルにした GitHub prerelease になります。
+Kaede Gallery のビルド・公開に関する開発者向け手順です。
+リリース固有の状況や配布物一覧は GitHub Release metadata または
+versioned release notes に記録し、このガイドでは再利用する手順を説明します。
 
-## 方法を選ぶ
+アーキテクチャとプロジェクトの制約は
+[`docs/design.md`](design.md) を基準とします。
+リリース・テストにユーザーの Vault を使わないでください。
 
-| 方法 | 成果物 | 実行場所 |
-| --- | --- | --- |
-| 完全なリリース（安定版／beta／release candidate） | production署名済みuniversal／arm64-v8a／x86_64 Android APK、x86_64/AArch64 Linux bundle（`.tar.zst` と `.AppImage`）、チェックサム、バージョン名のGitHub Release | ローカルLinuxで `tools/release.sh` を実行し、その後Windows ZIPをActionsで添付 |
-| 任意のリモートビルド | Android debug APK、および／またはLinux AArch64 bundleの一時artifact | 手動起動するActions。production releaseではない |
-| 署名付きリリースを全てActionsで実行 | **現在は未対応** | Android production署名から完全なRelease作成までを行うworkflowはまだない |
+## リリース経路
 
-リリース公開済みと記載する前に、公開中の GitHub Release と実際の配布物を確認してください。
-tag や workflow の設定・成功だけでは、公開の証拠になりません。
+| 経路 | 成果物 |
+| --- | --- |
+| `tools/release.sh` によるローカル production release | 署名済み universal／arm64-v8a／x86_64 Android APK、自己完結した x86_64／AArch64 Linux `.tar.zst` archive と AppImage、ライセンス資料、チェックサム、GitHub Release |
+| tag を指定した Windows 手動 workflow | Windows x64／ARM64 ZIP を既存 GitHub Release に添付し、チェックサムを更新 |
+| tag なしの Windows 手動 workflow | GitHub Release へ添付しない Windows ZIP build artifact |
+| 任意の Android/Linux workflow | Android debug APK、および／または AArch64 Linux bundle の一時 Actions artifact |
 
-## 過去のリリースに関する例外
+release tag は `VERSION` と完全一致させ、先頭に `v` を付けません。
+beta (`bN`) または release candidate (`rcN`) suffix がある tag は prerelease になります。
+`tools/release.sh` は `CHANGELOG.md` の一致する見出しから release note を読み込みます。
 
-過去の `2.0.0b4` prerelease には Windows ZIP がありません。Windows workflow run
-[38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012) は
-`LinuxPortalDirectoryPickerTest.resolvesPortalImportAndExportFilesWithoutAcceptingNonLocalUris`
-で失敗し、archive 作成と upload は skip されました。その後、Release owner は
-成功した Windows workflow run
-[38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594)
-を根拠に Phase 14 を完了扱いとしました。b4 固有の欠落は明示的に免除された
-歴史的項目であり、ZIP を upload 済みとは記録しません。過去の tag を移動・
-作り直ししないでください。
+## リリースの準備
 
-Android version codeではbetaをb1〜b898、release candidateをrc1〜rc100、安定版を999として予約します。タグ作成後に許されるのは、`CHANGELOG.md` 以外のMarkdownドキュメント変更だけです。リリーススクリプトは現在のコミットと `origin/main` が一致することも検査します。リリースノートとドキュメント以外のリリースコードはタグ時点のままにしてください。
+`VERSION` の変更、tag 作成、artifact の公開にはリリース担当者の承認が必要です。
+tag を作成する前に次を確認してください。
 
-## ローカルLinuxで完全なリリースを作成
+- 実装差分と実際に確認した結果に基づき、`CHANGELOG.md` を更新・レビューする。
+- 変更に必要な Rust / Kotlin check を実行する。リリーススクリプトも必要な test suite と安全性確認を実行する。
+- レビュー済み変更を `main` に commit・push し、作業ツリーが clean であることを確認する。
+  スクリプトは commit が `origin/main` と一致することを要求する。
+- `VERSION` と release note の見出しが一致することを確認する。
+  公開済み tag を再利用しない。
 
-以下の手順は、新しく公開するリリース向けです。レビュー済み `main` commitを使い、
-`VERSION` がRelease tagと一致すること、作業ツリーに未コミット変更がないことを確認します。
-すでに公開した tag でリリース処理を再実行しないでください。
+リリース担当者が version と changelog を承認した後、clean checkout で次を実行します。
 
 ```sh
 git switch main
@@ -41,64 +43,96 @@ cat VERSION
 git status --short
 ```
 
-KeePassXCデータベースとキーファイルのパスをローカル環境変数に設定します。ファイルの内容や秘密鍵そのものをリポジトリ、コマンド引数、チャットに入れないでください。
+## Android / Linux artifact の公開
+
+固定 Nix 開発環境、認証済み GitHub CLI、KeePassXC CLI、Android SDK/NDK、
+Rustup 1.98.1 を備えた Linux host を使います。
+`aarch64-linux-android` と `x86_64-linux-android` Rust target は、
+その toolchain に事前インストールされている必要があります。
+リリーススクリプトは Rust workspace test、Kotlin/JVM test、Android release の
+build・検証を行い、Linux の両 architecture を作成します。
+AArch64 Linux package は x86_64 Linux host から cross-build します。
+
+開発 shell に入り、ローカルの KeePassXC database と key file を指定します。
+ファイルの内容や署名情報をリポジトリ・コマンド引数・chat に含めないでください。
 
 ```sh
+nix develop
 export KEEPASSXC_DATABASE="/absolute/path/to/signing-database.kdbx"
 export KEEPASSXC_KEY_FILE="/absolute/path/to/signing-key-file"
 release_tag="$(cat VERSION)"
+```
+
+既定の KeePassXC entry は `Kaede Gallery Android signing`、
+attachment は `release.jks` です。`XDG_RUNTIME_DIR` は現在のユーザーが所有する
+mode `700` の private directory でなければなりません。
+一時的な署名素材はこの場所に保存され、スクリプト終了時に削除されます。
+
+レビュー済みリリース commit がすでに `origin/main` にあることを確認してから、
+annotated tag を作成・push します。スクリプトは local/remote tag、source commit、
+認証情報、release note、build 前提条件を検証してから公開します。
+
+```sh
+git tag -a "$release_tag" -m "$release_tag"
+git push origin main "$release_tag"
 tools/release.sh "$release_tag"
 ```
 
-既定のKeePassXCエントリ名は `Kaede Gallery Android signing`、添付ファイル名は
-`release.jks` です。スクリプトは鍵を一時的に取り出し、universal／arm64-v8a／
-x86_64 APKの署名と検証、Rust/Kotlinテスト、x86_64/AArch64 Linux bundleの作成、
-チェックサム計算を行い、tagに応じた安定版またはprereleaseを公開します。
-Linux `.tar.zst` と `.AppImage` は自己完結したNix closureを含み、固定した
-`mpv`・`ffmpeg` と実行時ライブラリ、ライセンス資料を同梱します。bundle作成前に
-両アーキテクチャのpackage closureへ両ツールが含まれることをスクリプトで検査します。
-Rustup 1.98.1と、事前導入済みの `aarch64-linux-android`／`x86_64-linux-android`
-targets が必要です。Linux bundle は x86_64 Linux builder で作成します。
-AArch64 向け Rust FFI をクロスコンパイルし、target runtime を組み立てるため、
-QEMU/binfmt、AArch64 native builder、remote builder は不要です。`XDG_RUNTIME_DIR` は
-現在のユーザー所有でmode `700` のprivate directoryでなければならず、署名素材は
-この中に一時保存します。大容量のrelease一時artifactは、容量の小さいruntime tmpfsを
-使い切らないよう、`TMPDIR`（既定値 `/tmp`）配下のprivate directoryに保存します。
-
-将来のGitHub Release作成後、Windows ZIPを手動workflowで作成・添付します。
+スクリプトが GitHub Release と Android/Linux artifact を作成した後、
+Windows workflow を起動して両 architecture の ZIP を作成・添付します。
 
 ```sh
 gh workflow run windows.yml \
   --repo hanaretamae/Kaede-Gallery \
   --ref main \
-  --field tag="$(cat VERSION)"
+  --field tag="$release_tag"
 gh run list --repo hanaretamae/Kaede-Gallery --workflow windows.yml
 ```
 
-このworkflowはtagとversionを検査し、Windows x64 packageを作り、ZIPと更新後のチェックサムを既存Releaseへアップロードします。Release自体は作成しません。両方のWindows workflowは `Kaede-Gallery.exe` と同じ階層に `LICENSE`、英語・日本語のREADME、英語・日本語のサードパーティライセンス通知を配置します。配布前にartifact内の各ファイルを確認してください。
+Windows workflow は先に Release が存在することを要求します。
+tag と `VERSION` の一致を確認し、プロジェクトおよびサードパーティ通知とともに
+`Kaede-Gallery.exe` を package 化して、release のチェックサムを更新します。
 
-## 任意のリモートビルド
+## 任意の artifact build
 
-Android／Linux ARMのartifactだけを作る場合は、Nix開発環境に入り、CLI wrapperから起動します。refの既定値は `main` です。第2引数にはworkflowを含む別のbranchまたはtagを指定できます。
+任意の Android/Linux workflow は手動起動のみです。push / pull request では起動せず、
+production APK の署名や Release の公開も行いません。
+Android debug APK、AArch64 Linux bundle、または両方を build できます。
+artifact の保存期間は14日です。
+
+`nix develop` 内から次を実行します。
 
 ```sh
-nix develop
 tools/run-optional-builds.sh android-debug
 tools/run-optional-builds.sh linux-aarch64
 tools/run-optional-builds.sh both
 ```
 
-1回の起動につき、いずれか1つを選んでください。GitHub Actions画面の **Optional Android and Linux AArch64 builds** からも起動できます。これは手動専用で、ローカルビルドを通常の方法とし、artifactは14日間保存します。`android-debug` はdebug署名APKで、production APKではありません。`linux-aarch64` は x86_64 runner 上で AArch64 bundle をクロスビルドします。このworkflowはx86_64のrelease bundle、GitHub Release、production署名済みAndroid APKを作成・公開しません。
+第2引数で workflow ref を指定できます。認証済み GitHub CLI が必要です。
 
-自動実行の `kotlin-windows.yml` artifact と手動実行の `windows.yml` ZIP には、チェックサムを検証したWindows版mpv／FFmpegを `tools/` に、ライセンステキストを `licenses/` に同梱します。手動workflowはtagなしならWindows artifactを作れますが、tagを指定した場合も、同じtagのGitHub Releaseがすでに存在するときに限りZIPを添付します。
+Windows 手動 workflow は tag を指定せずに起動すると、ZIP artifact の build のみ行います。
+artifact の保存期間は7日です。tag を指定した場合は既存 Release に ZIP を添付します。
 
-## Actionsだけでproduction releaseを行う方法
+## 公開の確認
 
-production署名を含む完全なActions-only releaseは**現在未対応**です。現在の署名手順は、リリース担当者のローカルKeePassXCデータベースからkeystoreとpasswordを読み取ります。任意のビルドworkflowは一時的なdebug/build artifactを作るだけで、Windows workflowは先にReleaseが存在することを要求します。
+tag、workflow の定義、build 成功だけで公開済みとは判断しないでください。
+公開中の GitHub Release に実際の artifact が存在することと、チェックサムを確認します。
 
-全てをリモートで行うには、保護されたrelease workflow、Android署名keystore/passwordを
-GitHub Environment secretまたは外部secret managerから渡すことについての明示的な決定、
-署名済みAPKと全bundleのCI検証が必要です。KeePassXCデータベースやkey fileを
-アップロードしたり、署名素材をリポジトリファイルに置いたりしないでください。
-このリモート署名構成は未承認・未設定です。ローカル手順は新しい承認済みversionで
-使用してください。
+```sh
+gh release view "$release_tag" --repo hanaretamae/Kaede-Gallery
+verify_dir="$(mktemp -d)"
+gh release download "$release_tag" \
+  --repo hanaretamae/Kaede-Gallery \
+  --dir "$verify_dir"
+(cd "$verify_dir" && sha256sum -c SHA256SUMS)
+```
+
+ダウンロードしたファイル名と内容を release note・対象 platform と照合してください。
+確認後、一時ディレクトリを削除します。
+
+## 署名の境界
+
+Android production 署名は `tools/release.sh` がローカルで行い、
+リリース担当者の KeePassXC database から認証情報を取得します。
+Actions workflow だけでは production 署名から公開までを完結できません。
+KeePassXC database や key file を upload したり、署名素材を repository に保存したりしないでください。

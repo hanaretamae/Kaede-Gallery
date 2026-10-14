@@ -1,10 +1,12 @@
-# Phase 1 performance baseline
+# Historical performance and acceptance measurements
 
-Historical baseline: the Android image/grid benchmark below used the retired
-Flutter UI and does not measure the maintained KMP/Compose app. KMP Android
-SAF scan and Compose grid-frame measurements are recorded later in this
-document for a single API 36 device, provider, and fictional fixture; they do
-not characterize other providers, devices, or large-media loading.
+This document archives dated measurements and acceptance observations; it is
+not a statement of current release status or a general performance guarantee.
+Flutter-era measurements are retained only as migration history and do not
+measure or establish behavior of the maintained KMP/Compose app. KMP Android
+SAF scan and Compose grid-frame results apply only to the recorded API 36
+device, provider, and fictional fixtures, not to other providers, devices, or
+large-media loading.
 
 Measured on 2026-10-01 using the release CLI and fresh generated fictional
 notes/indexes only. Timings are wall-clock values printed by Bash `time`;
@@ -22,7 +24,7 @@ large or malformed notes, memory use, and filtered-query latency were not
 measured here. Re-run `tools/benchmark.sh <note-count> <work-directory>` when
 the scanner or index changes.
 
-## Phase 4 readiness check
+## Phase 4 readiness measurements recorded 2026-10-02
 
 Re-measured on 2026-10-02 with the release CLI and generated fictional data.
 Generation and compilation are excluded from scan timings. Query timings
@@ -34,17 +36,17 @@ include CLI startup and database opening; command output is discarded.
 | 20,000 | 3.164 s | 0.139 s | 0.045 s | 0.256 s | 0.238 s |
 
 All scan runs indexed the expected number of notes with zero warnings. The
-20,000-note unchanged scan is well below the “few seconds” target, and both
+20,000-note unchanged scan was well below the “few seconds” target, and both
 representative tag-filtered list queries completed in under half a second.
 These query timings are single wall-clock measurements, not latency
 distributions.
 
-The Flutter widget suite (25 tests) and static analysis passed. The gallery
-uses a lazy grid and fetches 24 items per page by default. No Flutter code
-refactor was indicated by these checks. Smooth scrolling with a large real
+The historical Flutter widget suite (25 tests) and static analysis passed.
+That gallery used a lazy grid and fetched 24 items per page by default. No
+Flutter code refactor was indicated by these checks. Smooth scrolling with a large real
 Vault, real-media I/O, peak memory, and frame-time profiling were not measured;
-those require an interactive target and representative media and remain useful
-follow-up checks for Linux and Android. Re-run the expanded benchmark with
+those scenarios would require an interactive target and representative media
+to measure. Re-run the expanded benchmark with
 `bash tools/benchmark.sh <note-count> <work-directory>`; it measures full and
 unchanged scans, category lookup, and broad/narrow tag-filtered list queries.
 
@@ -63,19 +65,19 @@ app-private directory and removed after each run.
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
 | 1,000 | 144 ms (132–151) | 497.0 MiB | 506.5 MiB | 9.6 MiB | 1/1 hits (50% of cold + warm lookups) | 12 ms (7–12) | 108 | 12.46 ms (11.41–17.41) |
 
-The RSS values include the integration-test Flutter process; the scan increase
+The RSS values included the integration-test Flutter process; the scan increase
 is measured against its pre-scan baseline. The synthetic platform channel does not measure Android
 `ContentResolver`/DocumentsProvider I/O or device-specific real-media decoding.
 Use this result as a Rust/Flutter/device baseline, not as a claim about large
 Vault throughput. The benchmark reports only aggregate metrics, never paths or
 note contents.
 
-## Current Rust core recheck
+## Rust core measurement snapshot recorded 2026-10-07
 
-Re-measured on 2026-10-07 with the current working-tree Rust core, release CLI,
-and newly generated fictional fixtures. This uses the current default gallery
-eligibility prefix (`source/art`), so only one of the generator's five tag
-patterns is gallery-index eligible. The scan traverses all generated notes;
+Measured on 2026-10-07 with the working-tree Rust core and release CLI at that
+time, using newly generated fictional fixtures. That revision's default
+gallery eligibility prefix (`source/art`) meant only one of the generator's
+five tag patterns was gallery-index eligible. The scan traversed all generated notes;
 the `indexed` CLI count is the eligible subset, not the number of input files.
 These results therefore supersede the earlier statement that every generated
 note was indexed. Query timings include CLI startup and database opening.
@@ -87,11 +89,12 @@ note was indexed. Query timings include CLI startup and database opening.
 
 Fixture generation and compilation are excluded. These are single wall-clock
 measurements on this Linux environment, without memory or UI-frame profiling.
-The 20,000-input full and unchanged scans remain within the stated few-seconds
-target. The connected-device Android benchmark could not be rerun: Flutter
-attempted to install Android Build-Tools 36 into the read-only Nix SDK.
+The recorded 20,000-input full and unchanged scans were within the stated
+few-seconds target. The connected-device Android benchmark was not rerun then:
+the retired Flutter tooling attempted to install Android Build-Tools 36 into
+the read-only Nix SDK.
 
-## 2026-10-07 current working-tree recheck
+## Rust CLI measurement snapshot recorded 2026-10-07
 
 Re-ran the Linux CLI benchmark after the KMP note-structure and Desktop video
 thumbnail changes, using newly generated fictional fixtures. Fixture generation
@@ -109,30 +112,31 @@ warnings. These Rust CLI figures do not measure Compose rendering, Android SAF
 provider I/O, memory use, or frame timings; the KMP Android measurements below
 cover those platform-specific checks.
 
-## 2026-10-10 thumbnail loading redesign
+## Thumbnail loading implementation notes recorded 2026-10-10
 
-The Android gallery now asks the SAF provider for a bounded thumbnail before
-reading and decoding the full media stream, limits concurrent gallery thumbnail
-work to four items, and keeps a 32 MiB private in-memory decoded-thumbnail LRU
-alongside the existing bounded private disk cache. Gallery image children now
-fill their measured 3:4 tile instead of forcing a fixed 220dp height. Android
-video thumbnails try provider previews and multiple sync-frame timestamps to
-handle MP4 files whose first frame is not decodable. These are implementation
-changes, not measured performance results; rerun a generated fictional
-image/video fixture benchmark before claiming that slow-media loading is fixed.
-Within an Android session, resolved media locations are memoized by media ID and
-cleared on rescan to avoid repeating the Rust lookup while scrolling back to
-already visited media. This change has not yet been measured separately.
-Compose gallery and viewer state holders now dispatch repository/FFI reads to
-an injectable background dispatcher, and rapid tag changes are coalesced before
-refreshing the gallery and category counts. This prevents synchronous Rust
-calls from blocking the UI and avoids redundant filter requests; it does not
-reduce the underlying cold SAF read/decode cost. Cold note and display-sized
-image loading still need device measurements; the current scan and grid-frame
+At the recorded revision, the Android gallery asked the SAF provider for a
+bounded thumbnail before reading and decoding the full media stream, limited
+concurrent gallery-thumbnail work to four items, and kept a 32 MiB private
+in-memory decoded-thumbnail LRU alongside the bounded private disk cache.
+Gallery image children filled their measured 3:4 tile instead of forcing a
+fixed 220dp height. Android video thumbnails tried provider previews and
+multiple sync-frame timestamps for MP4 files whose first frame was not
+decodable. These implementation changes were not performance measurements;
+a generated fictional image/video fixture benchmark would be needed to measure
+their effect on slow-media loading.
+That revision memoized resolved media locations by media ID within an Android
+session and cleared them on rescan to avoid repeating the Rust lookup while
+scrolling back to already visited media. This change was not measured
+separately. Compose gallery and viewer state holders dispatched repository/FFI
+reads to an injectable background dispatcher, and rapid tag changes were
+coalesced before refreshing the gallery and category counts. This prevented
+synchronous Rust calls from blocking the UI and avoided redundant filter
+requests; it did not reduce the underlying cold SAF read/decode cost. Cold note
+and display-sized image loading were not measured in this record; the scan and grid-frame
 measurements do not establish a latency comparison with the historical Flutter
 application.
 
-## KMP Android SAF and Compose acceptance
+## KMP Android SAF and Compose measurements recorded 2026-10-07
 
 Measured on 2026-10-07 on the connected RMX6688 (Android 16 / API 36,
 1280x2800, active 120 Hz display) using a dedicated fictional SAF fixture:
@@ -162,9 +166,9 @@ retaining the per-note, per-batch, and per-scan byte limits. Three unchanged
 rescans then completed in 3.736 s, 3.951 s, and 3.592 s; note reads took
 2.412 s, 2.565 s, and 2.282 s, while enumeration took 0.907 s, 0.985 s, and
 0.910 s. The fixture remained exactly 2,000 notes and 246,000 bytes. This
-meets the broad few-seconds target on this device and Documents provider, but
-is not a guarantee for other SAF providers or devices. Each explicit rescan
-still reads all note content. A metadata-only shortcut was not introduced
+recorded scenario was within the broad few-seconds target on this device and
+Documents provider, but is not a guarantee for other providers or devices.
+Each explicit rescan read all note content. A metadata-only shortcut was not introduced
 because providers may omit or coarsen modification times, which could silently
 leave edited Vault notes stale.
 
@@ -186,41 +190,37 @@ The fixture had no media, so KMP thumbnail-cache hits were not applicable;
 Android video playback and thumbnail behavior were separately verified with a
 fictional media fixture.
 
-The current image-loading path now lets independent Rust thumbnail decodes run
-concurrently while serializing only private-cache filesystem operations.
-Android viewer loading requests the selected image before sequentially
-prefetching neighboring images; neighbor prefetches share the bounded decode
-permit used by gallery thumbnails. When no gallery preview is already cached,
-Android and Desktop viewers now request the viewer-sized image directly rather
-than separately generating/decoding a gallery-sized image first. These
-scheduling changes have not been benchmarked against a representative media
-Vault, so they do not establish Dart parity or a measured latency improvement;
-cold provider I/O and image decode timings remain to be measured on the target
-devices. The viewer now resolves adjacent image locations concurrently and
-starts bounded Android decode / Desktop thumbnail prefetch for those neighbors
-in the background, so a subsequent image switch can use the warm decoded-image
-cache. This reduces wait only when prefetch completes before the user switches;
-it can increase background I/O and has not yet been measured on-device.
+The image-loading path described at the time let independent Rust thumbnail
+decodes run concurrently while serializing private-cache filesystem
+operations. Android viewer loading requested the selected image before
+sequentially prefetching neighboring images; neighbor prefetches shared the
+bounded decode permit used by gallery thumbnails. When no gallery preview was
+cached, Android and Desktop viewers requested a viewer-sized image directly
+rather than generating and decoding a gallery-sized image first. No
+representative-media benchmark was recorded, so these scheduling changes did
+not establish Dart parity or a measured latency improvement. Cold provider I/O
+and image-decode timings were not measured on the target devices. The viewer
+also resolved adjacent image locations concurrently and started bounded
+Android decode / Desktop thumbnail prefetch for neighbors in the background.
+This could reduce wait only when prefetch completed before an image switch,
+could increase background I/O, and was not measured on-device in this record.
 
-Gallery thumbnail requests are now gated by the Lazy Grid viewport: Android and
-Desktop defer loading tiles outside the visible range and start requests as
-tiles enter it. This prioritizes the current page without changing image
-resolution or encoding. The viewport scheduling change has not been benchmarked
-on-device.
+Gallery thumbnail requests were gated by the Lazy Grid viewport: Android and
+Desktop deferred loading tiles outside the visible range and started requests
+as tiles entered it. This prioritized the visible range without changing image
+resolution or encoding. The viewport scheduling change was not benchmarked
+on-device in this record.
 
-Image work now uses a bounded priority scheduler on both platforms: the image
-currently open in the viewer takes precedence over visible gallery tiles, and
-neighboring viewer prefetches run last. Desktop image work is capped at four
-concurrent loads rather than competing without a shared limit. Identical
-in-flight requests for the same media and requested size share one provider
-read/decode, while decoded results continue to use the existing bounded memory
-caches. These scheduling and request-coalescing changes have automated
-regression coverage but have not been benchmarked on representative media
-Vaults.
+Image work used a bounded priority scheduler on both platforms: the image open
+in the viewer took precedence over visible gallery tiles, and neighboring
+viewer prefetches ran last. Desktop image work was capped at four concurrent
+loads. Identical in-flight requests for the same media and requested size
+shared one provider read/decode, while decoded results used bounded memory
+caches. These scheduling and request-coalescing changes had automated
+regression coverage but no representative-media benchmark was recorded.
 
-Android's previous 128 MiB total note-content scan cap could silently leave
-later notes without parsed content in larger Vaults. The shared, still-bounded
-SAF limit is now 512 MiB, generated for Android and Rust from `saf-limits.json`.
-A fictional staged-scan regression exceeds the old limit without reading a
-user Vault; representative device scans are still needed to confirm the
-reported missing-note case.
+The record documents increasing Android's total note-content scan cap from
+128 MiB to a bounded 512 MiB, generated for Android and Rust from
+`saf-limits.json`. A fictional staged-scan regression exceeded the old limit
+without reading a user Vault. The figures here do not establish how that
+change performs across SAF providers or devices.

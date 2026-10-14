@@ -24,24 +24,25 @@ must not depend on Kotlin, UniFFI, or UI types.
 
 ## Binding technology and target qualification
 
-The shipped KMP implementation uses UniFFI 0.32.0 through the third-party
-Kotlin Multiplatform Gradle plugin. The plugin is not part of Mozilla's UniFFI
-project ([plugin overview and target
+The repository pins Rust UniFFI 0.32.0 in `crates/gallery-ffi/Cargo.toml` and
+the third-party Kotlin Multiplatform Gradle plugin at 1.3.0 in
+`kotlin/gradle/libs.versions.toml`. The plugin is separate from Mozilla's
+UniFFI project ([plugin overview and target
 matrix](https://ubiqueinnovation.github.io/uniffi-kotlin-multiplatform-bindings/),
-[Mozilla UniFFI](https://github.com/mozilla/uniffi-rs)). The current plugin
-documentation specifies Rust 1.91+, UniFFI 0.32.0, Gradle 9.6.1+, Kotlin
-2.4.0+, and Android Gradle Plugin 9.x. The workspace's declared Rust minimum
-is 1.85, while its pinned build toolchain is 1.98.1. The plugin's `mingwX64`
-target uses GNU Windows ABI. The desktop Compose app instead uses the Windows
-JVM host integration; `mingwX64` is not the application's Windows desktop
-target and is not treated as a supported application ABI. Windows CI verifies
-the JVM host tests and distributable packaging, but physical Windows runtime
-behavior and embedded video playback are not claimed as verified. Keep the
-core minimum Rust version unchanged unless an explicit
-compatibility review justifies a change; isolate any higher toolchain
-requirement to the FFI crate. If target compatibility or supply-chain review
-fails, compare a small owned C ABI facade rather than weakening core
-boundaries.
+[Mozilla UniFFI](https://github.com/mozilla/uniffi-rs)). The shared Rust
+workspace declares a 1.85 minimum; `gallery-ffi` requires Rust 1.91, and
+release builds use Rust 1.98.1. Keep the core minimum unchanged unless an
+explicit compatibility review justifies a change; isolate higher toolchain
+requirements to the FFI crate. Verify the plugin's compatibility requirements
+before upgrading it.
+
+The plugin's `mingwX64` target uses GNU Windows ABI. The desktop Compose app
+instead uses the Windows JVM host integration; `mingwX64` is not the
+application's Windows desktop target or a supported application ABI. Windows
+CI verifies JVM host tests and distributable packaging, not physical Windows
+runtime behavior or embedded video playback. If target compatibility or
+supply-chain review fails, compare a small owned C ABI facade rather than
+weakening core boundaries.
 
 The Kotlin adapter uses `kotlinx-coroutines-core` 1.10.2 to dispatch blocking
 FFI calls to `Dispatchers.IO`; common tests use its matching test artifact.

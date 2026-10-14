@@ -91,10 +91,8 @@ integrations.
     that cross-compiles the Rust FFI and assembles a target-native runtime
     without executing target binaries. Android debug and Linux AArch64 optional
     builds are manual-only; local builds remain the default. The owner closed
-    Phase 14 against the stable `2.0.0` release and successful Windows workflow
-    run [38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594).
-    The missing Windows ZIP for historical prerelease `2.0.0b4` was explicitly
-    waived and was not uploaded.
+    Phase 14 by approval on 2026-10-12. This records completion of the
+    migration phase, not the current availability of release assets.
 15. **Future platform:** Keep the common architecture extensible to macOS and
     iOS. iOS external Vault access remains blocked on a separate design
     decision; do not imply it is supported by this migration.
@@ -105,12 +103,11 @@ below as historical evidence. GitHub Actions run Windows tests/package checks
 on push and pull request, with Android debug and Linux AArch64 optional build
 artifacts available only through manual dispatch. Local builds remain primary,
 and the optional workflow does not sign or publish Android releases.
-The remote `2.0.0b2` tag points to `6fa0080`; it is a historical beta tag and
-must not be moved. The missing `2.0.0b4` Windows archive is a waived historical
-omission, not a delivered artifact. Full Actions-only production release is
-not implemented: the signing flow uses the local KeePassXC database. See
-`docs/releasing.md` for supported release paths and prerequisites. Flutter and
-Dart are not active application, build, or release paths.
+Full Actions-only production release is not implemented: the signing flow uses
+the release owner's local KeePassXC database. See `docs/releasing.md` for
+release procedures. Verify the public GitHub Release and its actual assets
+before documenting release availability. Flutter and Dart are not active
+application, build, or release paths.
 
 ### Phase 13 acceptance status
 
@@ -213,16 +210,10 @@ bundle and license installation. `nix bundle --system x86_64-linux` also
 produced the self-contained Linux release bundle. The Gradle dependency updater
 completed and its JSON output parsed successfully. No user's Vault was used.
 
-**Phase 14 complete (owner-approved closure, 2026-10-12):** Stable `2.0.0` is
-published with Android, Linux x86_64/AArch64, and Windows x64/ARM64 assets. The
-successful Windows workflow run
-[38199667594](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38199667594)
-provides current Windows CI evidence. The older `2.0.0b4` Windows ZIP remains
-absent; the owner explicitly waived that b4-specific gate when closing the
-phase. The earlier failure
-[38136147012](https://github.com/hanaretamae/Kaede-Gallery/actions/runs/38136147012)
-and skipped upload remain historical facts, not a successful artifact
-acceptance. The owner verified the declared AArch64 Linux Desktop build on
+**Phase 14 complete (owner-approved closure, 2026-10-12):** The Kotlin
+Multiplatform migration and its documented acceptance scope are closed. This
+phase record is not evidence that any particular release or asset is currently
+published. The owner verified the declared AArch64 Linux Desktop build on
 2026-10-09 with
 `nix build --system aarch64-linux --no-link .#packages.aarch64-linux.kmpDesktop`
 (exit status 0); the exact builder mechanism was not recorded. Windows builds
@@ -356,12 +347,13 @@ current migration branch at commit `076436a`
 This verifies the Windows build and packaging path, not execution on physical
 Windows hardware or runtime availability of native mpv embedding there.
 Android visual/interaction checks are complete for the documented fixture
-scenarios. The Phase 13 parity gate has passed for the documented acceptance
+scenarios. The Phase 13 parity gate passed for the documented acceptance
 scope. Phase 14 migrated the build and release paths to KMP/Rust and retired the
 Flutter application. The following Android/Windows workflow references and
 pending release items describe an earlier migration checkpoint; Phase 14 was
-later closed by owner approval and stable releases were published. Current
-release assets and build routes are documented in `docs/releasing.md`.
+later closed by owner approval. This Phase 13 record is migration history, not
+evidence of current KMP behavior or release asset availability. Verify actual
+assets on the public Releases page; build procedures are in `docs/releasing.md`.
 KMP now supports editing Flutter-compatible tag color and filter-category
 rules. The most-specific color prefix is applied to filter options and viewer
 tags; category changes are written to private Rust settings and rescan the
@@ -478,15 +470,17 @@ workspace suite and Clippy, desktop tests, and Android debug APK assembly. That
 APK was installed and launched on the connected API 36 device; no Vault was
 selected for this smoke launch.
 
-Latest local verification (2026-10-07): Rust workspace tests, formatting,
-Clippy, and dependency policy checks pass. Kotlin/JVM tests and compilation,
-including generated UniFFI bindings, Android host tests and Android source
-compilation, Android arm64 and x86_64 Rust FFI builds, the Compose Android
-debug APK, and the Linux Compose Desktop distribution build pass. The Android
+Recorded local verification snapshot (2026-10-07): Rust workspace tests,
+formatting, Clippy, and dependency policy checks passed. Kotlin/JVM tests and
+compilation, including generated UniFFI bindings, Android host tests and
+Android source compilation, Android arm64 and x86_64 Rust FFI builds, the
+Compose Android debug APK, and the Linux Compose Desktop distribution build
+passed. The Android
 build uses the installed Rust 1.98.1 Android target libraries and Android NDK
 clang for native cross-compilation; the Nix-packaged Rust compiler alone does
-not include those target libraries. All 62 Flutter tests also pass. These
-checks validate compilation and packaging; shared UI state-holder tests cover
+not include those target libraries. The retired Flutter application also
+passed its 62-test suite at that time. These recorded checks validate
+compilation and packaging only; shared UI state-holder tests cover
 indexed position jumps and loading pages after a jump. A manual Android API 36
 device smoke test selected only `testdata/dummy-vault` through the system folder
 picker, loaded the fixture gallery, rendered SAF-backed note details and an
@@ -498,8 +492,9 @@ defaults, and confirmed both fixture notes and image tile previews returned.
 On 2026-10-07, a separate fictional SAF fixture verified Android H.264 playback
 and exposed a note-tile bug: note summaries had no representative-media kind,
 so video covers were sent to the image decoder. Rust summaries and the UniFFI
-record now carry representative-media kind and availability; note tiles select
-the correct decoder and show the same missing-media state as media tiles. The
+record were updated to carry representative-media kind and availability; note
+tiles selected the correct decoder and showed the same missing-media state as
+media tiles. The
 same device fixture rendered its magenta video thumbnail.
 The Android private-settings writer was corrected to validate the canonical
 app-private path; the update and rescan succeeded on-device. The fixture hashes
