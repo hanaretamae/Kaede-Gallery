@@ -10,8 +10,9 @@ other conflicts instead of silently overriding either contract.
 ## Purpose and scope
 
 Provide an offline gallery for media and metadata in an Obsidian Vault,
-initially targeting Linux and Android, with Windows packaging and CI support.
-Physical Windows runtime behavior is not part of the current acceptance plan.
+targeting Linux, Android, and Windows x64 Desktop. Physical Windows execution
+was not included in Phase 13 acceptance; that historical test boundary is not
+a statement that Windows is unsupported.
 Rust owns parsing, scanning, indexing, filtering, and image thumbnails. Kotlin
 Multiplatform and Compose Multiplatform are the target application and shared
 UI layers; Android and desktop integrations remain platform-specific. The
@@ -49,9 +50,9 @@ integrations.
 5. **Complete (historical Flutter delivery; retired in Phase 14):** Windows x64
    builds previously used a manual GitHub Actions workflow. The KMP replacement
    now provides Windows-host JVM tests, Compose Desktop packaging, and a manual
-   release-attachment workflow. Windows x64 runtime execution is not part of the
-   current acceptance plan; Windows on Arm can run the x64 package under
-   emulation, while native arm64 runtime support is not claimed.
+   release-attachment workflow. Windows x64 is a supported desktop runtime
+   target. Windows on Arm can run the x64 package under emulation; native arm64
+   runtime support is not claimed.
 6. **Complete:** Rust Core readiness. The Rust API, safety, tests, limits, and
    performance baseline have been audited; the Kotlin-facing facade contract
    is documented. Reuse existing functionality instead of duplicating it.
@@ -72,9 +73,10 @@ integrations.
     unchanged-scan target is met on the tested device/provider with the shared
     bound; see `docs/phase1-performance.md`.
 12. **Implemented; runtime acceptance is target-specific:** Linux uses desktop
-    filesystem/window/video integrations. Windows x64 JVM packaging and tests
-    pass CI, including the embedded-mpv platform-selection path. Physical
-    Windows runtime testing is not included in the current acceptance plan.
+    filesystem/window/video integrations. Windows x64 desktop is a supported
+    runtime target; Windows-host JVM packaging and tests pass CI, including the
+    embedded-mpv platform-selection path. Physical Windows execution was not
+    included in Phase 13 acceptance.
 13. **Complete (acceptance gate passed):** Cross-platform functional parity,
     security properties, build/release paths, and performance evidence have
     been checked against the documented fictional fixtures and target-specific
@@ -85,8 +87,9 @@ integrations.
     path. Nix defaults, Gradle dependency locking, Android/Linux release
     scripts, Windows packaging/workflows, license assets, and active developer
     documentation target this implementation. Linux x86_64, Android, and
-    Windows JVM build/package checks have been exercised; physical Windows
-    runtime behavior is not claimed as verified. Linux x86_64 and AArch64
+    Windows x64 are supported runtime targets; Windows JVM build/package
+    checks have been exercised. The Phase 13 acceptance record below does not
+    include physical Windows execution. Linux x86_64 and AArch64
     packages are available, including the x86_64-hosted `aarch64Cross` path
     that cross-compiles the Rust FFI and assembles a target-native runtime
     without executing target binaries. Android debug and Linux AArch64 optional
@@ -226,11 +229,12 @@ default.
 The Flutter/Dart-to-Kotlin migration is complete. The active application is
 Kotlin Multiplatform / Compose with shared gallery, search, filtering, paging,
 settings, note details, and viewer behavior; Rust provides parsing, indexing,
-and the FFI. Android and Linux Desktop are active application targets.
-Windows JVM CI and release packaging are configured, but physical Windows
-runtime behavior is not claimed as verified. Flutter and Dart remain only in
-the historical acceptance record below and are not active application, build,
-or release paths.
+and the FFI. Android, Linux Desktop, and Windows x64 Desktop are supported
+application targets. Windows JVM CI and release packaging are configured.
+Physical Windows execution was outside the Phase 13 acceptance scope recorded
+below; this does not mean that Windows is unsupported. Flutter and Dart remain
+only in the historical acceptance record below and are not active application,
+build, or release paths.
 
 The common viewer delegates media rendering to a platform capability. Linux
 image display is implemented in `desktopApp`;

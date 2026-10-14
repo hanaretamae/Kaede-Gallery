@@ -14,7 +14,7 @@
 </p>
 
 <p align="center">
-  <img alt="App platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20Linux-informational">
+  <img alt="App platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20Linux%20%7C%20Windows%20x64-informational">
   <img alt="Windows build and package checks" src="https://img.shields.io/badge/Windows-JVM%20%2F%20package%20checks-informational">
   <img alt="Rust core" src="https://img.shields.io/badge/core-Rust-orange">
   <img alt="Kotlin Multiplatform and Compose UI" src="https://img.shields.io/badge/UI-Kotlin%20Multiplatform%20%2F%20Compose-7F52FF">
