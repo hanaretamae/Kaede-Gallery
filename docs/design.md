@@ -324,8 +324,10 @@ loading. Linux playback forces mpv's X11 video output so its `--wid` targets
 the Swing canvas under XWayland instead of creating a separate Wayland window.
 The Linux Nix runtime uses `mpv-unwrapped`, `ffmpeg-headless`, and a Temurin 25
 `jlink` image containing the desktop modules, charset and crypto providers,
-zip filesystem support, and English/Japanese locale data. The build JDK is not
-part of the runtime closure. The Linux desktop distribution retains only
+zip filesystem support, and English/Japanese locale data. Its Java launcher
+uses the target Nix runtime loader and libc path so the bundled closure does not
+depend on a host-specific ELF interpreter. The build JDK is not part of the
+runtime closure. The Linux desktop distribution retains only
 Material Icons Extended classes referenced by its shared and desktop Kotlin
 sources. Its launcher prepends the pinned `mpv` and `ffmpeg-headless` binaries
 to `PATH`. Linux release archives and AppImages are

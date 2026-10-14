@@ -44,6 +44,7 @@ jobs:
           :ui:app:jvmTest
           :desktopApp:test
           :desktopApp:createDistributable
+          --no-configuration-cache
       - name: Show native test failures
         if: failure()
         working-directory: kotlin/core/rust/build

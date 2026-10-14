@@ -3,6 +3,13 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.3.1] - Draft
+
+### Fixed
+
+- Use the bundled Linux ELF loader for the Java runtime so Linux bundles and AppImages do not depend on a host-specific interpreter path.
+- Fix the Windows desktop packaging workflow failing on Compose Desktop's Gradle Configuration Cache incompatibility.
+
 ## [2.3.0] - Draft
 
 ### Changed

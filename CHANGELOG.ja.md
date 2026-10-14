@@ -5,6 +5,13 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 このファイルの各リリース項目は AI が実装差分と検証記録から草案を作成し、
 リリース担当者が確認して公開します。
 
+## [2.3.1] - 草案
+
+### 修正
+
+- Linux配布物のJavaランタイムがホスト固有のELFローダーに依存しないよう、同梱ローダーを使用します。
+- Compose Desktopの配布タスクがGradle Configuration Cacheに対応していないため、Windows配布workflowで失敗する問題を修正します。
+
 ## [2.3.0] - 草案
 
 ### 変更

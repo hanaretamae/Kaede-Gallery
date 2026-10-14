@@ -71,6 +71,7 @@
             {
               name,
               targetJdk,
+              targetDynamicLinker ? pkgs.stdenv.cc.bintools.dynamicLinker,
               targetObjcopyCommand ? null,
             }:
             let
@@ -86,6 +87,7 @@
               {
                 nativeBuildInputs = [
                   objcopyTool
+                  pkgs.patchelf
                   pkgs.temurin-bin-25
                 ];
                 dontPatchELF = true;
@@ -101,6 +103,12 @@
                   --no-header-files \
                   --compress=zip-6 \
                   --output "$out"
+                ${pkgs.patchelf}/bin/patchelf \
+                  --set-interpreter "${targetDynamicLinker}" \
+                  --add-rpath "${builtins.dirOf targetDynamicLinker}" \
+                  "$out/bin/java"
+                test "$(${pkgs.patchelf}/bin/patchelf --print-interpreter "$out/bin/java")" = \
+                  "${targetDynamicLinker}"
               '';
           linuxJlinkRuntime = mkJlinkRuntime {
             name = "kaede-gallery-jre-${system}";
@@ -305,6 +313,7 @@
                 aarch64JlinkRuntime = mkJlinkRuntime {
                   name = "kaede-gallery-jre-aarch64";
                   targetJdk = targetPkgs.temurin-bin-25;
+                  targetDynamicLinker = targetPkgs.stdenv.cc.bintools.dynamicLinker;
                   targetObjcopyCommand =
                     "${crossPkgs.stdenv.cc}/bin/aarch64-unknown-linux-gnu-objcopy";
                 };

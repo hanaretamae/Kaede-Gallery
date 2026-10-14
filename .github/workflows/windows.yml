@@ -66,6 +66,7 @@ jobs:
           :ui:app:jvmTest
           :desktopApp:test
           :desktopApp:createDistributable
+          --no-configuration-cache
 
       - name: Assemble Windows release archive
         shell: pwsh
