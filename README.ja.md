@@ -239,7 +239,7 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-Nix シェルには JDK 17、Android SDK（API 35–37.1）、Build Tools 37、
+Nix シェルには JDK 25、Android SDK（API 35–37.1）、Build Tools 37、
 NDK 28.2、CMake 3.22.1 が含まれます。
 
 Android は通常ローカルでビルドします。Rust Android targets を用意し、

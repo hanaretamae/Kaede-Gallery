@@ -44,6 +44,7 @@ dependencies {
 compose.desktop {
     application {
         mainClass = "com.hanaretamae.kaede.desktop.MainKt"
+        jvmArgs += "--enable-native-access=ALL-UNNAMED"
         nativeDistributions {
             windows {
                 iconFile.set(rootProject.file("shared-assets/branding/kaede-gallery-icon.ico"))

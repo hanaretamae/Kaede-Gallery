@@ -273,7 +273,7 @@ LD_LIBRARY_PATH="$(pkg-config --variable=libdir gl):${LD_LIBRARY_PATH}" ./gradle
 ./gradlew :desktopApp:createDistributable
 ```
 
-The Nix shell provides JDK 17, Android SDK (API 35–37.1), Build Tools 37,
+The Nix shell provides JDK 25, Android SDK (API 35–37.1), Build Tools 37,
 NDK 28.2, and CMake 3.22.1.
 
 Build Android locally: install the Rust Android targets, configure the NDK

@@ -1,3 +1,8 @@
+import org.gradle.api.tasks.compile.JavaCompile
+import org.gradle.api.tasks.testing.Test
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+import org.jetbrains.kotlin.gradle.tasks.KotlinJvmCompile
+
 plugins {
     alias(libs.plugins.kotlin.multiplatform) apply false
     alias(libs.plugins.kotlin.jvm) apply false
@@ -24,6 +29,23 @@ require(
     "VERSION must use b1 through b898 or rc1 through rc100 before the final release."
 }
 version = releaseVersion
+
+subprojects {
+    tasks.withType<KotlinJvmCompile>().configureEach {
+        if (project.path == ":desktopApp" || name.contains("Jvm")) {
+            compilerOptions.jvmTarget.set(JvmTarget.JVM_17)
+        }
+    }
+    tasks.withType<JavaCompile>().configureEach {
+        if (project.path == ":desktopApp" || name.contains("Jvm")) {
+            sourceCompatibility = JavaVersion.VERSION_17.toString()
+            targetCompatibility = JavaVersion.VERSION_17.toString()
+        }
+    }
+    tasks.withType<Test>().configureEach {
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
+    }
+}
 
 val prepareDistributionNotices = tasks.register("prepareDistributionNotices") {
     val projectLicense = rootProject.file("../LICENSE")

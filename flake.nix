@@ -95,7 +95,7 @@
             fi
           '';
 
-          gradle = pkgs.gradle_9.override { java = pkgs.jdk17; };
+          gradle = pkgs.gradle_9.override { java = pkgs.jdk25; };
           kmpDesktopItem = pkgs.makeDesktopItem {
             name = "com.hanaretamae.kaede";
             desktopName = "Kaede Gallery";
@@ -117,7 +117,7 @@
             nativeBuildInputs = with pkgs; [
               gradle
               rustupShim
-              jdk17
+              jdk25
               cargo
               rustc
               makeWrapper
@@ -138,11 +138,11 @@
               stdenv.cc.cc.lib
             ];
 
-            JAVA_HOME = "${pkgs.jdk17}";
+            JAVA_HOME = "${pkgs.jdk25}";
             RUSTC = "${pkgs.rustc}/bin/rustc";
             RUSTDOC = "${pkgs.rustc}/bin/rustdoc";
             gradleFlags = [
-              "-Dorg.gradle.java.home=${pkgs.jdk17}"
+              "-Dorg.gradle.java.home=${pkgs.jdk25}"
               "-Porg.gradle.java.installations.auto-download=false"
               "-Porg.gradle.java.installations.auto-detect=false"
               "-Pkaede.uniffi.bindgenSource=../uniffi-bindgen-source"
@@ -206,7 +206,8 @@
                     pkgs.libxkbcommon
                     pkgs.stdenv.cc.cc.lib
                 ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-              exec ${pkgs.jdk17}/bin/java \
+              exec ${pkgs.jdk25}/bin/java \
+                --enable-native-access=ALL-UNNAMED \
                 -Djpackage.app-version=${version} \
                 -Djava.awt.im.style=on-the-spot \
                 -Dcompose.application.resources.dir="$app_dir/resources" \
@@ -303,9 +304,9 @@
                     ${pkgs.zip}/bin/zip -q -d "$rust_jar" linux-x86-64/libgallery_ffi.so
                     mkdir -p "$NIX_BUILD_TOP/kaede-gallery-native/linux-aarch64"
                     cp "$native_library" "$NIX_BUILD_TOP/kaede-gallery-native/linux-aarch64/libgallery_ffi.so"
-                    ${pkgs.jdk17}/bin/jar --update --file "$rust_jar" \
+                    ${pkgs.jdk25}/bin/jar --update --file "$rust_jar" \
                       -C "$NIX_BUILD_TOP/kaede-gallery-native" linux-aarch64/libgallery_ffi.so
-                    ${pkgs.jdk17}/bin/jar --list --file "$rust_jar" |
+                    ${pkgs.jdk25}/bin/jar --list --file "$rust_jar" |
                       grep -Fx linux-aarch64/libgallery_ffi.so
 
                     app_lib="$PWD/desktopApp/build/compose/binaries/main/app/desktopApp/lib/app"
@@ -313,7 +314,7 @@
                     mkdir -p "$NIX_BUILD_TOP/kaede-gallery-skiko-arm64"
                     (
                       cd "$NIX_BUILD_TOP/kaede-gallery-skiko-arm64"
-                      ${pkgs.jdk17}/bin/jar --extract --file ${skikoRuntimeArm64} \
+                      ${pkgs.jdk25}/bin/jar --extract --file ${skikoRuntimeArm64} \
                         libskiko-linux-arm64.so libskiko-linux-arm64.so.sha256
                     )
                     cp "$NIX_BUILD_TOP/kaede-gallery-skiko-arm64/libskiko-linux-arm64.so" "$app_lib/"
@@ -331,7 +332,7 @@
 
                     rm -rf "$app_dir/lib/runtime"
                     mkdir -p "$app_dir/lib/runtime"
-                    cp -a ${targetPkgs.temurin-bin-17}/. "$app_dir/lib/runtime/"
+                    cp -a ${targetPkgs.temurin-bin-25}/. "$app_dir/lib/runtime/"
                     rm -f "$app_dir/lib/libapplauncher.so" "$app_dir/lib/app/.jpackage.xml"
 
                     cat > "$app_dir/bin/desktopApp" <<'EOF'
@@ -353,6 +354,7 @@
                       targetPkgs.stdenv.cc.cc.lib
                     ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
                     exec "$app_dir/../runtime/bin/java" \
+                      --enable-native-access=ALL-UNNAMED \
                       -Djpackage.app-version=${version} \
                       -Djava.awt.im.style=on-the-spot \
                       -Dcompose.application.resources.dir="$app_dir/resources" \
@@ -485,14 +487,14 @@
                 gtk3
                 glib
                 libGL
-                jdk17
+                jdk25
               ])
               ++ [ androidSdk.androidsdk ]
               ++ pkgs.lib.optionals (system == "x86_64-linux") [
                 (appimagetool pkgs)
                 pkgs.zstd
               ];
-            JAVA_HOME = "${pkgs.jdk17}";
+            JAVA_HOME = "${pkgs.jdk25}";
             RUSTC = "${pkgs.rustc}/bin/rustc";
             RUSTDOC = "${pkgs.rustc}/bin/rustdoc";
             ANDROID_HOME = "${androidSdk.androidsdk}/libexec/android-sdk";

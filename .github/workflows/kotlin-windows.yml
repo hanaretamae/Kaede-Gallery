@@ -27,7 +27,7 @@ jobs:
       - uses: actions/setup-java@v5
         with:
           distribution: ${{ matrix.java_distribution }}
-          java-version: "17"
+          java-version: "25"
           cache: gradle
       - uses: dtolnay/rust-toolchain@1.98.1
       - name: Build uniffi runtime for Windows ARM64
