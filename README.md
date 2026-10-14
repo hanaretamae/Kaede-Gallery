@@ -13,6 +13,14 @@
   The application uses Kotlin Multiplatform / Compose and a Rust parser, index, and FFI.
 </p>
 
+<p align="center">
+  <img alt="App platforms" src="https://img.shields.io/badge/platform-Android%20%7C%20Linux-informational">
+  <img alt="Windows build and package checks" src="https://img.shields.io/badge/Windows-JVM%20%2F%20package%20checks-informational">
+  <img alt="Rust core" src="https://img.shields.io/badge/core-Rust-orange">
+  <img alt="Kotlin Multiplatform and Compose UI" src="https://img.shields.io/badge/UI-Kotlin%20Multiplatform%20%2F%20Compose-7F52FF">
+  <img alt="Offline by default" src="https://img.shields.io/badge/network-offline%20by%20default-success">
+</p>
+
 > [!IMPORTANT]
 > Kaede Gallery never writes to your Vault. Indexes, thumbnails, and settings
 > are kept in private application data outside it.
