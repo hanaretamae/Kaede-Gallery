@@ -37,11 +37,6 @@ The optional Google Sans Flex typeface is bundled with the shared UI under the
 SIL Open Font License 1.1. Its license is included in the offline license
 viewer and `kotlin/shared-assets/licenses/GoogleSansFlex-OFL.txt`.
 
-Linux AppImages also bundle the Noto Sans CJK font as a glyph fallback
-under the SIL Open Font License 1.1. Its license is included at
-`licenses/NotoSansCJK-OFL.txt`. Source: <https://github.com/notofonts/noto-cjk>
-via the pinned nixpkgs `noto-fonts-cjk-sans` package.
-
 The Compose Desktop Linux and Windows distributions bundle JNA 5.19.1. Its JAR
 also contains the `META-INF/LICENSE` notice and license references. Source:
 <https://github.com/java-native-access/jna>

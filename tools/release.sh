@@ -233,10 +233,6 @@ command -v nix >/dev/null || fail "Nix is required to build the Linux bundles"
 command -v zstd >/dev/null || fail "zstd is required to package the Linux bundles"
 appimagetool="$(nix build --no-link --print-out-paths ".#packages.x86_64-linux.appimagetool")" ||
   fail "could not build the pinned appimagetool"
-noto_fonts="$(nix build --no-link --print-out-paths ".#packages.x86_64-linux.appimageNotoFonts")" ||
-  fail "could not build the pinned Noto CJK font"
-noto_font="$noto_fonts/share/fonts/opentype/noto-cjk/NotoSansCJK-Regular.ttc"
-[[ -f $noto_font ]] || fail "the Noto CJK fallback font was not produced"
 for arch in x86_64 aarch64; do
   package=default
   [[ $arch != aarch64 ]] || package=aarch64Cross
@@ -245,10 +241,13 @@ for arch in x86_64 aarch64; do
     fail "could not build the Linux $arch package"
   linux_closure="$(nix path-info --recursive "$linux_package")" ||
     fail "could not inspect the Linux $arch package closure"
-  for media_tool in ffmpeg mpv; do
-    grep -Eq -- "/nix/store/[a-z0-9]+-${media_tool}(-[^/]*)?$" <<< "$linux_closure" ||
-      fail "the Linux $arch package closure does not include $media_tool"
-  done
+  grep -Eq -- '/nix/store/[a-z0-9]+-ffmpeg-headless-[^/]+$' <<< "$linux_closure" ||
+    fail "the Linux $arch package closure does not include ffmpeg-headless"
+  grep -Eq -- '/nix/store/[a-z0-9]+-mpv-[0-9][^/]*$' <<< "$linux_closure" ||
+    fail "the Linux $arch package closure does not include unwrapped mpv"
+  if grep -Eq -- '/nix/store/[a-z0-9]+-ffmpeg-[0-9][^/]*-bin$' <<< "$linux_closure"; then
+    fail "the Linux $arch package closure still includes a standalone non-headless ffmpeg binary"
+  fi
   linux_out="$dist_dir/linux-$arch"
   nix bundle --system x86_64-linux --out-link "$linux_out" \
     "$installable" ||
@@ -262,10 +261,7 @@ for arch in x86_64 aarch64; do
   chmod 755 "$linux_stage/kaede-gallery"
 
   appdir="$dist_dir/AppDir-$arch"
-  mkdir -p -- \
-    "$appdir/usr/bin" \
-    "$appdir/usr/share/fontconfig" \
-    "$appdir/usr/share/fonts/opentype/noto-cjk"
+  mkdir -p -- "$appdir/usr/bin"
   cp -- "$linux_stage/kaede-gallery" "$appdir/usr/bin/kaede-gallery"
   mkdir -p -- "$appdir/usr/share/doc/kaede-gallery"
   license_dir="$appdir/usr/share/licenses/kaede-gallery"
@@ -276,12 +272,6 @@ for arch in x86_64 aarch64; do
   install -m 644 LICENSE "$license_dir/LICENSE"
   cp -a kotlin/shared-assets/licenses/. \
     "$license_dir/licenses/"
-  install -m 644 packaging/appimage/NotoSansCJK-OFL.txt \
-    "$license_dir/licenses/NotoSansCJK-OFL.txt"
-  install -m 644 packaging/appimage/fonts.conf \
-    "$appdir/usr/share/fontconfig/fonts.conf"
-  install -m 644 "$noto_font" \
-    "$appdir/usr/share/fonts/opentype/noto-cjk/NotoSansCJK-Regular.ttc"
   install -m 755 packaging/appimage/AppRun "$appdir/AppRun"
   install -m 644 packaging/appimage/com.hanaretamae.kaede.desktop "$appdir/com.hanaretamae.kaede.desktop"
   install -m 644 kotlin/shared-assets/branding/kaede-gallery-icon.png "$appdir/kaede-gallery.png"

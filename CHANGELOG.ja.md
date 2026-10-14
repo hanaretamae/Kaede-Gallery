@@ -11,6 +11,7 @@ English release notes: [CHANGELOG.md](CHANGELOG.md).
 
 - デスクトップ実行環境とビルド環境をJava 25へ更新し、JVMバイトコードはJava 17互換を維持します。
 - Linux AArch64とWindows x64にはTemurin 25を使用し、Windows ARM64にはMicrosoft OpenJDK 25を使用します。
+- AppImageへの Noto Sans CJK の同梱を終了し、日本語などCJK文字の表示はホストにインストールされたフォントに依存します。
 
 ## [2.1.3] - 草案
 

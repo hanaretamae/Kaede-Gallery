@@ -57,9 +57,9 @@
         packages:
         packages.lib.makeBinPath [
           packages.coreutils
-          packages.ffmpeg
+          packages.ffmpeg-headless
           packages.glib
-          packages.mpv
+          packages.mpv-unwrapped
         ];
     in
     {
@@ -67,6 +67,45 @@
         system:
         let
           pkgs = mkPkgs system;
+          mkJlinkRuntime =
+            {
+              name,
+              targetJdk,
+              targetObjcopyCommand ? null,
+            }:
+            let
+              objcopyTool =
+                if targetObjcopyCommand == null then
+                  pkgs.binutils
+                else
+                  pkgs.writeShellScriptBin "objcopy" ''
+                    exec ${targetObjcopyCommand} "$@"
+                  '';
+            in
+            pkgs.runCommand name
+              {
+                nativeBuildInputs = [
+                  objcopyTool
+                  pkgs.temurin-bin-25
+                ];
+                dontPatchELF = true;
+                dontStrip = true;
+              }
+              ''
+                ${pkgs.temurin-bin-25}/bin/jlink \
+                  --module-path "${targetJdk}/jmods" \
+                  --add-modules java.desktop,java.instrument,java.logging,jdk.charsets,jdk.crypto.ec,jdk.localedata,jdk.unsupported,jdk.zipfs \
+                  --include-locales en,ja \
+                  --strip-debug \
+                  --no-man-pages \
+                  --no-header-files \
+                  --compress=zip-6 \
+                  --output "$out"
+              '';
+          linuxJlinkRuntime = mkJlinkRuntime {
+            name = "kaede-gallery-jre-${system}";
+            targetJdk = pkgs.temurin-bin-25;
+          };
           cargoVendor = pkgs.rustPlatform.fetchCargoVendor {
             src = self;
             cargoLock.lockFile = ./Cargo.lock;
@@ -186,6 +225,7 @@
               app_dir="$out/share/kaede-gallery"
               mkdir -p "$app_dir"
               cp -a desktopApp/build/compose/binaries/main/app/desktopApp/. "$app_dir/"
+              rm -rf "$app_dir/lib/runtime"
               rm -f "$app_dir/lib/libapplauncher.so" "$app_dir/lib/app/.jpackage.xml"
 
               cat > "$app_dir/bin/desktopApp" <<'EOF'
@@ -206,7 +246,7 @@
                     pkgs.libxkbcommon
                     pkgs.stdenv.cc.cc.lib
                 ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-              exec ${pkgs.jdk25}/bin/java \
+              exec ${linuxJlinkRuntime}/bin/java \
                 --enable-native-access=ALL-UNNAMED \
                 -Djpackage.app-version=${version} \
                 -Djava.awt.im.style=on-the-spot \
@@ -262,6 +302,12 @@
                 targetPkgs = mkPkgs "aarch64-linux";
                 crossPkgs = pkgs.pkgsCross.aarch64-multiplatform;
                 crossRustc = crossPkgs.pkgsBuildHost.rustc;
+                aarch64JlinkRuntime = mkJlinkRuntime {
+                  name = "kaede-gallery-jre-aarch64";
+                  targetJdk = targetPkgs.temurin-bin-25;
+                  targetObjcopyCommand =
+                    "${crossPkgs.stdenv.cc}/bin/aarch64-unknown-linux-gnu-objcopy";
+                };
                 skikoRuntimeArm64 = pkgs.fetchurl {
                   url = "https://repo.maven.apache.org/maven2/org/jetbrains/skiko/skiko-awt-runtime-linux-arm64/0.153.0/skiko-awt-runtime-linux-arm64-0.153.0.jar";
                   hash = "sha256-+Jh77caV+q/658qimIVcJaBf1ZoVMXOkN5GKkuGXhkY=";
@@ -331,8 +377,6 @@
                     cp -a "$app_image/." "$app_dir/"
 
                     rm -rf "$app_dir/lib/runtime"
-                    mkdir -p "$app_dir/lib/runtime"
-                    cp -a ${targetPkgs.temurin-bin-25}/. "$app_dir/lib/runtime/"
                     rm -f "$app_dir/lib/libapplauncher.so" "$app_dir/lib/app/.jpackage.xml"
 
                     cat > "$app_dir/bin/desktopApp" <<'EOF'
@@ -353,7 +397,7 @@
                       targetPkgs.libxkbcommon
                       targetPkgs.stdenv.cc.cc.lib
                     ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-                    exec "$app_dir/../runtime/bin/java" \
+                    exec ${aarch64JlinkRuntime}/bin/java \
                       --enable-native-access=ALL-UNNAMED \
                       -Djpackage.app-version=${version} \
                       -Djava.awt.im.style=on-the-spot \
@@ -415,7 +459,6 @@
         // pkgs.lib.optionalAttrs (system == "x86_64-linux") {
           aarch64Cross = aarch64CrossDesktop;
           appimagetool = appimagetool pkgs;
-          appimageNotoFonts = pkgs.noto-fonts-cjk-sans.override { static = true; };
           appimageRuntimeX86_64 = appimageRuntimes.x86_64 pkgs;
           appimageRuntimeAarch64 = appimageRuntimes.aarch64 pkgs;
         }

@@ -9,6 +9,7 @@ See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier re
 
 - Upgrade Desktop runtime and build environments to Java 25 while retaining Java 17-compatible JVM bytecode.
 - Use Temurin 25 for Linux AArch64 runtimes and Windows x64, and Microsoft OpenJDK 25 on Windows ARM64.
+- Stop bundling Noto Sans CJK with AppImages; Japanese and other CJK glyph availability now depends on host-installed fonts.
 
 ## [2.1.3] - Draft
 

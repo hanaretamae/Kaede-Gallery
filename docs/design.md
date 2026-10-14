@@ -310,11 +310,11 @@ caches are invalidated on rescan or Vault removal. Video previews also fall
 back across multiple sync-frame timestamps when the first MP4 frame cannot be
 decoded. These changes still require a fresh large-media latency benchmark.
 Linux and Windows video are rendered in an embedded native child window from a
-separate `mpv` process. Linux release bundles include pinned `mpv` and `ffmpeg`
-inside the self-contained runtime closure; the release script verifies both
-tools in each target closure before packaging. Windows CI artifacts and release
-ZIPs include pinned GPL `mpv.exe`/`ffmpeg.exe` in `tools/` beside
-`Kaede-Gallery.exe`; these take precedence over `PATH`.
+separate `mpv` process. Linux release bundles include pinned `mpv-unwrapped` and
+`ffmpeg-headless` inside the self-contained runtime closure. The release script
+verifies both tools in each target closure before packaging. Windows CI
+artifacts and release ZIPs include pinned GPL `mpv.exe`/`ffmpeg.exe` in
+`tools/` beside `Kaede-Gallery.exe`; these take precedence over `PATH`.
 Rust may return Windows extended-length Vault paths (`\\?\`); the desktop
 platform layer removes that prefix only for Java path parsing and display,
 while passing the original locator to the Rust filesystem repository.
@@ -322,19 +322,21 @@ Launch disables mpv user configuration, scripts, subtitle/audio auto-loading,
 mpv's OSC, non-subtitle OSD, default input bindings, and automatic sidecar
 loading. Linux playback forces mpv's X11 video output so its `--wid` targets
 the Swing canvas under XWayland instead of creating a separate Wayland window.
-The Nix package launcher prepends its pinned `mpv` and `ffmpeg` binaries to
-`PATH`. Linux release archives and AppImages are self-contained `nix bundle`
-executables whose closure includes those pinned tools and their runtime
-libraries; they do not depend on host `mpv` or `ffmpeg`. The release script
-checks both tools are in each target package closure and includes the
-third-party notices and license texts with the archive and AppImage. AppImages
-bundle Noto Sans CJK as a glyph fallback and use an app-specific Fontconfig
-configuration that also includes `/etc/fonts/fonts.conf` when available. The
-launcher selects that configuration unless `FONTCONFIG_FILE` is explicit. When
-using the bundled configuration, an unset `FONTCONFIG_PATH` defaults to its
-bundled configuration directory so the relative bundled-font directory
-resolves correctly. An explicit `FONTCONFIG_FILE` or `FONTCONFIG_PATH` is
-preserved. Desktop video
+The Linux Nix runtime uses `mpv-unwrapped`, `ffmpeg-headless`, and a Temurin 25
+`jlink` image containing the desktop modules, charset and crypto providers,
+zip filesystem support, and English/Japanese locale data. The build JDK is not
+part of the runtime closure. The Linux desktop distribution retains only
+Material Icons Extended classes referenced by its shared and desktop Kotlin
+sources. Its launcher prepends the pinned `mpv` and `ffmpeg-headless` binaries
+to `PATH`. Linux release archives and AppImages are
+self-contained `nix bundle` executables whose closure includes those pinned
+tools and their runtime libraries; they do not depend on host `mpv` or
+`ffmpeg`. The release script checks both tools are in each target package
+closure and includes the third-party notices and license texts with the
+archive and AppImage. AppImages use the host Fontconfig configuration,
+defaulting to `/etc/fonts/fonts.conf` when available, and preserve explicit
+`FONTCONFIG_FILE` or `FONTCONFIG_PATH` settings. Japanese and other CJK glyph
+availability therefore depends on fonts installed on the host. Desktop video
 thumbnails limit ffmpeg to local file input, one
 frame, 512-pixel bounds, a
 4 MiB output cap, a 10-second timeout, and two concurrent extraction
