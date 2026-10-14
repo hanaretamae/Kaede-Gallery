@@ -15,7 +15,7 @@ class GalleryNoteStructureCodecTest {
               "relatedHeadings":["Sources"],
               "postTextEndHeadings":["Details"],
               "galleryTagPrefixes":["source/art"],
-              "frontmatter":{"tagsKeys":["tags","labels"],"titleKeys":["title","name"]},
+              "frontmatter":{"tagsKeys":["tags","labels"],"titleKeys":["title","name"],"authorKeys":["creator"]},
               "linkResolution":"shortestPath",
               "postTextIncludeQuote":false,
               "blockOrder":["author","media"],
@@ -36,6 +36,7 @@ class GalleryNoteStructureCodecTest {
 
         assertEquals(listOf("Notes"), decoded.memoHeadings)
         assertEquals(listOf("tags", "labels"), decoded.frontmatter.tagsKeys)
+        assertEquals(listOf("creator"), decoded.frontmatter.authorKeys)
         assertEquals(GalleryLinkResolution.SHORTEST_PATH, decoded.linkResolution)
         assertFalse(decoded.postTextIncludeQuote)
         assertEquals(
@@ -48,6 +49,7 @@ class GalleryNoteStructureCodecTest {
             ),
         )
         assertTrue(updated.contains(""""hiddenBlocks":["memo"]"""))
+        assertTrue(updated.contains(""""authorKeys":["creator"]"""))
         assertTrue(updated.contains(""""otherTagOption":true"""))
         assertEquals(
             GalleryLinkResolution.ABSOLUTE_PATH,
@@ -58,6 +60,7 @@ class GalleryNoteStructureCodecTest {
     @Test
     fun validatesRequiredTagAliasesAndInputBounds() {
         val base = GalleryNoteStructureSettings()
+        assertEquals(listOf("author"), base.frontmatter.authorKeys)
         assertFalse(
             GalleryNoteStructureCodec.isValid(
                 base.copy(frontmatter = base.frontmatter.copy(tagsKeys = emptyList())),
@@ -71,6 +74,11 @@ class GalleryNoteStructureCodecTest {
         assertFalse(
             GalleryNoteStructureCodec.isValid(
                 base.copy(frontmatter = base.frontmatter.copy(titleKeys = listOf("k".repeat(129)))),
+            ),
+        )
+        assertTrue(
+            GalleryNoteStructureCodec.isValid(
+                base.copy(frontmatter = base.frontmatter.copy(authorKeys = emptyList())),
             ),
         )
         assertFalse(

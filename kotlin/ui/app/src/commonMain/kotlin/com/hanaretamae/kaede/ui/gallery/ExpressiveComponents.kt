@@ -18,6 +18,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Fullscreen
+import androidx.compose.material.icons.filled.FullscreenExit
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.DropdownMenuGroup
@@ -39,6 +42,7 @@ import androidx.compose.material3.ToggleButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -120,6 +124,48 @@ fun GalleryPlaybackActions(
                     horizontalArrangement = Arrangement.spacedBy(2.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) { trailing() }
+            }
+        }
+    }
+}
+
+@Composable
+fun GalleryPlaybackHiddenActions(
+    fullscreen: Boolean,
+    onShowControls: () -> Unit,
+    onToggleFullscreen: (() -> Unit)?,
+    strings: GalleryPlaybackStrings,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.End,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        KaedeTooltip(strings.showControls) {
+            FilledTonalIconButton(
+                shapes = IconButtonDefaults.shapes(),
+                onClick = onShowControls,
+            ) {
+                Icon(Icons.Filled.PlayArrow, strings.showControls)
+            }
+        }
+        onToggleFullscreen?.let { toggle ->
+            val label = if (fullscreen) strings.exitFullScreen else strings.fullScreen
+            KaedeTooltip(label) {
+                FilledTonalIconButton(
+                    shapes = IconButtonDefaults.shapes(),
+                    colors = IconButtonDefaults.filledTonalIconButtonColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
+                    onClick = toggle,
+                ) {
+                    Icon(
+                        if (fullscreen) Icons.Filled.FullscreenExit else Icons.Filled.Fullscreen,
+                        label,
+                    )
+                }
             }
         }
     }

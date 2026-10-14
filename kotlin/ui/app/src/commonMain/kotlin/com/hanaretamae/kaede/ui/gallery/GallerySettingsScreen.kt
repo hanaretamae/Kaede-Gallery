@@ -150,6 +150,7 @@ import com.hanaretamae.kaede.ui.gallery.resources.Res
 import com.hanaretamae.kaede.ui.gallery.resources.kaede_gallery_icon
 
 data class GallerySettingsStrings(
+    val exampleLanguage: LanguagePreference,
     val title: String,
     val close: String,
     val listDisplay: String,
@@ -186,8 +187,6 @@ data class GallerySettingsStrings(
     val licenseTextUnavailable: String,
     val helpAndUse: String,
     val exampleNote: String,
-    val exampleNoteHelp: String,
-    val exampleNoteExplanations: List<String>,
     val copyExample: String,
     val addItem: String,
     val editItem: String,
@@ -226,6 +225,7 @@ data class GallerySettingsStrings(
     val tagCategories: String,
     val tagCategoriesHelp: String,
     val invalidTagCategories: String,
+    val otherCategory: String,
     val categoryName: String,
     val categoryPath: String,
     val splitDeep: String,
@@ -241,6 +241,7 @@ data class GallerySettingsStrings(
     val frontmatterAliases: String,
     val tagsKeys: String,
     val titleKeys: String,
+    val authorKeys: String,
     val urlKeys: String,
     val publishedKeys: String,
     val createdKeys: String,
@@ -296,6 +297,7 @@ data class GallerySettingsStrings(
 )
 
 val EnglishGallerySettingsStrings = GallerySettingsStrings(
+    exampleLanguage = LanguagePreference.ENGLISH,
     title = "Settings",
     close = "Back",
     listDisplay = "Paging and list",
@@ -316,7 +318,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     forgetVaultMessage = "This removes its local index and releases its read grant. Vault files are not changed.",
     forgetVaultConfirm = "Forget",
     importExportReset = "Data",
-    tagSettings = "Tag settings",
+    tagSettings = "Tags",
     scanWarningsTitle = "Items that could not be checked",
     scanWarningsSummary = { if (it == 0) "None" else "$it items" },
     openSourceLicenses = "Open-source licenses",
@@ -332,14 +334,6 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     licenseTextUnavailable = "This license text is unavailable in this installation.",
     helpAndUse = "Help and how to use",
     exampleNote = "Example note",
-    exampleNoteHelp = "Fictional Markdown using the current note structure.\nCopying it does not write to your Vault.",
-    exampleNoteExplanations = listOf(
-        "Frontmatter contains fictional metadata and tags.",
-        "The author is inferred from the note's tags.",
-        "The embedded image demonstrates media handling.",
-        "The post text and optional quote demonstrate body parsing.",
-        "Related links and memo headings use the configured aliases.",
-    ),
     copyExample = "Copy Markdown",
     addItem = "Add",
     editItem = "Edit",
@@ -362,14 +356,14 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     systemFont = "System",
     expressiveFont = "Google Sans Flex",
     pagination = "Gallery list",
-    fixedColumns = "Fixed gallery columns (0 = automatic, or 2–12)",
-    galleryEligibility = "Gallery eligibility",
+    fixedColumns = "Fixed gallery columns (0 = automatic, or 1–12)",
+    galleryEligibility = "Gallery target tags",
     galleryTagPrefixes = "Target tag prefixes",
     galleryTagPrefixesHelp = "Only notes with a matching tag are shown.\nLeave empty to show no notes.",
     invalidGalleryTagPrefixes = "Use up to 64 unique non-empty prefixes, each at most 128 UTF-8 bytes.",
-    tagDisplayRules = "Tag filter visibility",
+    tagDisplayRules = "Tags shown in filter",
     includedTagPrefixes = "Included tag prefixes",
-    hiddenTagPrefixes = "Hidden tag prefixes",
+    hiddenTagPrefixes = "Tags not shown in filter",
     tagDisplayRulesHelp = "Included prefixes define available filters; hidden prefixes are removed.\nUse * to include every tag.",
     invalidTagDisplayPrefixes = "Use up to 64 non-empty prefixes, each at most 128 UTF-8 bytes.",
     tagColors = "Tag colors",
@@ -378,6 +372,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     tagCategories = "Tag filter categories",
     tagCategoriesHelp = "Exact paths (source/art) and subtree paths (source/count/*) are supported.\nMore specific rules win.",
     invalidTagCategories = "Check category names and paths; use at most 64 categories.",
+    otherCategory = "Other category",
     categoryName = "Name",
     categoryPath = "Tag path",
     splitDeep = "Split deep tags",
@@ -385,10 +380,11 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     otherCategoryEnabled = "Show unmatched tags in Other",
     addCategory = "Add category",
     removeCategory = "Remove",
-    noteStructure = "Note structure",
+    noteStructure = "Note",
     noteBlockHelp = { block ->
         when (block) {
-            GalleryNoteBlock.AUTHOR -> "Shows the author resolved from the note's tags."
+            GalleryNoteBlock.AUTHOR ->
+                "Shows the author from a configured frontmatter key, leading author link, profile URL, or filename."
             GalleryNoteBlock.MEDIA -> "Shows images and videos in the main viewer.\nMedia is not repeated in the details panel."
             GalleryNoteBlock.POST_TEXT -> "Shows the post text before its end marker.\nQuoted lines can be included or excluded."
             GalleryNoteBlock.POST_TEXT_END -> "Marks where the post text ends.\nConfigure the heading names used to recognize this boundary."
@@ -400,9 +396,10 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     memoHeadings = "Memo headings",
     relatedHeadings = "Related headings",
     postTextEndHeadings = "Post-text end headings",
-    frontmatterAliases = "Frontmatter aliases",
+    frontmatterAliases = "Frontmatter keys",
     tagsKeys = "Tags keys",
     titleKeys = "Title keys",
+    authorKeys = "Author keys",
     urlKeys = "URL keys",
     publishedKeys = "Published keys",
     createdKeys = "Created keys",
@@ -415,7 +412,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     relativePath = "Relative path",
     absolutePath = "Absolute path",
     includeQuotedText = "Include quoted lines in post text",
-    detailBlockOrder = "Note detail block order and visibility",
+    detailBlockOrder = "Note structure",
     authorBlock = "Author",
     mediaBlock = "Media",
     postTextBlock = "Post text",
@@ -458,6 +455,7 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
 )
 
 val JapaneseGallerySettingsStrings = GallerySettingsStrings(
+    exampleLanguage = LanguagePreference.JAPANESE,
     title = "設定",
     close = "戻る",
     listDisplay = "ページングと一覧",
@@ -478,7 +476,7 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     forgetVaultMessage = "ローカル索引を削除し、読み取り権限を解放します。Vault内のファイルは変更しません。",
     forgetVaultConfirm = "登録解除",
     importExportReset = "データ",
-    tagSettings = "タグ設定",
+    tagSettings = "タグ",
     scanWarningsTitle = "確認できなかった項目",
     scanWarningsSummary = { if (it == 0) "ありません" else "$it 件" },
     openSourceLicenses = "オープンソースライセンス",
@@ -494,14 +492,6 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     licenseTextUnavailable = "このライセンス本文はインストール内で利用できません。",
     helpAndUse = "ヘルプ・使い方",
     exampleNote = "ノートの例",
-    exampleNoteHelp = "現在のノート構造を使った架空のMarkdownです。\nコピーしてもVaultに書き込まれません。",
-    exampleNoteExplanations = listOf(
-        "フロントマターに架空のメタデータとタグを記載します。",
-        "作者はノートのタグから判定されます。",
-        "埋め込み画像でメディアの指定方法を示します。",
-        "本文と任意の引用行で本文の解析例を示します。",
-        "関連リンクとメモ見出しには設定した別名を使います。",
-    ),
     copyExample = "Markdownをコピー",
     addItem = "追加",
     editItem = "編集",
@@ -524,14 +514,14 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     systemFont = "システム",
     expressiveFont = "Google Sans Flex",
     pagination = "ギャラリー一覧",
-    fixedColumns = "ギャラリー列数（0で自動、または2〜12）",
-    galleryEligibility = "ギャラリー対象",
+    fixedColumns = "ギャラリー列数（0で自動、または1〜12）",
+    galleryEligibility = "ギャラリー対象タグ",
     galleryTagPrefixes = "対象タグの接頭辞",
     galleryTagPrefixesHelp = "一致するタグを持つノートだけを表示します。\n空欄では対象ノートがありません。",
     invalidGalleryTagPrefixes = "重複しない空でない接頭辞を64個まで、各128 UTF-8バイト以内で入力してください。",
-    tagDisplayRules = "タグフィルターの表示",
+    tagDisplayRules = "表示対象タグ",
     includedTagPrefixes = "表示対象タグの接頭辞",
-    hiddenTagPrefixes = "非表示タグの接頭辞",
+    hiddenTagPrefixes = "フィルターに表示しないタグ",
     tagDisplayRulesHelp = "表示対象でフィルター候補を限定し、非表示接頭辞に一致する候補を除外します。\n全て表示するには * を指定します。",
     invalidTagDisplayPrefixes = "空でない接頭辞を64個まで、各128 UTF-8バイト以内で入力してください。",
     tagColors = "タグ色",
@@ -540,6 +530,7 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     tagCategories = "タグフィルターのカテゴリ",
     tagCategoriesHelp = "完全一致（source/art）とサブツリー（source/count/*）を指定できます。\nより具体的な規則が優先されます。",
     invalidTagCategories = "カテゴリ名とパスを確認してください。カテゴリは64件までです。",
+    otherCategory = "その他カテゴリ",
     categoryName = "名前",
     categoryPath = "タグパス",
     splitDeep = "深い階層を分割",
@@ -547,10 +538,11 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     otherCategoryEnabled = "未分類タグをその他に表示",
     addCategory = "カテゴリを追加",
     removeCategory = "削除",
-    noteStructure = "ノート構造",
+    noteStructure = "ノート",
     noteBlockHelp = { block ->
         when (block) {
-            GalleryNoteBlock.AUTHOR -> "ノートのタグから判定した作者を表示します。"
+            GalleryNoteBlock.AUTHOR ->
+                "設定したフロントマターキー、本文先頭の作者リンク、プロフィールURL、ファイル名から投稿者を表示します。"
             GalleryNoteBlock.MEDIA -> "画像や動画をメインビュワーに表示します。\n詳細欄にはメディアを重複して表示しません。"
             GalleryNoteBlock.POST_TEXT -> "本文終了の見出しまでの文章を表示します。\n引用行を含めるかどうかを設定できます。"
             GalleryNoteBlock.POST_TEXT_END -> "本文が終了する位置を示します。\n区切りの判定に使う見出し名を設定できます。"
@@ -561,14 +553,15 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     memoHeadings = "メモ見出し",
     relatedHeadings = "関連見出し",
     postTextEndHeadings = "本文終端見出し",
-    frontmatterAliases = "フロントマター別名",
+    frontmatterAliases = "フロントマターのキー",
     tagsKeys = "タグキー",
     titleKeys = "タイトルキー",
+    authorKeys = "作者キー",
     urlKeys = "URLキー",
     publishedKeys = "公開日キー",
     createdKeys = "作成日キー",
     updatedKeys = "更新日キー",
-    coverKeys = "カバーキー",
+    coverKeys = "表紙キー",
     linkResolution = "内部リンクの解決",
     markdownLink = "Markdown Link",
     wikiLink = "WikiLink",
@@ -576,7 +569,7 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     relativePath = "相対パス",
     absolutePath = "絶対パス",
     includeQuotedText = "引用行を本文に含める",
-    detailBlockOrder = "ノート詳細の表示順と表示設定",
+    detailBlockOrder = "ノート構造",
     authorBlock = "作者",
     mediaBlock = "メディア",
     postTextBlock = "本文",
@@ -1075,6 +1068,8 @@ fun GallerySettingsScreen(
                     isValid = GalleryTagDisplayPrefixesCodec::isValid,
                     maxItems = GalleryTagPrefixesCodec.MAX_PREFIXES,
                 )
+                }
+                SettingsPanel(strings.hiddenTagPrefixes) {
                 SettingsEditableList(
                     title = strings.hiddenTagPrefixes,
                     values = hiddenTagPrefixesDraft.toSettingsLines(),
@@ -1086,6 +1081,7 @@ fun GallerySettingsScreen(
                     isValid = GalleryTagDisplayPrefixesCodec::isValid,
                     maxItems = GalleryTagPrefixesCodec.MAX_PREFIXES,
                 )
+                }
                 if (tagDisplayPrefixesError) {
                     Text(
                         strings.invalidTagDisplayPrefixes,
@@ -1115,7 +1111,6 @@ fun GallerySettingsScreen(
                             delay(450)
                             stateHolder.saveTagDisplayPrefixes(includedTagPrefixes, hiddenTagPrefixes)
                         }
-                    }
                     }
                 }
                 SettingsPanel(strings.tagColors) {
@@ -1443,6 +1438,7 @@ fun GallerySettingsScreen(
                         },
                     )
                 }
+                SettingsPanel(strings.otherCategory) {
                 SettingsGroup {
                 SegmentedListItem(
                     shapes = ListItemDefaults.segmentedShapes(0, 3),
@@ -1484,6 +1480,7 @@ fun GallerySettingsScreen(
                         )
                     },
                 )
+                }
                 }
                 val categorySettingsValid = GalleryTagCategoryCodec.isValid(categoryDraft)
                 if (!storedCategorySettingsValid || tagCategoriesError || !categorySettingsValid) {
@@ -1546,9 +1543,10 @@ fun GallerySettingsScreen(
                 }
                 SettingsPanel(strings.frontmatterAliases) {
                     listOf(
-                        strings.tagsKeys to noteStructureDraft.frontmatter.tagsKeys,
                         strings.titleKeys to noteStructureDraft.frontmatter.titleKeys,
+                        strings.authorKeys to noteStructureDraft.frontmatter.authorKeys,
                         strings.urlKeys to noteStructureDraft.frontmatter.urlKeys,
+                        strings.tagsKeys to noteStructureDraft.frontmatter.tagsKeys,
                         strings.publishedKeys to noteStructureDraft.frontmatter.publishedKeys,
                         strings.createdKeys to noteStructureDraft.frontmatter.createdKeys,
                         strings.updatedKeys to noteStructureDraft.frontmatter.updatedKeys,
@@ -1561,12 +1559,13 @@ fun GallerySettingsScreen(
                                 onChange = { keys ->
                                     val current = noteStructureDraft.frontmatter
                                     val updated = when (index) {
-                                        0 -> current.copy(tagsKeys = keys)
-                                        1 -> current.copy(titleKeys = keys)
+                                        0 -> current.copy(titleKeys = keys)
+                                        1 -> current.copy(authorKeys = keys)
                                         2 -> current.copy(urlKeys = keys)
-                                        3 -> current.copy(publishedKeys = keys)
-                                        4 -> current.copy(createdKeys = keys)
-                                        5 -> current.copy(updatedKeys = keys)
+                                        3 -> current.copy(tagsKeys = keys)
+                                        4 -> current.copy(publishedKeys = keys)
+                                        5 -> current.copy(createdKeys = keys)
+                                        6 -> current.copy(updatedKeys = keys)
                                         else -> current.copy(coverKeys = keys)
                                     }
                                     val candidate = noteStructureDraft.copy(frontmatter = updated)
@@ -1579,12 +1578,13 @@ fun GallerySettingsScreen(
                                 isValid = { keys ->
                                     val current = noteStructureDraft.frontmatter
                                     val updated = when (index) {
-                                        0 -> current.copy(tagsKeys = keys)
-                                        1 -> current.copy(titleKeys = keys)
+                                        0 -> current.copy(titleKeys = keys)
+                                        1 -> current.copy(authorKeys = keys)
                                         2 -> current.copy(urlKeys = keys)
-                                        3 -> current.copy(publishedKeys = keys)
-                                        4 -> current.copy(createdKeys = keys)
-                                        5 -> current.copy(updatedKeys = keys)
+                                        3 -> current.copy(tagsKeys = keys)
+                                        4 -> current.copy(publishedKeys = keys)
+                                        5 -> current.copy(createdKeys = keys)
+                                        6 -> current.copy(updatedKeys = keys)
                                         else -> current.copy(coverKeys = keys)
                                     }
                                     GalleryNoteStructureCodec.isValid(
@@ -1613,7 +1613,7 @@ fun GallerySettingsScreen(
                                         GalleryNoteBlock.POST_TEXT_END,
                                     )
                                 ) {
-                                    SettingsPanel(strings.noteStructure) {
+                                    SettingsPanel(strings.detailBlockOrder) {
                                         val (label, values) = when (selectedNoteOptions) {
                                             GalleryNoteBlock.MEMO -> strings.memoHeadings to noteStructureDraft.memoHeadings
                                             GalleryNoteBlock.RELATED -> strings.relatedHeadings to noteStructureDraft.relatedHeadings
@@ -2149,19 +2149,10 @@ private fun GalleryExampleNotePage(
     ) JapaneseGallerySettingsStrings else EnglishGallerySettingsStrings,
 ) {
     val clipboard = androidx.compose.ui.platform.LocalClipboardManager.current
-    val markdown = remember(structure) { galleryExampleMarkdown(structure) }
+    val markdown = remember(structure, strings.exampleLanguage) {
+        galleryExampleMarkdown(structure, strings.exampleLanguage)
+    }
     Column(verticalArrangement = Arrangement.spacedBy(SettingsGroupSpacing)) {
-        SettingsGroup {
-            strings.exampleNoteExplanations.forEachIndexed { index, explanation ->
-                SegmentedListItem(
-                    shapes = ListItemDefaults.segmentedShapes(index, strings.exampleNoteExplanations.size),
-                    colors = settingsItemColors(),
-                    leadingContent = { Text("${index + 1}.") },
-                ) {
-                    Text(explanation)
-                }
-            }
-        }
         Surface(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
@@ -2277,44 +2268,114 @@ private fun SettingsEditableList(
     }
 }
 
-internal fun galleryExampleMarkdown(structure: GalleryNoteStructureSettings): String = buildString {
-    fun field(keys: List<String>, value: String) {
-        keys.firstOrNull()?.let { appendLine("$it: $value") }
+internal fun galleryExampleMarkdown(
+    structure: GalleryNoteStructureSettings,
+    language: LanguagePreference = LanguagePreference.ENGLISH,
+): String = buildString {
+    val japanese = language == LanguagePreference.JAPANESE
+    val title = if (japanese) "架空のギャラリーノート" else "Fictional gallery note"
+    val author = if (japanese) "架空の作者" else "Fictional author"
+    val heading = if (japanese) "見出し" else "Heading"
+    val postText = if (japanese) "架空の投稿文" else "Fictional post text"
+    val quotation = if (japanese) "架空の引用" else "Fictional quotation"
+    val relatedNote = if (japanese) "架空の関連ノート" else "fictional-related-note"
+    val memo = if (japanese) "架空のメモ" else "Fictional memo"
+    val defaultStructure = GalleryNoteStructureSettings()
+
+    fun headingAlias(
+        aliases: List<String>,
+        defaults: List<String>,
+        localizedDefault: String,
+    ): String? =
+        if (aliases == defaults) localizedDefault else aliases.firstOrNull()
+
+    val postTextEndHeading = headingAlias(
+        structure.postTextEndHeadings,
+        defaultStructure.postTextEndHeadings,
+        if (japanese) "文書" else "Document",
+    )
+    val relatedHeading = headingAlias(
+        structure.relatedHeadings,
+        defaultStructure.relatedHeadings,
+        if (japanese) "関連" else "Related",
+    )
+    val memoHeading = headingAlias(
+        structure.memoHeadings,
+        defaultStructure.memoHeadings,
+        if (japanese) "覚書" else "Memo",
+    )
+
+    fun yamlScalar(value: String): String {
+        val lowercase = value.lowercase()
+        val plain = value.isNotEmpty() &&
+            value == value.trim() &&
+            value.first() !in "-?:,[]{}#&*!|>'\"%@`" &&
+            !value.startsWith("---") &&
+            !value.startsWith("...") &&
+            !value.contains(": ") &&
+            !value.contains(" #") &&
+            '\n' !in value && '\r' !in value && '\t' !in value &&
+            lowercase !in setOf("null", "~", "true", "false", "yes", "no", "on", "off")
+        if (plain) return value
+        val escaped = value.replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+            .replace("\r", "\\r")
+            .replace("\t", "\\t")
+        return "\"$escaped\""
     }
-    appendLine("---")
-    field(structure.frontmatter.titleKeys, "\"Fictional gallery note\"")
-    field(structure.frontmatter.urlKeys, "\"https://example.invalid/post\"")
-    field(structure.frontmatter.publishedKeys, "\"2026-01-01\"")
-    field(structure.frontmatter.createdKeys, "\"2026-01-01\"")
-    field(structure.frontmatter.updatedKeys, "\"2026-01-02\"")
-    field(structure.frontmatter.coverKeys, "\"media/fictional-image.png\"")
-    structure.frontmatter.tagsKeys.firstOrNull()?.let { key ->
-        appendLine("$key:")
-        structure.galleryTagPrefixes.take(4).forEach { prefix ->
-            val escaped = prefix.replace("\\", "\\\\").replace("\"", "\\\"")
-                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
-            appendLine("  - \"$escaped\"")
+
+    fun field(keys: List<String>, value: String) {
+        keys.firstOrNull()?.let { key ->
+            appendLine("${yamlScalar(key)}: ${yamlScalar(value)}")
         }
     }
+
     appendLine("---")
+    field(structure.frontmatter.titleKeys, title)
+    structure.frontmatter.authorKeys.firstOrNull()?.let { key ->
+        appendLine("${yamlScalar(key)}:")
+        appendLine("  - ${yamlScalar(author)}")
+    }
+    field(structure.frontmatter.urlKeys, "https://example.invalid/post")
+    structure.frontmatter.tagsKeys.firstOrNull()?.let { key ->
+        if (structure.galleryTagPrefixes.isEmpty()) {
+            appendLine("${yamlScalar(key)}: []")
+        } else {
+            appendLine("${yamlScalar(key)}:")
+            structure.galleryTagPrefixes.forEach { prefix ->
+                appendLine("  - ${yamlScalar(prefix)}")
+            }
+        }
+    }
+    field(structure.frontmatter.publishedKeys, "2026-01-01T00:00:00")
+    field(structure.frontmatter.createdKeys, "2026-01-01T00:00:00")
+    field(structure.frontmatter.updatedKeys, "2026-01-02T00:00:00")
+    field(structure.frontmatter.coverKeys, "media/fictional-image.png")
+    appendLine("---")
+    appendLine()
+    appendLine("# $heading")
     structure.blockOrder.forEach { block ->
         appendLine()
         when (block) {
-            GalleryNoteBlock.AUTHOR -> appendLine("[Fictional author](https://example.invalid/author)")
+            GalleryNoteBlock.AUTHOR ->
+                appendLine("[$author](https://example.invalid/author)")
             GalleryNoteBlock.MEDIA -> appendLine("![[media/fictional-image.png]]")
             GalleryNoteBlock.POST_TEXT -> {
-                appendLine("# Fictional post text.")
-                if (structure.postTextIncludeQuote) appendLine("> Fictional quotation.")
+                appendLine(postText)
+                if (structure.postTextIncludeQuote) appendLine("> $quotation")
             }
             GalleryNoteBlock.POST_TEXT_END ->
-                structure.postTextEndHeadings.firstOrNull()?.let { appendLine("# $it") }
-            GalleryNoteBlock.RELATED -> structure.relatedHeadings.firstOrNull()?.let {
-                appendLine("# $it")
-                appendLine("- [[fictional-related-note]]")
+                postTextEndHeading?.let { appendLine("# $it") }
+            GalleryNoteBlock.RELATED -> relatedHeading?.let {
+                appendLine("## $it")
+                appendLine()
+                appendLine("- [[$relatedNote]]")
             }
-            GalleryNoteBlock.MEMO -> structure.memoHeadings.firstOrNull()?.let {
-                appendLine("# $it")
-                appendLine("- Fictional memo.")
+            GalleryNoteBlock.MEMO -> memoHeading?.let {
+                appendLine("## $it")
+                appendLine()
+                appendLine("- $memo")
             }
         }
     }

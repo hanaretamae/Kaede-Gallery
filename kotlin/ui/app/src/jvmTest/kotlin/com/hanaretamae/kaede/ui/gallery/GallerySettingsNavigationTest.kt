@@ -73,13 +73,15 @@ class GallerySettingsNavigationTest {
         val strings = EnglishGallerySettingsStrings
         compose.onAllNodes(hasText(strings.exampleNote) and hasClickAction())[0]
             .performScrollTo().performClick()
-        compose.onNodeWithText(strings.exampleNoteExplanations.first()).assertIsDisplayed()
-        compose.onNode(hasText("# Fictional post text.", substring = true)).assertExists()
+        compose.onNode(hasText("Fictional post text", substring = true)).assertExists()
         compose.onNodeWithText(strings.copyExample).performScrollTo().performClick()
         compose.waitUntil(5_000) { copied != null }
         compose.runOnIdle {
             kotlin.test.assertEquals(
-                galleryExampleMarkdown(com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings()),
+                galleryExampleMarkdown(
+                    com.hanaretamae.kaede.core.settings.GalleryNoteStructureSettings(),
+                    strings.exampleLanguage,
+                ),
                 copied?.text,
             )
         }
@@ -106,8 +108,7 @@ class GallerySettingsNavigationTest {
                 )
             }
         }
-        compose.onNodeWithText(EnglishGallerySettingsStrings.exampleNoteExplanations.first())
-            .assertIsDisplayed()
+        compose.onNode(hasText("Fictional gallery note", substring = true)).assertExists()
         compose.onNodeWithContentDescription(EnglishGallerySettingsStrings.close).performClick()
         compose.runOnIdle { kotlin.test.assertTrue(closed) }
     }
@@ -272,6 +273,8 @@ class GallerySettingsNavigationTest {
         compose.onNodeWithText(strings.frontmatterAliases).assertIsDisplayed()
         compose.onNodeWithText(strings.titleKeys).assertIsDisplayed()
         compose.onNodeWithText("title").assertIsDisplayed()
+        compose.onNodeWithText(strings.authorKeys).assertIsDisplayed()
+        compose.onNodeWithText("author").assertIsDisplayed()
         compose.onNodeWithText(strings.memoBlock).performScrollTo()
         compose.onNodeWithText("${strings.markdownLink} / ${strings.wikiLink}").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText(strings.linkResolution).performScrollTo().assertIsDisplayed()
@@ -473,8 +476,10 @@ class GallerySettingsNavigationTest {
         listOf(
             strings.galleryEligibility,
             strings.tagDisplayRules,
+            strings.hiddenTagPrefixes,
             strings.tagColors,
             strings.tagCategories,
+            strings.otherCategory,
         ).forEach { compose.onNodeWithText(it).performScrollTo().assertIsDisplayed() }
     }
 

@@ -7,7 +7,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.test.junit4.v2.createComposeRule
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithTag
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.dp
 import org.junit.Rule
 import org.junit.Test
@@ -55,5 +58,29 @@ class GalleryPlaybackActionsTest {
             assertEquals(leading.center.y, trailing.center.y, 1f)
             if (width >= 400) assertEquals(row.right, trailing.right, 1f)
         }
+    }
+
+    @Test
+    fun hiddenControlsOfferTheDesktopRevealAndFullscreenActions() {
+        var revealCount = 0
+        var fullscreenCount = 0
+        compose.setContent {
+            GalleryPlaybackHiddenActions(
+                fullscreen = true,
+                onShowControls = { revealCount++ },
+                onToggleFullscreen = { fullscreenCount++ },
+                strings = EnglishGalleryPlaybackStrings,
+            )
+        }
+
+        compose.onNodeWithContentDescription("Show video controls")
+            .assertIsDisplayed()
+            .performClick()
+        compose.onNodeWithContentDescription("Exit full screen")
+            .assertIsDisplayed()
+            .performClick()
+
+        assertEquals(1, revealCount)
+        assertEquals(1, fullscreenCount)
     }
 }

@@ -83,6 +83,6 @@ data class GallerySettings(
         const val MIN_PAGE_SIZE = 1
         const val MAX_PAGE_SIZE = 500
         const val MAX_FIXED_COLUMN_COUNT = 12
-        const val MIN_FIXED_COLUMN_COUNT = 2
+        const val MIN_FIXED_COLUMN_COUNT = 1
     }
 }

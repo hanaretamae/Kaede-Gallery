@@ -32,6 +32,7 @@ pub struct NoteStructureSettings {
 pub struct FrontmatterSettings {
     pub tags_keys: Vec<String>,
     pub title_keys: Vec<String>,
+    pub author_keys: Vec<String>,
     pub url_keys: Vec<String>,
     pub published_keys: Vec<String>,
     pub created_keys: Vec<String>,
@@ -44,6 +45,7 @@ impl Default for FrontmatterSettings {
         Self {
             tags_keys: vec!["tags".into()],
             title_keys: vec!["title".into()],
+            author_keys: vec!["author".into()],
             url_keys: vec!["url".into()],
             published_keys: vec!["published".into()],
             created_keys: vec!["created".into()],
@@ -288,9 +290,11 @@ fn parse_note_inner(
         .and_then(frontmatter_string)
         .unwrap_or(body_title);
     let sections = extract_sections(body_without_title, settings);
-    let (author, author_url) = post_author(body_without_title, settings)
-        .map(|(label, url)| (Some(label), Some(url)))
-        .unwrap_or((None, None));
+    let body_author = post_author(body_without_title, settings);
+    let author_url = body_author.as_ref().map(|(_, url)| url.clone());
+    let author = first_frontmatter_value(&frontmatter, &settings.frontmatter.author_keys)
+        .and_then(frontmatter_string)
+        .or_else(|| body_author.map(|(label, _)| label));
     let mut media = Vec::new();
     if let Some(cover) = first_frontmatter_value(&frontmatter, &settings.frontmatter.cover_keys)
         .and_then(frontmatter_string)
@@ -366,6 +370,7 @@ pub fn parse_note_structure_settings(input: &str) -> Result<NoteStructureSetting
         .tags_keys
         .iter()
         .chain(settings.frontmatter.title_keys.iter())
+        .chain(settings.frontmatter.author_keys.iter())
         .chain(settings.frontmatter.url_keys.iter())
         .chain(settings.frontmatter.published_keys.iter())
         .chain(settings.frontmatter.created_keys.iter())
@@ -1191,6 +1196,36 @@ mod tests {
         assert_eq!(note.url.as_deref(), Some("https://example.invalid/post"));
         assert_eq!(note.published.as_deref(), Some("2026-10-01"));
         assert_eq!(note.media[0].path, "image.webp");
+    }
+
+    #[test]
+    fn author_uses_configured_frontmatter_alias_and_can_be_disabled() {
+        let default_note = parse_note(
+            "---\nauthor: Fictional author\ntags: [source/example]\n---\n# Fictional title\n",
+        )
+        .expect("valid note");
+        assert_eq!(default_note.author.as_deref(), Some("Fictional author"));
+
+        let settings = parse_note_structure_settings(
+            r#"{"noteStructure":{"frontmatter":{"authorKeys":["creator"]}}}"#,
+        )
+        .expect("valid author alias settings");
+        let aliased_note = parse_note_with_settings(
+            "---\nauthor: Hidden author\ncreator: Configured author\ntags: [source/example]\n---\n# Fictional title\n",
+            &settings,
+        )
+        .expect("valid note");
+        assert_eq!(aliased_note.author.as_deref(), Some("Configured author"));
+
+        let settings =
+            parse_note_structure_settings(r#"{"noteStructure":{"frontmatter":{"authorKeys":[]}}}"#)
+                .expect("valid disabled author settings");
+        let hidden_note = parse_note_with_settings(
+            "---\nauthor: Hidden author\ntags: [source/example]\n---\n# Fictional title\n",
+            &settings,
+        )
+        .expect("valid note");
+        assert_eq!(hidden_note.author, None);
     }
 
     #[test]

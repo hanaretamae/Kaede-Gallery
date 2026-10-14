@@ -330,9 +330,10 @@ checks both tools are in each target package closure and includes the
 third-party notices and license texts with the archive and AppImage. AppImages
 bundle Noto Sans CJK as a glyph fallback and use an app-specific Fontconfig
 configuration that also includes `/etc/fonts/fonts.conf` when available. The
-launcher selects that configuration unless `FONTCONFIG_FILE` is explicit. If
-`FONTCONFIG_PATH` is unset, it independently defaults it to `/etc/fonts` when
-available. Explicit `FONTCONFIG_FILE` and `FONTCONFIG_PATH` values are
+launcher selects that configuration unless `FONTCONFIG_FILE` is explicit. When
+using the bundled configuration, an unset `FONTCONFIG_PATH` defaults to its
+bundled configuration directory so the relative bundled-font directory
+resolves correctly. An explicit `FONTCONFIG_FILE` or `FONTCONFIG_PATH` is
 preserved. Desktop video
 thumbnails limit ffmpeg to local file input, one
 frame, 512-pixel bounds, a
@@ -626,7 +627,8 @@ video aspect ratios.
 Desktop speed choices expand inline in the player scene, avoiding a native
 popup above embedded video. Controls wrap at narrow widths. Maximized
 video controls initially appear, then animate out after inactivity during playback;
-explicit reveal and restore-window buttons remain available. Seeking keeps a
+both Android and Desktop keep the same explicit reveal-controls and
+restore-window buttons available. Seeking keeps a
 stable slider state and preview while dragging, including forward and backward
 movement before release. Android renders video
 into a `TextureView` so returning to the gallery does not flash a black
@@ -709,9 +711,10 @@ panel, avoiding simultaneous remeasurement and scrolling. Toolbar color stays
 independent of the black media background.
 Adaptive gallery columns use a 200dp minimum tile width in shared UI and a
 180px density-adjusted minimum on Desktop, with 12dp spacing and 24dp horizontal
-content padding, and keep at least two columns. The shared layout yields four
-columns at an 866dp content width; Desktop fits four columns in an 866px window
-across common display scales. Users can still select a fixed count in Settings.
+content padding, and keep at least two columns. A fixed count of 1–12 can be
+selected in Settings; zero selects the adaptive layout. The shared layout
+yields four columns at an 866dp content width; Desktop fits four columns in an
+866px window across common display scales.
 
 Settings follows Material 3 Expressive list styling: the page uses the
 `background` role, the top app bar is pinned (container
@@ -728,8 +731,8 @@ system accent and pure black), Language, and Font lists. Appearance also contain
 a Gallery list subpage (page size, columns, display switches, and unavailable-media
 icons). The remaining groups are Vault (selected Vault
 with a change button, scan-warning summary with details and rescan, and a
-destructive forget row); Notes (navigation to Note structure and Tag settings
-pages); and About this app (About, Data — import/export/reset — and Help).
+destructive forget row); Notes (navigation to Note and Tags pages); and About
+this app (About, Data — import/export/reset — and Help).
 Appearance settings include theme, language, system accent, pure black, and a
 font choice between the system family and bundled Google Sans Flex. Selectable
 settings choices have identifying icons, and their values are included in
@@ -776,7 +779,9 @@ until details are shown,
 shows tags as a wrapping row of chips, and groups dates, post text, memos, and
 related content into tonal surfaces. The author is shown directly below the
 note title, outside the date surface; profile, source-page, and copy-URL
-actions stay right-aligned in that same row. The date surface contains dates
+actions stay right-aligned in that same row. The configured author frontmatter
+alias defaults to `author`; when no author key matches, existing leading-link,
+URL, and filename fallbacks remain. The date surface contains dates
 only. The toolbar keeps back and the title on the left and other actions on the
 right. Trackpad horizontal scroll events and touch swipes both navigate among
 media in a note. Its toolbar uses icons for host-window fullscreen, a media-action menu,
@@ -837,10 +842,11 @@ rather than being replaced by unrelated UI controls.
 ## Note parsing and gallery selection
 
 Notes use YAML frontmatter containing a `tags` list and optional `url`,
-`published`, `created`, `updated`, and `cover`. UTF-8 BOM and LF/CRLF are
-accepted. Dates may remain original strings when not understood. Unknown keys
-are ignored. A note is eligible when at least one original tag matches a
-configured gallery-target prefix; the default is `source/art`. Prefixes can be changed or cleared in note-structure settings.
+`author`, `published`, `created`, `updated`, and `cover`. UTF-8 BOM and
+LF/CRLF are accepted. Dates may remain original strings when not understood.
+Unknown keys are ignored. A note is eligible when at least one original tag matches a
+configured gallery-target prefix; the default is `source/art`. Prefixes can be
+changed or cleared in Note settings.
 Other parseable notes with valid tags are retained in the private index only as
 internal-link targets; they are excluded from gallery results, tag counts, and
 pagination totals.
@@ -883,8 +889,10 @@ available in filter controls, hidden in filter controls and note details, and
 tag-color prefixes. These settings are stored in private app data, never in the
 Vault. Filter-prefix settings limit the UI's available tag controls; note tags
 are still indexed so the gallery can query them and display their metadata.
-Target, visible, and hidden prefixes, tag-color rules, and filter categories use
-validated add/edit/remove segmented lists instead of multiline bulk editors.
+Target tags, tags shown in filters, tags hidden from filters, tag-color rules,
+and filter categories use validated add/edit/remove segmented lists instead of
+multiline bulk editors. The hidden-tag list has its own heading; the category
+page groups unmatched-tag behavior under an Other category heading.
 Tapping a tag-color rule row opens its editor; the row retains dedicated remove
 and edit actions.
 The internal-link-resolution choices sit below the note-detail order list on a
@@ -895,6 +903,8 @@ Tag settings and appearance settings can be exported together as JSON.
 Flutter's private `tag-settings.json` contains configurable gallery-target tag
 prefixes, Markdown heading aliases for memo, related items, and the end of post
 text, and Frontmatter key aliases for tags, title, URL, dates, and cover media.
+KMP also supports author-key aliases, defaulting to `author`; an empty
+author-key list ignores frontmatter author values.
 The KMP settings editor stores its target-prefix override separately in private
 `gallery-tag-settings.json`, so it does not discard the remaining parser and
 category settings. Defaults retain the current behavior. Changing parsing
@@ -905,33 +915,34 @@ links are only resolved against parseable indexed notes inside the Vault.
 Obsidian basename wikilinks also resolve by nearest matching filename, then
 exact note title. Filename and eligible-note indexes keep link resolution and
 tag filtering bounded without exposing link-only notes in the gallery. The settings
-screen groups Vault, scan, note, and data settings; tag display rules are a
-separate second-level page under the note category. The note-structure screen
-includes a separate bottom card for a fictional example note that can be viewed
-as selectable Markdown and copied, but is never written to the Vault. The Vault
-picker displays the same card using default settings; after selection the
-example reflects that Vault's current settings. Settings can be exported
-to or imported from versioned JSON, or reset to defaults. The Note structure
-and Tag settings pages each offer a confirmed, page-scoped reset. Resetting
-Note structure restores its aliases, link resolution, and viewer block order
-and visibility while preserving gallery eligibility and tag settings. Resetting
-Tag settings restores gallery eligibility, tag filter visibility, colors, and
-categories while preserving Note structure and unrelated settings; category
-defaults follow the selected UI language. The Data page retains the whole
-settings reset.
+screen groups Vault, scan, note, and data settings; Notes links to Note, Tags,
+and Example note pages. The example page shows a fictional note as selectable
+Markdown that can be copied, but is never written to the Vault. The Vault
+picker displays the same example using default settings; after selection the
+example reflects that Vault's current settings. The example is available in
+English and Japanese according to the selected UI language and uses the
+configured frontmatter keys, tags, heading aliases, block order, and quotation
+setting. Settings can be exported to or
+imported from versioned JSON, or reset to defaults. The Note and Tags pages
+each offer a confirmed, page-scoped reset. Resetting Note restores its aliases,
+link resolution, and viewer block order and visibility while preserving
+gallery eligibility and tag settings. Resetting Tags restores gallery
+eligibility, tag filter visibility, colors, and categories while preserving
+Note structure and unrelated settings; category defaults follow the selected
+UI language. The Data page retains the whole settings reset.
 In the note viewer, frontmatter remains fixed first; author, media, post text,
 the post-text end marker, related, and memo blocks follow the configured order.
 The default order places the post-text end marker after post text, followed by
 related and then memo. Media participates in the reorderable list.
 Media thumbnails are not repeated in the details panel; the main viewer remains
 the only media display. Blocks can be reordered and hidden independently.
-Frontmatter aliases have their own inline section at the top of Note structure,
+Frontmatter keys have their own inline section at the top of the Note page,
 outside the block-order list. Memo and related headings/rules and post-text end
 headings open their own scrollable settings dialogs from the block-order list. Each block has an
 explanation popup; blocks without independent settings do not show a settings
 action. Memo and related use configurable heading names without level or
-list-style restrictions. The
-fictional Markdown example reflects current block order and tag settings.
+list-style restrictions. The fictional Markdown example is shown directly
+without an explanation list and reflects current block order and tag settings.
 List page size and the loaded-item range are configurable; the range is enabled
 by default. One-based gallery item numbers on note and media tiles are separately
 configurable and disabled by default; the tile label is numeric only. Grouped
@@ -1057,10 +1068,12 @@ unordered/ordered list markers and two-space indentation levels are retained
 for memo and related-list presentation without drawing bullet glyphs. The viewer
 shows the author directly below the note title, with profile, source-page, and
 copy-link actions on that same row; the author and profile action follow the
-configured author visibility. Post text appears in the detail area without a
-post-text label or duplicated author. It fills the app window on entry, with
-black background and centered, fit-contained media; details are initially hidden and can be shown by tapping the media. While an
-image's note details, source path, or display-sized source decode is loading,
+configured author visibility. Frontmatter author values are read only from the
+configured author-key aliases (default `author`). Post text appears in the
+detail area without a post-text label or duplicated author. The viewer fills
+the app window on entry with a black background and centered, fit-contained
+media; details are initially hidden and can be shown by tapping the media.
+While an image's note details, source path, or display-sized source decode is loading,
 keep the viewer's black media background and show the Material 3 Expressive
 loading indicator rather than the gallery thumbnail or a transient decode
 error.

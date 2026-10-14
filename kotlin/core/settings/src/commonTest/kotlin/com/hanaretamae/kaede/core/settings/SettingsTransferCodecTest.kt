@@ -154,7 +154,6 @@ class SettingsTransferCodecTest {
             valid.replace("\"pageSize\":24", "\"pageSize\":0"),
             valid.replace("\"pageSize\":24", "\"pageSize\":\"24\""),
             valid.replace("\"fixedColumnCount\":0", "\"fixedColumnCount\":13"),
-            valid.replace("\"fixedColumnCount\":0", "\"fixedColumnCount\":1"),
             valid.replace("\"showMissingMediaIcon\":false", "\"showMissingMediaIcon\":\"maybe\""),
             valid.replace("\"includedPrefixes\":[\"*\"]", "\"includedPrefixes\":[false]"),
             valid.replace(
@@ -180,6 +179,15 @@ class SettingsTransferCodecTest {
         )) {
             assertNull(SettingsTransferCodec.decode(invalid))
         }
+    }
+
+    @Test
+    fun acceptsOneFixedGalleryColumnInImportedSettings() {
+        val oneColumnSettings = SettingsTransferCodec.encode(GallerySettings())
+            .replace("\"fixedColumnCount\":0", "\"fixedColumnCount\":1")
+
+        assertEquals(1, assertNotNull(SettingsTransferCodec.decode(oneColumnSettings)).fixedColumnCount)
+        assertEquals(1, GallerySettings(fixedColumnCount = 1).fixedColumnCount)
     }
 
     @Test

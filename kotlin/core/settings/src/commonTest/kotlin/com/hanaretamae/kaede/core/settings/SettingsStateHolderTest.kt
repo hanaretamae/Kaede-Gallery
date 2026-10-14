@@ -122,9 +122,12 @@ class SettingsStateHolderTest {
         holder.setFixedColumnCount(GallerySettings.MAX_FIXED_COLUMN_COUNT + 1)
         advanceUntilIdle()
         assertEquals(RepositoryError.INVALID_REQUEST, holder.state.value.error)
+        assertEquals(1, repository.saved.size)
         holder.setFixedColumnCount(1)
         advanceUntilIdle()
-        assertEquals(1, repository.saved.size)
+        assertEquals(1, holder.state.value.settings?.fixedColumnCount)
+        assertEquals(1, repository.saved.last().fixedColumnCount)
+        assertEquals(2, repository.saved.size)
     }
 
     @Test

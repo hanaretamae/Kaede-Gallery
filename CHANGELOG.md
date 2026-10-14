@@ -3,6 +3,22 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.1.3] - Draft
+
+### Added
+
+- Configure frontmatter author keys, defaulting to `author`, and provide localized note examples that reflect current settings.
+
+### Changed
+
+- Keep automatic gallery columns at 0 and allow fixed counts from 1 through 12.
+- Rename Note and Tags settings and clarify frontmatter and tag-filter controls.
+- Keep the controls shown after video auto-hide consistent on Android and Desktop.
+
+### Fixed
+
+- Correct bundled AppImage font discovery on NixOS.
+
 ## [2.1.2] - Draft
 
 ### Fixed

@@ -132,6 +132,7 @@ import com.hanaretamae.kaede.ui.gallery.KaedeGalleryApp
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackActions
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackHiddenActions
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackStrings
 import com.hanaretamae.kaede.ui.gallery.EnglishGalleryPlaybackStrings
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackSpeedChoices
@@ -1668,28 +1669,13 @@ private fun AndroidVideoPlayer(
             }
         }
         if (!controlsVisible) {
-            onToggleFullscreen?.let { toggle ->
-                KaedeTooltip(
-                    if (fullscreen) playbackStrings.exitFullScreen
-                    else playbackStrings.fullScreen,
-                ) {
-                    FilledTonalIconButton(
-                        shapes = IconButtonDefaults.shapes(),
-                        onClick = {
-                            toggle()
-                            revealControls()
-                        },
-                        modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
-                    ) {
-                        Icon(
-                            if (fullscreen) Icons.Filled.FullscreenExit
-                            else Icons.Filled.Fullscreen,
-                            if (fullscreen) playbackStrings.exitFullScreen
-                            else playbackStrings.fullScreen,
-                        )
-                    }
-                }
-            }
+            GalleryPlaybackHiddenActions(
+                fullscreen = fullscreen,
+                onShowControls = ::revealControls,
+                onToggleFullscreen = onToggleFullscreen,
+                strings = playbackStrings,
+                modifier = Modifier.align(Alignment.TopEnd).padding(16.dp),
+            )
         }
     }
 }

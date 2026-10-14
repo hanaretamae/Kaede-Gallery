@@ -139,12 +139,12 @@ other) can be edited by exact path (`source/art`) or whole subtree
 (`source/count/*`). For each category, you can choose whether tags at the third
 level and deeper are split by parent tag. This is off by default.
 
-Edit frontmatter aliases at the top of **Note structure**. Tag rules use
+Edit frontmatter keys at the top of **Note**. Tag rules use
 add/edit/remove lists.
 
-A separate card at the bottom shows a fictional sample that reflects your
-settings and can be copied. The Vault picker shows the default sample instead.
-Neither sample is written to the Vault.
+Open **Example note** under Notes to view a fictional sample in the selected
+language that reflects your settings and can be copied. The Vault picker shows
+the default sample instead. Neither sample is written to the Vault.
 
 Changing the note structure triggers a rescan. Tag settings affect display
 only; they do not change the Vault or index contents.

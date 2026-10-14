@@ -110,6 +110,7 @@ import com.hanaretamae.kaede.ui.gallery.GallerySettingsScreen
 import com.hanaretamae.kaede.ui.gallery.EnglishGallerySettingsStrings
 import com.hanaretamae.kaede.ui.gallery.JapaneseGallerySettingsStrings
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackActions
+import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackHiddenActions
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackStrings
 import com.hanaretamae.kaede.ui.gallery.EnglishGalleryPlaybackStrings
 import com.hanaretamae.kaede.ui.gallery.GalleryPlaybackSpeedChoices
@@ -1195,27 +1196,13 @@ internal fun DesktopMediaContent(
                         )
                     }
                     if (mediaState.fullscreen && !controlsVisible) {
-                        Row(
+                        GalleryPlaybackHiddenActions(
+                            fullscreen = true,
+                            onShowControls = { controlsVisible = true },
+                            onToggleFullscreen = mediaState.onToggleFullscreen,
+                            strings = mediaState.playbackStrings,
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.End,
-                        ) {
-                            KaedeTooltip(mediaState.playbackStrings.showControls) {
-                                FilledTonalIconButton(onClick = { controlsVisible = true }) {
-                                    Icon(
-                                        Icons.Filled.PlayArrow,
-                                        mediaState.playbackStrings.showControls,
-                                    )
-                                }
-                            }
-                            mediaState.onToggleFullscreen?.let { toggle ->
-                                DesktopFullscreenButton(
-                                    fullscreen = true,
-                                    onClick = toggle,
-                                    fullScreenLabel = mediaState.playbackStrings.fullScreen,
-                                    exitFullScreenLabel = mediaState.playbackStrings.exitFullScreen,
-                                )
-                            }
-                        }
+                        )
                     }
                 } else {
                     mediaState.onToggleFullscreen?.let { toggle ->

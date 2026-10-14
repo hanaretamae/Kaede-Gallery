@@ -46,6 +46,7 @@ private val defaultNoteBlockOrder = listOf(
 data class GalleryFrontmatterSettings(
     val tagsKeys: List<String> = listOf("tags"),
     val titleKeys: List<String> = listOf("title"),
+    val authorKeys: List<String> = listOf("author"),
     val urlKeys: List<String> = listOf("url"),
     val publishedKeys: List<String> = listOf("published"),
     val createdKeys: List<String> = listOf("created"),
@@ -110,6 +111,12 @@ object GalleryNoteStructureCodec {
             frontmatter = GalleryFrontmatterSettings(
                 tagsKeys = stringList(frontmatter, "tagsKeys", listOf("tags"), MAX_KEY_BYTES),
                 titleKeys = stringList(frontmatter, "titleKeys", listOf("title"), MAX_KEY_BYTES),
+                authorKeys = stringList(
+                    frontmatter,
+                    "authorKeys",
+                    listOf("author"),
+                    MAX_KEY_BYTES,
+                ),
                 urlKeys = stringList(frontmatter, "urlKeys", listOf("url"), MAX_KEY_BYTES),
                 publishedKeys = stringList(
                     frontmatter,
@@ -152,6 +159,7 @@ object GalleryNoteStructureCodec {
             validHeadings(settings.postTextEndHeadings) &&
             validKeys(settings.frontmatter.tagsKeys, mustNotBeEmpty = true) &&
             validKeys(settings.frontmatter.titleKeys) &&
+            validKeys(settings.frontmatter.authorKeys) &&
             validKeys(settings.frontmatter.urlKeys) &&
             validKeys(settings.frontmatter.publishedKeys) &&
             validKeys(settings.frontmatter.createdKeys) &&
@@ -187,6 +195,7 @@ object GalleryNoteStructureCodec {
         structure["frontmatter"] = buildJsonObject {
             put("tagsKeys", JsonArray(settings.frontmatter.tagsKeys.map(::JsonPrimitive)))
             put("titleKeys", JsonArray(settings.frontmatter.titleKeys.map(::JsonPrimitive)))
+            put("authorKeys", JsonArray(settings.frontmatter.authorKeys.map(::JsonPrimitive)))
             put("urlKeys", JsonArray(settings.frontmatter.urlKeys.map(::JsonPrimitive)))
             put("publishedKeys", JsonArray(settings.frontmatter.publishedKeys.map(::JsonPrimitive)))
             put("createdKeys", JsonArray(settings.frontmatter.createdKeys.map(::JsonPrimitive)))
