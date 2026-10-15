@@ -180,7 +180,7 @@ class GallerySettingsNavigationTest {
             strings.helpAndUse to strings.relatedNotes,
         ).forEach { (page, content) ->
             compose.onNode(hasText(page) and hasClickAction()).performScrollTo().performClick()
-            compose.onNodeWithText(content).assertIsDisplayed()
+            compose.onNodeWithText(content).performScrollTo().assertIsDisplayed()
             if (page == strings.about) {
                 val logoFrame = compose.onNodeWithTag("AboutLogoFrame")
                     .fetchSemanticsNode().boundsInRoot
