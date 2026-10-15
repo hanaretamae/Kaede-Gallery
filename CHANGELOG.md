@@ -3,6 +3,18 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.3.3] - Draft
+
+### Changed
+
+- Group Help guidance under localized headings and improve settings color roles for light and dark themes.
+
+### Fixed
+
+- Read Linux desktop appearance through GIO and update the theme when portal appearance settings change.
+- Include the GSettings schema and dconf backend needed for the Linux accent-color fallback in Nix launchers.
+- Restore visible unselected colors for settings button groups and a contrasting frame around the example note.
+
 ## [2.3.2] - Draft
 
 ### Fixed
