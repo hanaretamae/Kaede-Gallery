@@ -146,12 +146,14 @@ import javax.swing.Timer
 import javax.swing.filechooser.FileSystemView
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.Channel
 import java.util.concurrent.atomic.AtomicReference
 
 private const val DESKTOP_VIEWER_IMAGE_SIZE = 4_096
@@ -224,9 +226,29 @@ private fun DesktopApplication(
     windowState: WindowState,
 ) {
     val portalAppearance by produceState(DesktopSystemAppearance()) {
-        while (true) {
-            value = withContext(Dispatchers.IO) { readDesktopSystemAppearance() }
-            delay(PORTAL_REFRESH_INTERVAL_MILLIS)
+        value = withContext(Dispatchers.IO) { readDesktopSystemAppearance() }
+        if (isLinuxDesktop()) {
+            val settingChanges = Channel<Unit>(Channel.CONFLATED)
+            val subscription = withContext(Dispatchers.IO) {
+                LinuxPortalSettings.subscribe { settingChanges.trySend(Unit) }
+            }
+            settingChanges.trySend(Unit)
+            try {
+                while (true) {
+                    settingChanges.receive()
+                    value = withContext(Dispatchers.IO) { readDesktopSystemAppearance() }
+                }
+            } finally {
+                settingChanges.close()
+                withContext(NonCancellable + Dispatchers.IO) {
+                    subscription.close()
+                }
+            }
+        } else {
+            while (true) {
+                delay(PORTAL_REFRESH_INTERVAL_MILLIS)
+                value = withContext(Dispatchers.IO) { readDesktopSystemAppearance() }
+            }
         }
     }
     val awtWindow = LocalAwtWindow.current

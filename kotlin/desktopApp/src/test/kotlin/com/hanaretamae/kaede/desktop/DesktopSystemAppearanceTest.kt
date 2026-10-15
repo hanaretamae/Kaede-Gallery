@@ -6,11 +6,29 @@ import com.materialkolor.dynamiccolor.ColorSpec
 import com.materialkolor.material3.dynamicColorScheme
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class DesktopSystemAppearanceTest {
+    @Test
+    fun portalAppearanceListenerFiltersToDocumentedSettings() {
+        assertTrue(
+            isPortalAppearanceSettingChanged("org.freedesktop.appearance", "color-scheme"),
+        )
+        assertTrue(
+            isPortalAppearanceSettingChanged("org.freedesktop.appearance", "accent-color"),
+        )
+        assertFalse(
+            isPortalAppearanceSettingChanged("org.freedesktop.appearance", "unknown-setting"),
+        )
+        assertFalse(
+            isPortalAppearanceSettingChanged("org.gnome.desktop.interface", "accent-color"),
+        )
+        assertFalse(isPortalAppearanceSettingChanged(null, null))
+    }
+
     @Test
     fun parsesPortalColorSchemeValues() {
         assertEquals(true, parsePortalDarkTheme("<uint32 1>"))

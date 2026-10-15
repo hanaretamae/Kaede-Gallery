@@ -254,6 +254,8 @@
                     pkgs.libxkbcommon
                     pkgs.stdenv.cc.cc.lib
                 ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+              export GSETTINGS_SCHEMA_DIR="''${GSETTINGS_SCHEMA_DIR:-${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/gsettings-desktop-schemas-${pkgs.gsettings-desktop-schemas.version}/glib-2.0/schemas}"
+              export GIO_EXTRA_MODULES="${pkgs.dconf}/lib/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
               exec ${linuxJlinkRuntime}/bin/java \
                 --enable-native-access=ALL-UNNAMED \
                 -Djpackage.app-version=${version} \
@@ -406,6 +408,8 @@
                       targetPkgs.libxkbcommon
                       targetPkgs.stdenv.cc.cc.lib
                     ]}''${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
+                    export GSETTINGS_SCHEMA_DIR="''${GSETTINGS_SCHEMA_DIR:-${targetPkgs.gsettings-desktop-schemas}/share/gsettings-schemas/gsettings-desktop-schemas-${targetPkgs.gsettings-desktop-schemas.version}/glib-2.0/schemas}"
+                    export GIO_EXTRA_MODULES="${targetPkgs.dconf}/lib/gio/modules''${GIO_EXTRA_MODULES:+:$GIO_EXTRA_MODULES}"
                     exec ${aarch64JlinkRuntime}/bin/java \
                       --enable-native-access=ALL-UNNAMED \
                       -Djpackage.app-version=${version} \

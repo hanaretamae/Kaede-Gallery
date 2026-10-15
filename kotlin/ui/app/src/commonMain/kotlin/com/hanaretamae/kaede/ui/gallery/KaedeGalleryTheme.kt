@@ -42,6 +42,14 @@ internal fun pureBlackColorScheme(baseScheme: ColorScheme): ColorScheme = baseSc
     background = Color.Black,
 )
 
+internal fun settingsListBackdropColor(colorScheme: ColorScheme): Color = colorScheme.background
+
+internal fun settingsListItemColor(colorScheme: ColorScheme): Color =
+    colorScheme.surfaceContainer
+
+internal fun exampleNoteFrameBorderColor(colorScheme: ColorScheme): Color =
+    colorScheme.outline
+
 internal fun resolveKaedeColorScheme(
     appearance: AppearanceSettings,
     darkTheme: Boolean,

@@ -477,6 +477,23 @@ internal interface GioApi : Library {
     ): Int
 
     fun g_dbus_connection_signal_unsubscribe(connection: Pointer, subscriptionId: Int)
+
+    fun g_settings_schema_source_get_default(): Pointer?
+    fun g_settings_schema_source_lookup(
+        source: Pointer,
+        schemaId: String,
+        recursive: Int,
+    ): Pointer?
+
+    fun g_settings_schema_has_key(schema: Pointer, key: String): Int
+    fun g_settings_schema_unref(schema: Pointer)
+    fun g_settings_new_full(
+        schema: Pointer,
+        backend: Pointer?,
+        path: String?,
+    ): Pointer?
+
+    fun g_settings_get_string(settings: Pointer, key: String): Pointer?
 }
 
 internal interface GlibApi : Library {
@@ -491,7 +508,9 @@ internal interface GlibApi : Library {
     ): Pointer?
 
     fun g_variant_get_child_value(value: Pointer, index: NativeLong): Pointer?
+    fun g_variant_get_variant(value: Pointer): Pointer?
     fun g_variant_get_uint32(value: Pointer): Int
+    fun g_variant_print(value: Pointer, typeAnnotate: Int): Pointer?
     fun g_variant_lookup_value(
         value: Pointer,
         key: String,
@@ -501,10 +520,12 @@ internal interface GlibApi : Library {
     fun g_variant_n_children(value: Pointer): NativeLong
     fun g_variant_get_string(value: Pointer, length: Pointer?): Pointer?
     fun g_variant_unref(value: Pointer)
+    fun g_free(memory: Pointer)
     fun g_main_context_new(): Pointer?
     fun g_main_context_push_thread_default(context: Pointer)
     fun g_main_context_pop_thread_default(context: Pointer)
     fun g_main_context_iteration(context: Pointer?, mayBlock: Int): Int
+    fun g_main_context_wakeup(context: Pointer)
     fun g_main_context_unref(context: Pointer)
     fun g_error_free(error: Pointer)
 }

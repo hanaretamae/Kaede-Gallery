@@ -31,9 +31,9 @@ internal fun readDesktopSystemAppearance(): DesktopSystemAppearance {
         )
     }
     if (!isLinuxDesktop()) return DesktopSystemAppearance()
-    val darkTheme = parsePortalDarkTheme(readPortalAppearanceSetting("color-scheme"))
-    val portalAccent = parsePortalAccentColor(readPortalAppearanceSetting("accent-color"))
-    val accentColor = portalAccent ?: parseGtkAccentColor(readGtkAccentColorSetting())
+    val darkTheme = parsePortalDarkTheme(LinuxPortalSettings.read("color-scheme"))
+    val portalAccent = parsePortalAccentColor(LinuxPortalSettings.read("accent-color"))
+    val accentColor = portalAccent ?: parseGtkAccentColor(LinuxPortalSettings.readGtkAccentColor())
     return DesktopSystemAppearance(darkTheme, accentColor)
 }
 
@@ -81,77 +81,6 @@ internal fun desktopSystemColorScheme(accent: Color?, darkTheme: Boolean): Color
             specVersion = ColorSpec.SpecVersion.SPEC_2025,
         )
     }
-
-private fun readPortalAppearanceSetting(key: String): String? {
-    val process = try {
-        ProcessBuilder(
-            "gdbus",
-            "call",
-            "--session",
-            "--dest",
-            "org.freedesktop.portal.Desktop",
-            "--object-path",
-            "/org/freedesktop/portal/desktop",
-            "--method",
-            "org.freedesktop.portal.Settings.ReadOne",
-            "org.freedesktop.appearance",
-            key,
-        ).redirectErrorStream(true).start()
-    } catch (_: IOException) {
-        return null
-    } catch (_: SecurityException) {
-        return null
-    }
-    return try {
-        if (!process.waitFor(PORTAL_READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-            process.destroyForcibly()
-            return null
-        }
-        if (process.exitValue() == 0) {
-            process.inputStream.bufferedReader().use { it.readText() }
-        } else {
-            null
-        }
-    } catch (_: InterruptedException) {
-        process.destroyForcibly()
-        Thread.currentThread().interrupt()
-        null
-    } catch (_: IOException) {
-        null
-    }
-}
-
-private fun readGtkAccentColorSetting(): String? {
-    val process = try {
-        ProcessBuilder(
-            "gsettings",
-            "get",
-            "org.gnome.desktop.interface",
-            "accent-color",
-        ).redirectErrorStream(true).start()
-    } catch (_: IOException) {
-        return null
-    } catch (_: SecurityException) {
-        return null
-    }
-    return try {
-        if (!process.waitFor(PORTAL_READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
-            process.destroyForcibly()
-            return null
-        }
-        if (process.exitValue() == 0) {
-            process.inputStream.bufferedReader().use { it.readText() }
-        } else {
-            null
-        }
-    } catch (_: InterruptedException) {
-        process.destroyForcibly()
-        Thread.currentThread().interrupt()
-        null
-    } catch (_: IOException) {
-        null
-    }
-}
 
 internal fun parseWindowsRegistryDword(output: String?): Long? =
     output?.let { Regex("""REG_DWORD\s+0x([0-9a-fA-F]+)""").find(it)?.groupValues?.get(1) }

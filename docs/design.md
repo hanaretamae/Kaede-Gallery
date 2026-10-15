@@ -330,8 +330,11 @@ tools and their runtime libraries; they do not depend on host `mpv` or
 closure and includes the third-party notices and license texts with the
 archive and AppImage. AppImages use the host Fontconfig configuration,
 defaulting to `/etc/fonts/fonts.conf` when available, and preserve explicit
-`FONTCONFIG_FILE` or `FONTCONFIG_PATH` settings. Japanese and other CJK glyph
-availability therefore depends on fonts installed on the host. Desktop video
+`FONTCONFIG_FILE` or `FONTCONFIG_PATH` settings. The launchers also include the
+GTK GSettings schema and dconf GIO module required for the accent fallback, so
+system appearance does not depend on host `gdbus` or `gsettings` executables.
+Japanese and other CJK glyph availability therefore depends on fonts installed
+on the host. Desktop video
 thumbnails limit ffmpeg to local file input, one
 frame, 512-pixel bounds, a
 4 MiB output cap, a 10-second timeout, and two concurrent extraction
@@ -718,15 +721,21 @@ yields four columns at an 866dp content width; Desktop fits four columns in an
 866px window across common display scales.
 
 Settings follows Material 3 Expressive list styling: the page uses the
-`background` role, the top app bar is pinned (container
+`background` role in light, dark, and pure-black themes, matching the Gallery
+page. The top app bar is pinned (container
 `background`, scrolled `surfaceContainerHigh`), and grouped items are
-`SegmentedListItem` rows on `surfaceBright` separated by the segmented gap,
+`SegmentedListItem` rows on `surfaceContainer` separated by the segmented gap,
 with 16dp group spacing and `titleSmall` primary-colored headings. Rows that
 open another page show a 40dp circular tonal icon container and a chevron.
 Other item icons have no tonal container. Settings groups have no outline
 borders; separation comes from tonal surfaces, segmented gaps, and headings.
 Toggleable segmented items retain Material 3 Expressive's default selected
 colors and interaction-dependent shape morphing, including switch changes.
+Connected single-choice groups use `surfaceContainerLow` and `onSurfaceVariant`
+for unselected choices while retaining Material's selected and disabled colors
+and checked semantics. The example-note preview uses a one-dp `outline`
+frame in both themes. Help guidance is grouped under localized headings and
+rendered as native text.
 The home page starts with Appearance controls, grouped into Theme (including
 system accent and pure black), Language, and Font lists. Appearance also contains
 a Gallery list subpage (page size, columns, display switches, and unavailable-media
@@ -759,12 +768,15 @@ the first query, once per gallery state holder. Android also holds the first fra
 2.5 seconds) until saved settings and the Vault session resolve so an
 already-selected Vault opens straight into the gallery. Linux Desktop reads the
 standard `org.freedesktop.portal.Settings` `color-scheme` and `accent-color`
-settings through `gdbus`; GNOME, KDE Plasma, and COSMIC can supply these values
-through their portal backends. Linux system color is enabled by default, and
-the accent color seeds a Material 3 Expressive 2025 scheme; users can disable
-system color in Appearance settings. Portal absence, unsupported keys, and
-invalid accent values fall back to the built-in scheme. The Linux portal
-integration has not been runtime-tested.
+settings through GIO's D-Bus API at startup and when the portal emits
+`SettingChanged`; it does not require the `gdbus` executable. GNOME, KDE Plasma,
+and COSMIC can supply these values through their portal backends. GTK accent is
+the fallback through GSettings, with the required schema and D-Bus backend
+included by the Linux Nix launchers rather than relying on host CLI executables.
+Linux system color is enabled by default, and the accent color seeds a Material
+3 Expressive 2025 scheme; users can disable system color in Appearance settings.
+Portal absence, unsupported keys, and invalid accent values fall back to the
+built-in scheme. The Linux portal integration has not been runtime-tested.
 
 Navigation between the gallery, settings, and nested viewer notes uses
 Material 3 Expressive spatial/effects motion specs for its horizontal

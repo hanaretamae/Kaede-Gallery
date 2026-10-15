@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.FullscreenExit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ColorScheme
 import androidx.compose.material3.DropdownMenuGroup
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DropdownMenuPopup
@@ -39,6 +40,8 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.ToggleButton
+import androidx.compose.material3.ToggleButtonColors
+import androidx.compose.material3.ToggleButtonDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.IconButton
@@ -280,6 +283,14 @@ fun KaedeIconButton(
     }
 }
 
+internal fun connectedChoiceButtonColors(
+    defaults: ToggleButtonColors,
+    colorScheme: ColorScheme,
+): ToggleButtonColors = defaults.copy(
+    containerColor = colorScheme.surfaceContainerLow,
+    contentColor = colorScheme.onSurfaceVariant,
+)
+
 /** Connected button group for single choice (Expressive replacement for segmented buttons). */
 @Composable
 internal fun <T> ConnectedChoiceGroup(
@@ -305,6 +316,10 @@ internal fun <T> ConnectedChoiceGroup(
                     options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                 },
+                colors = connectedChoiceButtonColors(
+                    defaults = ToggleButtonDefaults.colors(),
+                    colorScheme = MaterialTheme.colorScheme,
+                ),
             ) {
                 iconFor?.invoke(option)?.let { icon ->
                     Icon(

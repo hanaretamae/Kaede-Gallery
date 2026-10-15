@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -115,6 +116,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.unit.dp
@@ -145,6 +147,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.CoroutineScope
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import org.jetbrains.compose.resources.painterResource
 import com.hanaretamae.kaede.ui.gallery.resources.Res
 import com.hanaretamae.kaede.ui.gallery.resources.kaede_gallery_icon
@@ -186,6 +189,11 @@ data class GallerySettingsStrings(
     val licenseRustEntry: String,
     val licenseTextUnavailable: String,
     val helpAndUse: String,
+    val helpSearchSection: String,
+    val helpGallerySection: String,
+    val helpTagsSection: String,
+    val helpNotesSection: String,
+    val helpNoteSectionsSection: String,
     val exampleNote: String,
     val copyExample: String,
     val addItem: String,
@@ -431,6 +439,11 @@ val EnglishGallerySettingsStrings = GallerySettingsStrings(
     exportSettings = "Export settings",
     transferSettings = "Settings file",
     help = "Help and how to use",
+    helpSearchSection = "Search",
+    helpGallerySection = "Gallery",
+    helpTagsSection = "Tags and filters",
+    helpNotesSection = "Notes and links",
+    helpNoteSectionsSection = "Note sections",
     relatedNotes = "Related notes",
     searchAndFiltering = "Search and filtering",
     relatedNotesHelp = "Markdown links, embedded note links, and Obsidian wikilinks\ncan open related notes when their targets resolve inside the selected Vault.",
@@ -588,6 +601,11 @@ val JapaneseGallerySettingsStrings = GallerySettingsStrings(
     exportSettings = "設定をエクスポート",
     transferSettings = "設定ファイル",
     help = "ヘルプ・使い方",
+    helpSearchSection = "検索",
+    helpGallerySection = "ギャラリー",
+    helpTagsSection = "タグとフィルター",
+    helpNotesSection = "ノートとリンク",
+    helpNoteSectionsSection = "ノートの各項目",
     relatedNotes = "関連ノート",
     searchAndFiltering = "検索とフィルター",
     relatedNotesHelp = "Markdownリンク、埋め込みノートリンク、Obsidian wikilinkから、\n選択中のVault内にある関連ノートを開けます。",
@@ -807,6 +825,7 @@ fun GallerySettingsScreen(
         val page = destination
         Column(
             modifier = Modifier.fillMaxSize().padding(insets)
+                .background(settingsListBackdropColor(MaterialTheme.colorScheme))
                 .verticalScroll(pageScrollState).padding(16.dp),
         ) {
             if (state.loading && state.settings == null) {
@@ -1978,31 +1997,19 @@ fun GallerySettingsScreen(
                 }
 
                 if (page == GallerySettingsPage.HELP) {
-                    val helpEntries = listOf(
-                        Triple(strings.relatedNotes, strings.relatedNotesHelp, Icons.AutoMirrored.Filled.Label),
-                        Triple(strings.noteStructure, strings.noteStructureUsageHelp, Icons.Filled.AccountTree),
-                        Triple(strings.searchAndFiltering, strings.searchAndFilteringHelp, Icons.Filled.Search),
-                        Triple(strings.galleryEligibility, strings.galleryTagPrefixesHelp, Icons.Filled.Search),
-                        Triple(strings.tagDisplayRules, strings.tagDisplayRulesHelp, Icons.AutoMirrored.Filled.Label),
-                        Triple(strings.tagColors, strings.tagColorsHelp, Icons.AutoMirrored.Filled.Label),
-                        Triple(strings.tagCategories, strings.tagCategoriesHelp, Icons.AutoMirrored.Filled.Label),
-                    ) + GalleryNoteBlock.entries.map { block ->
-                            Triple(
-                                block.displayName(strings),
-                                strings.noteBlockHelp(block),
-                                noteBlockIcon(block),
-                            )
-                        }
-                    SettingsGroup {
-                        helpEntries.forEachIndexed { index, (title, body, icon) ->
-                            SegmentedListItem(
-                                shapes = ListItemDefaults.segmentedShapes(index, helpEntries.size),
-                                colors = settingsItemColors(),
-                                leadingContent = {
-                                    Icon(icon, null)
-                                },
-                                supportingContent = { Text(body) },
-                            ) { Text(title) }
+                    galleryHelpSections(strings).forEach { section ->
+                        SettingsHeading(section.heading)
+                        SettingsGroup {
+                            section.entries.forEachIndexed { index, entry ->
+                                SegmentedListItem(
+                                    shapes = ListItemDefaults.segmentedShapes(index, section.entries.size),
+                                    colors = settingsItemColors(),
+                                    leadingContent = {
+                                        Icon(entry.icon, null)
+                                    },
+                                    supportingContent = { Text(entry.body) },
+                                ) { Text(entry.title) }
+                            }
                         }
                     }
                 }
@@ -2157,6 +2164,10 @@ private fun GalleryExampleNotePage(
             modifier = Modifier.fillMaxWidth(),
             shape = MaterialTheme.shapes.large,
             color = MaterialTheme.colorScheme.surfaceBright,
+            border = BorderStroke(
+                1.dp,
+                exampleNoteFrameBorderColor(MaterialTheme.colorScheme),
+            ),
         ) {
             SelectionContainer {
                 Text(
@@ -2405,7 +2416,8 @@ private fun SettingsHeading(text: String) {
         text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 8.dp),
+        modifier = Modifier.semantics { heading() }
+            .padding(start = 16.dp, top = 24.dp, end = 16.dp, bottom = 8.dp),
     )
 }
 
@@ -2570,10 +2582,92 @@ private fun noteBlockIcon(block: GalleryNoteBlock) = when (block) {
     GalleryNoteBlock.RELATED -> Icons.Filled.Link
 }
 
-/** Settings rows sit on `surfaceBright` above the `surfaceContainer` page, like Android 16 settings. */
+internal data class GalleryHelpEntry(
+    val title: String,
+    val body: String,
+    val icon: ImageVector,
+)
+
+internal data class GalleryHelpSection(
+    val heading: String,
+    val entries: List<GalleryHelpEntry>,
+)
+
+internal fun galleryHelpSections(strings: GallerySettingsStrings): List<GalleryHelpSection> =
+    listOf(
+        GalleryHelpSection(
+            strings.helpSearchSection,
+            listOf(
+                GalleryHelpEntry(
+                    strings.searchAndFiltering,
+                    strings.searchAndFilteringHelp,
+                    Icons.Filled.Search,
+                ),
+            ),
+        ),
+        GalleryHelpSection(
+            strings.helpGallerySection,
+            listOf(
+                GalleryHelpEntry(
+                    strings.galleryEligibility,
+                    strings.galleryTagPrefixesHelp,
+                    Icons.Filled.Search,
+                ),
+            ),
+        ),
+        GalleryHelpSection(
+            strings.helpTagsSection,
+            listOf(
+                GalleryHelpEntry(
+                    strings.tagDisplayRules,
+                    strings.tagDisplayRulesHelp,
+                    Icons.AutoMirrored.Filled.Label,
+                ),
+                GalleryHelpEntry(
+                    strings.tagColors,
+                    strings.tagColorsHelp,
+                    Icons.AutoMirrored.Filled.Label,
+                ),
+                GalleryHelpEntry(
+                    strings.tagCategories,
+                    strings.tagCategoriesHelp,
+                    Icons.AutoMirrored.Filled.Label,
+                ),
+            ),
+        ),
+        GalleryHelpSection(
+            strings.helpNotesSection,
+            listOf(
+                GalleryHelpEntry(
+                    strings.relatedNotes,
+                    strings.relatedNotesHelp,
+                    Icons.AutoMirrored.Filled.Label,
+                ),
+                GalleryHelpEntry(
+                    strings.noteStructure,
+                    strings.noteStructureUsageHelp,
+                    Icons.Filled.AccountTree,
+                ),
+            ),
+        ),
+        GalleryHelpSection(
+            strings.helpNoteSectionsSection,
+            GalleryNoteBlock.entries.map { block ->
+                GalleryHelpEntry(
+                    block.displayName(strings),
+                    strings.noteBlockHelp(block),
+                    noteBlockIcon(block),
+                )
+            },
+        ),
+    )
+
+/** Settings rows use a container surface over the shared page background. */
 @Composable
 private fun settingsItemColors(): ListItemColors =
-    ListItemDefaults.segmentedColors(containerColor = MaterialTheme.colorScheme.surfaceBright)
+    ListItemDefaults.segmentedColors(
+        containerColor = settingsListItemColor(MaterialTheme.colorScheme),
+    )
 
 @Composable
 private fun SettingsGroup(content: @Composable ColumnScope.() -> Unit) {

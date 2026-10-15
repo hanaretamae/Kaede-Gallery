@@ -657,6 +657,7 @@ fun GalleryScreen(
     }
     Scaffold(
         modifier = modifier.fillMaxSize().nestedScroll(galleryScrollBehavior.nestedScrollConnection),
+        containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Column {
                 TopAppBar(
