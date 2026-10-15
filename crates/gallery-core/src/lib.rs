@@ -323,6 +323,10 @@ pub fn forget_selected_vault(directory: &Path, expected_vault: &str) -> Result<(
 
     let _guard = THUMBNAIL_LOCK.write().map_err(|_| CoreError::Worker)?;
     for name in [
+        "gallery.sqlite-journal",
+        "gallery.sqlite-wal",
+        "gallery.sqlite-shm",
+        "gallery.sqlite",
         "index.sqlite-journal",
         "index.sqlite-wal",
         "index.sqlite-shm",
@@ -5275,6 +5279,10 @@ mod tests {
         let selected = save_selected_vault(&app_data, &vault).expect("save selection");
 
         for name in [
+            "gallery.sqlite",
+            "gallery.sqlite-journal",
+            "gallery.sqlite-wal",
+            "gallery.sqlite-shm",
             "index.sqlite",
             "index.sqlite-journal",
             "index.sqlite-wal",
@@ -5297,6 +5305,7 @@ mod tests {
             Some(selected.clone())
         );
         assert!(app_data.join("index.sqlite").exists());
+        assert!(app_data.join("gallery.sqlite").exists());
 
         forget_selected_vault(&app_data, &selected).expect("forget selected vault");
         assert_eq!(
@@ -5304,6 +5313,10 @@ mod tests {
             None
         );
         for name in [
+            "gallery.sqlite",
+            "gallery.sqlite-journal",
+            "gallery.sqlite-wal",
+            "gallery.sqlite-shm",
             "index.sqlite",
             "index.sqlite-journal",
             "index.sqlite-wal",

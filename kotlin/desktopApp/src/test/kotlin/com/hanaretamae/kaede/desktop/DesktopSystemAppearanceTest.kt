@@ -31,6 +31,25 @@ class DesktopSystemAppearanceTest {
     }
 
     @Test
+    fun parsesGtkNamedAndHexAccentColors() {
+        assertEquals(
+            Color(0x35 / 255f, 0x84 / 255f, 0xe4 / 255f),
+            parseGtkAccentColor("'blue'"),
+        )
+        assertEquals(
+            Color(0x21 / 255f, 0x90 / 255f, 0xa4 / 255f),
+            parseGtkAccentColor("'teal'"),
+        )
+        assertEquals(
+            Color(0x12 / 255f, 0xab / 255f, 0xef / 255f),
+            parseGtkAccentColor("'#12abef'"),
+        )
+        assertNull(parseGtkAccentColor("'unknown'"))
+        assertNull(parseGtkAccentColor("not a color"))
+        assertNull(parseGtkAccentColor(null))
+    }
+
+    @Test
     fun createsCompleteExpressive2025SchemeFromSystemAccent() {
         val accent = Color(0.22f, 0.41f, 0.73f)
         for (darkTheme in listOf(false, true)) {

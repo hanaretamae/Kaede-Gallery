@@ -32,7 +32,8 @@ internal fun readDesktopSystemAppearance(): DesktopSystemAppearance {
     }
     if (!isLinuxDesktop()) return DesktopSystemAppearance()
     val darkTheme = parsePortalDarkTheme(readPortalAppearanceSetting("color-scheme"))
-    val accentColor = parsePortalAccentColor(readPortalAppearanceSetting("accent-color"))
+    val portalAccent = parsePortalAccentColor(readPortalAppearanceSetting("accent-color"))
+    val accentColor = portalAccent ?: parseGtkAccentColor(readGtkAccentColorSetting())
     return DesktopSystemAppearance(darkTheme, accentColor)
 }
 
@@ -52,6 +53,23 @@ internal fun parsePortalAccentColor(value: String?): Color? {
     }.toList()
     if (components.size != 3 || components.any { it !in 0f..1f }) return null
     return Color(components[0], components[1], components[2])
+}
+
+internal fun parseGtkAccentColor(value: String?): Color? {
+    val normalized = value?.trim()?.removeSurrounding("'")?.removeSurrounding("\"")
+        ?.lowercase() ?: return null
+    val color = GTK_ACCENT_COLORS[normalized] ?: run {
+        val hex = normalized.removePrefix("#")
+        if (hex.length != 6 || !hex.all { it.isDigit() || it.lowercaseChar() in 'a'..'f' }) {
+            return null
+        }
+        hex.toLongOrNull(16)?.toInt() ?: return null
+    }
+    return Color(
+        red = ((color shr 16) and 0xff) / 255f,
+        green = ((color shr 8) and 0xff) / 255f,
+        blue = (color and 0xff) / 255f,
+    )
 }
 
 internal fun desktopSystemColorScheme(accent: Color?, darkTheme: Boolean): ColorScheme? =
@@ -78,6 +96,38 @@ private fun readPortalAppearanceSetting(key: String): String? {
             "org.freedesktop.portal.Settings.ReadOne",
             "org.freedesktop.appearance",
             key,
+        ).redirectErrorStream(true).start()
+    } catch (_: IOException) {
+        return null
+    } catch (_: SecurityException) {
+        return null
+    }
+    return try {
+        if (!process.waitFor(PORTAL_READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)) {
+            process.destroyForcibly()
+            return null
+        }
+        if (process.exitValue() == 0) {
+            process.inputStream.bufferedReader().use { it.readText() }
+        } else {
+            null
+        }
+    } catch (_: InterruptedException) {
+        process.destroyForcibly()
+        Thread.currentThread().interrupt()
+        null
+    } catch (_: IOException) {
+        null
+    }
+}
+
+private fun readGtkAccentColorSetting(): String? {
+    val process = try {
+        ProcessBuilder(
+            "gsettings",
+            "get",
+            "org.gnome.desktop.interface",
+            "accent-color",
         ).redirectErrorStream(true).start()
     } catch (_: IOException) {
         return null
@@ -138,3 +188,16 @@ private fun readWindowsRegistryValue(key: String, name: String): String? {
         null
     }
 }
+
+private val GTK_ACCENT_COLORS = mapOf(
+    "default" to 0x3584e4,
+    "blue" to 0x3584e4,
+    "teal" to 0x2190a4,
+    "green" to 0x3a944a,
+    "yellow" to 0xc88800,
+    "orange" to 0xed5b00,
+    "red" to 0xe62d42,
+    "pink" to 0xd56199,
+    "purple" to 0x9141ac,
+    "slate" to 0x6f8396,
+)

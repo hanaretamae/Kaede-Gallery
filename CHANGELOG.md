@@ -3,6 +3,13 @@
 Release notes are drafted from implementation changes and verified results, then reviewed by the release owner.
 See [CHANGELOG.ja.md](CHANGELOG.ja.md) for the Japanese changelog and earlier release history.
 
+## [2.3.2] - Draft
+
+### Fixed
+
+- Remove the production gallery index and its SQLite sidecars when forgetting a Vault.
+- Fall back to the GNOME system accent setting when the Linux desktop portal does not provide an accent color.
+
 ## [2.3.1] - Draft
 
 ### Fixed
